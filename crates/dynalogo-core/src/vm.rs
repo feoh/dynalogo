@@ -52,6 +52,73 @@ impl fmt::Display for VmError {
 
 impl std::error::Error for VmError {}
 
+const CONTROL_LIBRARY_SOURCE: &str = r#"
+TO __WHILELOOP :TEST :BODY
+  IF RUNRESULT :TEST [RUN :BODY __WHILELOOP :TEST :BODY]
+END
+
+TO WHILE :TEST :BODY
+  __WHILELOOP :TEST :BODY
+END
+
+TO __UNTILLOOP :TEST :BODY
+  IFELSE RUNRESULT :TEST [STOP] [RUN :BODY __UNTILLOOP :TEST :BODY]
+END
+
+TO UNTIL :TEST :BODY
+  __UNTILLOOP :TEST :BODY
+END
+
+TO DO.WHILE :BODY :TEST
+  RUN :BODY
+  IF RUNRESULT :TEST [DO.WHILE :BODY :TEST]
+END
+
+TO __CONDREST :CLAUSES
+  IF EMPTYP :CLAUSES [STOP]
+  IF RUNRESULT FIRST FIRST :CLAUSES [RUN LAST FIRST :CLAUSES STOP]
+  __CONDREST BUTFIRST :CLAUSES
+END
+
+TO COND :CLAUSES
+  __CONDREST :CLAUSES
+END
+
+TO __CASEREST :VALUE :CLAUSES
+  IF EMPTYP :CLAUSES [STOP]
+  IF EQUALP FIRST FIRST :CLAUSES "ELSE [RUN LAST FIRST :CLAUSES STOP]
+  IF MEMBERP :VALUE FIRST FIRST :CLAUSES [RUN LAST FIRST :CLAUSES STOP]
+  __CASEREST :VALUE BUTFIRST :CLAUSES
+END
+
+TO CASE :VALUE :CLAUSES
+  __CASEREST :VALUE :CLAUSES
+END
+
+TO __FORLOOP :VAR :CURRENT :LIMIT :STEP :BODY
+  IFELSE :STEP >= 0 [
+    IF :CURRENT > :LIMIT [STOP]
+  ] [
+    IF :CURRENT < :LIMIT [STOP]
+  ]
+  MAKE :VAR :CURRENT
+  RUN :BODY
+  __FORLOOP :VAR SUM :CURRENT :STEP :LIMIT :STEP :BODY
+END
+
+TO FOR :CONTROL :BODY
+  IFELSE EQUALP COUNT :CONTROL 4 [
+    __FORLOOP FIRST :CONTROL ITEM 2 :CONTROL ITEM 3 :CONTROL ITEM 4 :CONTROL :BODY
+  ] [
+    IFELSE ITEM 2 :CONTROL <= ITEM 3 :CONTROL [
+      __FORLOOP FIRST :CONTROL ITEM 2 :CONTROL ITEM 3 :CONTROL 1 :BODY
+    ] [
+      __FORLOOP FIRST :CONTROL ITEM 2 :CONTROL ITEM 3 :CONTROL -1 :BODY
+    ]
+  ]
+END
+"#;
+
 #[derive(Debug, Default, Clone)]
 pub struct Environment {
     globals: HashMap<String, Value>,
@@ -85,6 +152,20 @@ impl Environment {
 
     pub fn set_global(&mut self, name: impl Into<String>, value: Value) {
         self.globals.insert(name.into().to_ascii_lowercase(), value);
+    }
+
+    pub fn set(&mut self, name: impl Into<String>, value: Value) {
+        let key = name.into().to_ascii_lowercase();
+        if let Some(frame) = self
+            .frames
+            .iter_mut()
+            .rev()
+            .find(|frame| frame.contains_key(&key))
+        {
+            frame.insert(key, value);
+        } else {
+            self.globals.insert(key, value);
+        }
     }
 
     pub fn get(&self, name: &str) -> Option<&Value> {
@@ -149,7 +230,14 @@ impl Default for Vm {
 
 impl Vm {
     pub fn new() -> Self {
-        Self::default()
+        let mut vm = Self::default();
+        vm.install_control_library();
+        vm
+    }
+
+    fn install_control_library(&mut self) {
+        self.eval_source(CONTROL_LIBRARY_SOURCE)
+            .expect("control-library procedures should compile");
     }
 
     pub fn interner(&self) -> &Interner {
@@ -763,7 +851,7 @@ impl Vm {
     fn make(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("make", &args, 2)?;
         let name = variable_name_input(&args[0], &self.interner)?;
-        self.env.set_global(name, args[1].clone());
+        self.env.set(name, args[1].clone());
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -1555,6 +1643,8 @@ fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> Str
                 let spelling = interner.spelling(*symbol);
                 if is_placeholder_word(spelling) {
                     format!(":{spelling}")
+                } else if spelling.starts_with(':') {
+                    spelling.to_string()
                 } else if arities.get(spelling).is_some() || is_operator_word(spelling) {
                     spelling.to_string()
                 } else {
@@ -1611,6 +1701,32 @@ mod tests {
         let (result, vm) = run("make \"x 42 print :x").unwrap();
         assert_eq!(result.output, "42\n");
         assert_eq!(vm.env().get("x").unwrap().show(vm.interner()), "42");
+    }
+
+    #[test]
+    fn make_updates_local_bindings_instead_of_shadowed_globals() {
+        let (result, vm) = run("make \"x 1
+             to change_local
+             local \"x
+             make \"x 5
+             print :x
+             end
+             change_local
+             print :x")
+        .unwrap();
+        assert_eq!(result.output, "5\n1\n");
+        assert_eq!(vm.env().get("x"), Some(&Value::number(1.0)));
+    }
+
+    #[test]
+    fn make_can_rebind_procedure_arguments() {
+        let (result, _) = run("to bump :x
+             make \"x sum :x 1
+             print :x
+             end
+             bump 4")
+        .unwrap();
+        assert_eq!(result.output, "5\n");
     }
 
     #[test]
@@ -1748,6 +1864,32 @@ mod tests {
              print runresult [sum 7 8]")
         .unwrap();
         assert_eq!(result.output, "[2 3 4]\n[2 3]\n10\na\nb\n30\n15\n");
+    }
+
+    #[test]
+    fn library_control_structures_run_over_instruction_lists() {
+        let (result, _) = run("make \"x 0 \
+             while [:x < 3] [make \"x sum :x 1] \
+             print :x \
+             make \"y 0 \
+             until [:y = 2] [make \"y sum :y 1] \
+             print :y \
+             make \"z 0 \
+             do.while [make \"z sum :z 1] [:z < 2] \
+             print :z")
+        .unwrap();
+        assert_eq!(result.output, "3\n2\n2\n");
+    }
+
+    #[test]
+    fn cond_case_and_for_are_available_by_default() {
+        let (result, _) = run("make \"acc [] \
+             for [i 1 5 2] [make \"acc lput :i :acc] \
+             print :acc \
+             cond [[[false] [print \"bad]] [[true] [print \"good]]] \
+             case 2 [[[1] [print \"one]] [[2 3] [print \"small]] [else [print \"other]]]")
+        .unwrap();
+        assert_eq!(result.output, "[1 3 5]\ngood\nsmall\n");
     }
 
     #[test]
