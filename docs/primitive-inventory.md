@@ -45,6 +45,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `MAKE`, `NAME`, `THING`, `LOCAL`
 - `DEFINEDP`/`DEFINED?`
 - `PRIMITIVEP`/`PRIMITIVE?`
+- `TEXT`, `FULLTEXT`, `COPYDEF`
 
 ## Arithmetic, comparison, and logic
 
@@ -73,7 +74,8 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Notes
 
 Not yet implemented from nearby roadmap/workspace tasks include the broader
-workspace-management family (`PO*`, `ERASE`, `TEXT`, `COPYDEF`, bury/unbury),
-file I/O (`LOAD`, `SAVE`, streams), macros, richer graphics primitives like
-`LABEL`/`FILL`, and the dynaturtle-specific runtime commands such as `TELL`,
-`ASK`, velocity, and collision/event APIs.
+workspace-management family (`PO*`, `ERASE`, bury/unbury), file I/O (`LOAD`,
+`SAVE`, streams), macros, richer graphics primitives like `LABEL`/`FILL`, and
+the dynaturtle-specific runtime commands such as `TELL`, `ASK`, velocity, and
+collision/event APIs. See also [primitive-gaps.md](primitive-gaps.md) for the
+current first-pass gap list.
