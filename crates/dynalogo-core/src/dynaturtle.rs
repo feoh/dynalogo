@@ -1,0 +1,223 @@
+//! Multi-turtle storage for v0.2 dynaturtles.
+//!
+//! The store is deliberately struct-of-arrays: per-tick updates and collision
+//! passes walk positions, headings, velocities, and flags as dense vectors.
+//! Language-level `TELL`, `ASK`, `EACH`, and `WHO` map to the active selection.
+
+use crate::turtle::{Point, TurtleState};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TurtleId(usize);
+
+impl TurtleId {
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub fn index(self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TurtleStore {
+    positions: Vec<Point>,
+    headings: Vec<f64>,
+    pen_down: Vec<bool>,
+    pen_color: Vec<u32>,
+    pen_size: Vec<f64>,
+    visible: Vec<bool>,
+    active: Vec<TurtleId>,
+}
+
+impl TurtleStore {
+    pub fn new() -> Self {
+        let mut store = Self {
+            positions: Vec::new(),
+            headings: Vec::new(),
+            pen_down: Vec::new(),
+            pen_color: Vec::new(),
+            pen_size: Vec::new(),
+            visible: Vec::new(),
+            active: Vec::new(),
+        };
+        let turtle = store.spawn_default();
+        store.active = vec![turtle];
+        store
+    }
+
+    pub fn len(&self) -> usize {
+        self.positions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.positions.is_empty()
+    }
+
+    pub fn spawn_default(&mut self) -> TurtleId {
+        self.spawn(TurtleState::default())
+    }
+
+    pub fn spawn(&mut self, state: TurtleState) -> TurtleId {
+        let id = TurtleId(self.positions.len());
+        self.positions.push(state.position);
+        self.headings.push(state.heading);
+        self.pen_down.push(state.pen_down);
+        self.pen_color.push(state.pen_color);
+        self.pen_size.push(state.pen_size);
+        self.visible.push(state.visible);
+        id
+    }
+
+    pub fn ensure(&mut self, id: TurtleId) {
+        while self.len() <= id.index() {
+            self.spawn_default();
+        }
+    }
+
+    pub fn state(&self, id: TurtleId) -> Option<TurtleState> {
+        let i = id.index();
+        Some(TurtleState {
+            position: *self.positions.get(i)?,
+            heading: *self.headings.get(i)?,
+            pen_down: *self.pen_down.get(i)?,
+            pen_color: *self.pen_color.get(i)?,
+            pen_size: *self.pen_size.get(i)?,
+            visible: *self.visible.get(i)?,
+        })
+    }
+
+    pub fn set_state(&mut self, id: TurtleId, state: TurtleState) {
+        self.ensure(id);
+        let i = id.index();
+        self.positions[i] = state.position;
+        self.headings[i] = state.heading;
+        self.pen_down[i] = state.pen_down;
+        self.pen_color[i] = state.pen_color;
+        self.pen_size[i] = state.pen_size;
+        self.visible[i] = state.visible;
+    }
+
+    pub fn active(&self) -> &[TurtleId] {
+        &self.active
+    }
+
+    pub fn who(&self) -> Option<TurtleId> {
+        self.active.first().copied()
+    }
+
+    pub fn tell_one(&mut self, id: TurtleId) {
+        self.ensure(id);
+        self.active = vec![id];
+    }
+
+    pub fn tell_many(&mut self, ids: impl IntoIterator<Item = TurtleId>) {
+        let ids: Vec<TurtleId> = ids.into_iter().collect();
+        for id in &ids {
+            self.ensure(*id);
+        }
+        self.active = ids;
+    }
+
+    pub fn ask<R>(&mut self, id: TurtleId, f: impl FnOnce(&mut Self) -> R) -> R {
+        let previous = self.active.clone();
+        self.tell_one(id);
+        let result = f(self);
+        self.active = previous;
+        result
+    }
+
+    pub fn each(&mut self, mut f: impl FnMut(&mut Self, TurtleId)) {
+        let ids = self.active.clone();
+        for id in ids {
+            self.tell_one(id);
+            f(self, id);
+        }
+    }
+
+    pub fn set_position(&mut self, id: TurtleId, position: Point) {
+        self.ensure(id);
+        self.positions[id.index()] = position;
+    }
+
+    pub fn set_heading(&mut self, id: TurtleId, heading: f64) {
+        self.ensure(id);
+        self.headings[id.index()] = heading.rem_euclid(360.0);
+    }
+
+    pub fn snapshots(&self) -> Vec<TurtleState> {
+        (0..self.len())
+            .map(|index| self.state(TurtleId(index)).expect("index in range"))
+            .collect()
+    }
+
+    pub fn positions(&self) -> &[Point] {
+        &self.positions
+    }
+
+    pub fn headings(&self) -> &[f64] {
+        &self.headings
+    }
+}
+
+impl Default for TurtleStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn store_starts_with_turtle_zero_active() {
+        let store = TurtleStore::new();
+        assert_eq!(store.len(), 1);
+        assert_eq!(store.who(), Some(TurtleId::new(0)));
+        assert_eq!(store.active(), &[TurtleId::new(0)]);
+    }
+
+    #[test]
+    fn tell_spawns_missing_turtles_and_sets_active_selection() {
+        let mut store = TurtleStore::new();
+        store.tell_many([TurtleId::new(2), TurtleId::new(4)]);
+        assert_eq!(store.len(), 5);
+        assert_eq!(store.active(), &[TurtleId::new(2), TurtleId::new(4)]);
+    }
+
+    #[test]
+    fn ask_temporarily_changes_active_turtle() {
+        let mut store = TurtleStore::new();
+        store.tell_many([TurtleId::new(0), TurtleId::new(1)]);
+        store.ask(TurtleId::new(3), |store| {
+            assert_eq!(store.active(), &[TurtleId::new(3)]);
+            store.set_position(TurtleId::new(3), Point::new(10.0, 20.0));
+        });
+        assert_eq!(store.active(), &[TurtleId::new(0), TurtleId::new(1)]);
+        assert_eq!(
+            store.state(TurtleId::new(3)).unwrap().position,
+            Point::new(10.0, 20.0)
+        );
+    }
+
+    #[test]
+    fn each_iterates_over_original_active_selection() {
+        let mut store = TurtleStore::new();
+        store.tell_many([TurtleId::new(1), TurtleId::new(2), TurtleId::new(3)]);
+        store.each(|store, id| store.set_heading(id, id.index() as f64 * 10.0));
+        assert_eq!(store.headings()[1], 10.0);
+        assert_eq!(store.headings()[2], 20.0);
+        assert_eq!(store.headings()[3], 30.0);
+    }
+
+    #[test]
+    fn snapshots_return_dense_turtle_states() {
+        let mut store = TurtleStore::new();
+        store.tell_one(TurtleId::new(2));
+        store.set_position(TurtleId::new(2), Point::new(5.0, 6.0));
+        let snapshots = store.snapshots();
+        assert_eq!(snapshots.len(), 3);
+        assert_eq!(snapshots[2].position, Point::new(5.0, 6.0));
+    }
+}
