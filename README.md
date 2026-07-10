@@ -35,9 +35,11 @@ END
 ## Workspace layout
 
 | Crate | Purpose |
-|---|---|
-| `crates/dynalogo-core` | Lexer, parser, bytecode compiler, VM, values, dynaturtle sim engine. Headless — no graphics dependencies. |
+| --- | --- |
+| `crates/dynalogo-core` | Lexer, parser, bytecode compiler, VM, values, dynaturtle sim engine. |
 | `crates/dynalogo` | Native frontend: window, turtle rendering, REPL. |
+
+`dynalogo-core` is headless and has no graphics dependencies.
 
 ## Status
 
