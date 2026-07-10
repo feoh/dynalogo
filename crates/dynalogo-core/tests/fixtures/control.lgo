@@ -1,0 +1,4 @@
+repeat 3 [print repcount]
+make "acc []
+for [i 1 5 2] [make "acc lput :i :acc]
+print :acc
