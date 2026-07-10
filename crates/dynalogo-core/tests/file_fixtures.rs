@@ -24,27 +24,56 @@ fn fixture_inputs() -> Vec<PathBuf> {
 }
 
 fn run_fixture(input_path: &Path) {
-    let expected_path = input_path.with_extension("out");
+    let stdout_path = input_path.with_extension("out");
+    let error_path = input_path.with_extension("err");
     let source = fs::read_to_string(input_path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", input_path.display()));
-    let expected = fs::read_to_string(&expected_path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", expected_path.display()));
 
     let mut vm = Vm::new();
-    let result = vm.eval_source(&source).unwrap_or_else(|error| {
-        panic!("fixture {} failed: {error}", input_path.display())
-    });
-
-    assert_eq!(
-        result.control,
-        ControlFlow::None,
-        "fixture {} ended with unexpected control flow",
-        input_path.display()
-    );
-    assert_eq!(
-        result.output,
-        expected,
-        "fixture {} output mismatch",
-        input_path.display()
-    );
+    match (stdout_path.exists(), error_path.exists()) {
+        (true, false) => {
+            let expected = fs::read_to_string(&stdout_path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", stdout_path.display()));
+            let result = vm.eval_source(&source).unwrap_or_else(|error| {
+                panic!("fixture {} failed: {error}", input_path.display())
+            });
+            assert_eq!(
+                result.control,
+                ControlFlow::None,
+                "fixture {} ended with unexpected control flow",
+                input_path.display()
+            );
+            assert_eq!(
+                result.output,
+                expected,
+                "fixture {} output mismatch",
+                input_path.display()
+            );
+        }
+        (false, true) => {
+            let expected = fs::read_to_string(&error_path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", error_path.display()));
+            let error = match vm.eval_source(&source) {
+                Ok(result) => panic!(
+                    "fixture {} unexpectedly succeeded with output {:?}",
+                    input_path.display(), result.output
+                ),
+                Err(error) => error,
+            };
+            assert_eq!(
+                error.message,
+                expected.trim_end(),
+                "fixture {} error mismatch",
+                input_path.display()
+            );
+        }
+        (true, true) => panic!(
+            "fixture {} cannot define both .out and .err expectations",
+            input_path.display()
+        ),
+        (false, false) => panic!(
+            "fixture {} must define either a .out or .err expectation",
+            input_path.display()
+        ),
+    }
 }
