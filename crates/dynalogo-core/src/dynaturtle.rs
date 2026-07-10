@@ -6,6 +6,33 @@
 
 use crate::turtle::{Point, TurtleState};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EdgeMode {
+    Bounce,
+    Wrap,
+    Fence,
+    Window,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WorldBounds {
+    pub min_x: f64,
+    pub min_y: f64,
+    pub max_x: f64,
+    pub max_y: f64,
+}
+
+impl WorldBounds {
+    pub fn new(min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> Self {
+        Self {
+            min_x,
+            min_y,
+            max_x,
+            max_y,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TurtleId(usize);
 
@@ -28,6 +55,8 @@ pub struct TurtleStore {
     pen_color: Vec<u32>,
     pen_size: Vec<f64>,
     visible: Vec<bool>,
+    shape: Vec<String>,
+    collision_radius: Vec<f64>,
     active: Vec<TurtleId>,
 }
 
@@ -41,6 +70,8 @@ impl TurtleStore {
             pen_color: Vec::new(),
             pen_size: Vec::new(),
             visible: Vec::new(),
+            shape: Vec::new(),
+            collision_radius: Vec::new(),
             active: Vec::new(),
         };
         let turtle = store.spawn_default();
@@ -69,6 +100,8 @@ impl TurtleStore {
         self.pen_color.push(state.pen_color);
         self.pen_size.push(state.pen_size);
         self.visible.push(state.visible);
+        self.shape.push("turtle".to_string());
+        self.collision_radius.push(8.0);
         id
     }
 
@@ -99,6 +132,21 @@ impl TurtleStore {
         self.pen_color[i] = state.pen_color;
         self.pen_size[i] = state.pen_size;
         self.visible[i] = state.visible;
+    }
+
+    pub fn set_shape(&mut self, id: TurtleId, shape: impl Into<String>, collision_radius: f64) {
+        self.ensure(id);
+        let i = id.index();
+        self.shape[i] = shape.into();
+        self.collision_radius[i] = collision_radius;
+    }
+
+    pub fn shape(&self, id: TurtleId) -> Option<&str> {
+        self.shape.get(id.index()).map(String::as_str)
+    }
+
+    pub fn collision_radius(&self, id: TurtleId) -> Option<f64> {
+        self.collision_radius.get(id.index()).copied()
     }
 
     pub fn active(&self) -> &[TurtleId] {
@@ -192,6 +240,67 @@ impl TurtleStore {
     pub fn velocities(&self) -> &[Point] {
         &self.velocities
     }
+
+    pub fn collision_radii(&self) -> &[f64] {
+        &self.collision_radius
+    }
+
+    pub fn apply_edge_mode(&mut self, bounds: WorldBounds, mode: EdgeMode) {
+        if mode == EdgeMode::Window {
+            return;
+        }
+
+        for index in 0..self.len() {
+            let radius = self.collision_radius[index];
+            let min_x = bounds.min_x + radius;
+            let max_x = bounds.max_x - radius;
+            let min_y = bounds.min_y + radius;
+            let max_y = bounds.max_y - radius;
+
+            match mode {
+                EdgeMode::Bounce => self.apply_bounce(index, min_x, max_x, min_y, max_y),
+                EdgeMode::Wrap => self.apply_wrap(index, bounds, radius),
+                EdgeMode::Fence => self.apply_fence(index, min_x, max_x, min_y, max_y),
+                EdgeMode::Window => unreachable!(),
+            }
+        }
+    }
+
+    fn apply_bounce(&mut self, index: usize, min_x: f64, max_x: f64, min_y: f64, max_y: f64) {
+        if self.positions[index].x < min_x || self.positions[index].x > max_x {
+            self.velocities[index].x = -self.velocities[index].x;
+            self.positions[index].x = self.positions[index].x.clamp(min_x, max_x);
+        }
+        if self.positions[index].y < min_y || self.positions[index].y > max_y {
+            self.velocities[index].y = -self.velocities[index].y;
+            self.positions[index].y = self.positions[index].y.clamp(min_y, max_y);
+        }
+    }
+
+    fn apply_wrap(&mut self, index: usize, bounds: WorldBounds, radius: f64) {
+        if self.positions[index].x + radius < bounds.min_x {
+            self.positions[index].x = bounds.max_x + radius;
+        } else if self.positions[index].x - radius > bounds.max_x {
+            self.positions[index].x = bounds.min_x - radius;
+        }
+        if self.positions[index].y + radius < bounds.min_y {
+            self.positions[index].y = bounds.max_y + radius;
+        } else if self.positions[index].y - radius > bounds.max_y {
+            self.positions[index].y = bounds.min_y - radius;
+        }
+    }
+
+    fn apply_fence(&mut self, index: usize, min_x: f64, max_x: f64, min_y: f64, max_y: f64) {
+        let old = self.positions[index];
+        self.positions[index].x = self.positions[index].x.clamp(min_x, max_x);
+        self.positions[index].y = self.positions[index].y.clamp(min_y, max_y);
+        if self.positions[index].x != old.x {
+            self.velocities[index].x = 0.0;
+        }
+        if self.positions[index].y != old.y {
+            self.velocities[index].y = 0.0;
+        }
+    }
 }
 
 impl Default for TurtleStore {
@@ -275,5 +384,57 @@ mod tests {
         assert!((velocity.x - 20.0).abs() < 1e-9);
         assert!(velocity.y.abs() < 1e-9);
         assert!((store.speed(TurtleId::new(0)).unwrap() - 20.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn shape_metadata_tracks_collision_radius() {
+        let mut store = TurtleStore::new();
+        store.set_shape(TurtleId::new(0), "ship", 12.5);
+        assert_eq!(store.shape(TurtleId::new(0)), Some("ship"));
+        assert_eq!(store.collision_radius(TurtleId::new(0)), Some(12.5));
+        assert_eq!(store.collision_radii(), &[12.5]);
+    }
+
+    #[test]
+    fn bounce_mode_clamps_position_and_flips_velocity() {
+        let mut store = TurtleStore::new();
+        store.set_position(TurtleId::new(0), Point::new(105.0, 0.0));
+        store.set_velocity(TurtleId::new(0), Point::new(4.0, 1.0));
+        store.apply_edge_mode(
+            WorldBounds::new(-100.0, -100.0, 100.0, 100.0),
+            EdgeMode::Bounce,
+        );
+        assert_eq!(store.state(TurtleId::new(0)).unwrap().position.x, 92.0);
+        assert_eq!(
+            store.velocity(TurtleId::new(0)).unwrap(),
+            Point::new(-4.0, 1.0)
+        );
+    }
+
+    #[test]
+    fn fence_mode_clamps_position_and_stops_blocked_axis() {
+        let mut store = TurtleStore::new();
+        store.set_position(TurtleId::new(0), Point::new(0.0, -120.0));
+        store.set_velocity(TurtleId::new(0), Point::new(3.0, -7.0));
+        store.apply_edge_mode(
+            WorldBounds::new(-100.0, -100.0, 100.0, 100.0),
+            EdgeMode::Fence,
+        );
+        assert_eq!(store.state(TurtleId::new(0)).unwrap().position.y, -92.0);
+        assert_eq!(
+            store.velocity(TurtleId::new(0)).unwrap(),
+            Point::new(3.0, 0.0)
+        );
+    }
+
+    #[test]
+    fn wrap_mode_wraps_fully_past_edge() {
+        let mut store = TurtleStore::new();
+        store.set_position(TurtleId::new(0), Point::new(110.0, 0.0));
+        store.apply_edge_mode(
+            WorldBounds::new(-100.0, -100.0, 100.0, 100.0),
+            EdgeMode::Wrap,
+        );
+        assert_eq!(store.state(TurtleId::new(0)).unwrap().position.x, -108.0);
     }
 }
