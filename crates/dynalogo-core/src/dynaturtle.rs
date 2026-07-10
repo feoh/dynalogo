@@ -22,6 +22,7 @@ impl TurtleId {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TurtleStore {
     positions: Vec<Point>,
+    velocities: Vec<Point>,
     headings: Vec<f64>,
     pen_down: Vec<bool>,
     pen_color: Vec<u32>,
@@ -34,6 +35,7 @@ impl TurtleStore {
     pub fn new() -> Self {
         let mut store = Self {
             positions: Vec::new(),
+            velocities: Vec::new(),
             headings: Vec::new(),
             pen_down: Vec::new(),
             pen_color: Vec::new(),
@@ -61,6 +63,7 @@ impl TurtleStore {
     pub fn spawn(&mut self, state: TurtleState) -> TurtleId {
         let id = TurtleId(self.positions.len());
         self.positions.push(state.position);
+        self.velocities.push(Point::new(0.0, 0.0));
         self.headings.push(state.heading);
         self.pen_down.push(state.pen_down);
         self.pen_color.push(state.pen_color);
@@ -145,6 +148,33 @@ impl TurtleStore {
         self.headings[id.index()] = heading.rem_euclid(360.0);
     }
 
+    pub fn velocity(&self, id: TurtleId) -> Option<Point> {
+        self.velocities.get(id.index()).copied()
+    }
+
+    pub fn speed(&self, id: TurtleId) -> Option<f64> {
+        self.velocity(id)
+            .map(|velocity| velocity.x.hypot(velocity.y))
+    }
+
+    pub fn set_velocity(&mut self, id: TurtleId, velocity: Point) {
+        self.ensure(id);
+        self.velocities[id.index()] = velocity;
+    }
+
+    pub fn set_speed(&mut self, id: TurtleId, speed: f64) {
+        self.ensure(id);
+        let heading = self.headings[id.index()].to_radians();
+        self.velocities[id.index()] = Point::new(heading.sin() * speed, heading.cos() * speed);
+    }
+
+    pub fn integrate(&mut self, dt_seconds: f64) {
+        for (position, velocity) in self.positions.iter_mut().zip(&self.velocities) {
+            position.x += velocity.x * dt_seconds;
+            position.y += velocity.y * dt_seconds;
+        }
+    }
+
     pub fn snapshots(&self) -> Vec<TurtleState> {
         (0..self.len())
             .map(|index| self.state(TurtleId(index)).expect("index in range"))
@@ -157,6 +187,10 @@ impl TurtleStore {
 
     pub fn headings(&self) -> &[f64] {
         &self.headings
+    }
+
+    pub fn velocities(&self) -> &[Point] {
+        &self.velocities
     }
 }
 
@@ -219,5 +253,27 @@ mod tests {
         let snapshots = store.snapshots();
         assert_eq!(snapshots.len(), 3);
         assert_eq!(snapshots[2].position, Point::new(5.0, 6.0));
+    }
+
+    #[test]
+    fn set_velocity_and_integrate_moves_turtles_continuously() {
+        let mut store = TurtleStore::new();
+        store.set_velocity(TurtleId::new(0), Point::new(10.0, -5.0));
+        store.integrate(0.5);
+        assert_eq!(
+            store.state(TurtleId::new(0)).unwrap().position,
+            Point::new(5.0, -2.5)
+        );
+    }
+
+    #[test]
+    fn set_speed_projects_along_logo_heading() {
+        let mut store = TurtleStore::new();
+        store.set_heading(TurtleId::new(0), 90.0);
+        store.set_speed(TurtleId::new(0), 20.0);
+        let velocity = store.velocity(TurtleId::new(0)).unwrap();
+        assert!((velocity.x - 20.0).abs() < 1e-9);
+        assert!(velocity.y.abs() < 1e-9);
+        assert!((store.speed(TurtleId::new(0)).unwrap() - 20.0).abs() < 1e-9);
     }
 }
