@@ -16,7 +16,11 @@ use crate::value::{List, Symbol, Value};
 pub enum Instruction {
     Push(Value),
     LoadThing(Symbol),
-    Call { callee: Symbol, argc: usize },
+    Call {
+        callee: Symbol,
+        argc: usize,
+        expects_value: bool,
+    },
     Infix(InfixOp),
     Halt,
 }
@@ -64,7 +68,7 @@ impl Compiler {
     pub fn compile_program(&self, program: &Program) -> Result<Chunk, CompileError> {
         let mut instructions = Vec::new();
         for expression in program.expressions() {
-            self.compile_expr(expression, &mut instructions)?;
+            self.compile_expr(expression, &mut instructions, false)?;
         }
         instructions.push(Instruction::Halt);
         Ok(Chunk::new(instructions))
@@ -74,22 +78,24 @@ impl Compiler {
         &self,
         expression: &Expr,
         instructions: &mut Vec<Instruction>,
+        expects_value: bool,
     ) -> Result<(), CompileError> {
         match expression {
             Expr::Literal(value) => instructions.push(Instruction::Push(value.clone())),
             Expr::Thing(symbol) => instructions.push(Instruction::LoadThing(*symbol)),
             Expr::Call { callee, args, .. } => {
                 for arg in args {
-                    self.compile_expr(arg, instructions)?;
+                    self.compile_expr(arg, instructions, true)?;
                 }
                 instructions.push(Instruction::Call {
                     callee: *callee,
                     argc: args.len(),
+                    expects_value,
                 });
             }
             Expr::Infix { op, left, right } => {
-                self.compile_expr(left, instructions)?;
-                self.compile_expr(right, instructions)?;
+                self.compile_expr(left, instructions, true)?;
+                self.compile_expr(right, instructions, true)?;
                 instructions.push(Instruction::Infix(*op));
             }
         }
@@ -154,11 +160,10 @@ impl ChunkCache {
             let chunk = compile()?;
             self.insert(key, chunk);
         }
-        Ok(self
-            .chunks
-            .get(&key)
-            .expect("chunk was just inserted")
-            .chunk())
+        match self.chunks.get(&key) {
+            Some(cached) => Ok(cached.chunk()),
+            None => unreachable!("chunk cache entry must exist after insertion"),
+        }
     }
 
     pub fn invalidate(&mut self, key: ChunkKey) -> bool {
@@ -230,14 +235,16 @@ mod tests {
             instructions[2],
             Instruction::Call {
                 callee: sum,
-                argc: 2
+                argc: 2,
+                expects_value: true
             }
         );
         assert_eq!(
             instructions[3],
             Instruction::Call {
                 callee: print,
-                argc: 1
+                argc: 1,
+                expects_value: false
             }
         );
         assert_eq!(instructions[4], Instruction::Halt);

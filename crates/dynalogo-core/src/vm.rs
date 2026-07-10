@@ -236,8 +236,9 @@ impl Vm {
     }
 
     fn install_control_library(&mut self) {
-        self.eval_source(CONTROL_LIBRARY_SOURCE)
-            .expect("control-library procedures should compile");
+        if let Err(error) = self.eval_source(CONTROL_LIBRARY_SOURCE) {
+            panic!("control-library procedures should compile: {}", error);
+        }
     }
 
     pub fn interner(&self) -> &Interner {
@@ -264,6 +265,11 @@ impl Vm {
         self.output.clear();
     }
 
+    fn remember_error(&mut self, error: VmError) -> VmError {
+        self.last_error = Some(error.message.clone());
+        error
+    }
+
     pub fn procedures(&self) -> &HashMap<String, Procedure> {
         &self.procedures
     }
@@ -281,20 +287,23 @@ impl Vm {
     }
 
     pub fn eval_source(&mut self, source: &str) -> Result<RunResult, VmError> {
-        let runnable = self.define_procedures_in_source(source)?;
-        if runnable.trim().is_empty() {
-            return Ok(RunResult {
-                stack: Vec::new(),
-                output: self.output.clone(),
-                control: ControlFlow::None,
-            });
-        }
-        let program = parse_source(&runnable, &mut self.interner, &self.arities)
-            .map_err(|error| VmError::new(error.to_string()))?;
-        let chunk = Compiler::new()
-            .compile_program(&program)
-            .map_err(|error| VmError::new(error.to_string()))?;
-        self.run(&chunk)
+        let result = (|| {
+            let runnable = self.define_procedures_in_source(source)?;
+            if runnable.trim().is_empty() {
+                return Ok(RunResult {
+                    stack: Vec::new(),
+                    output: self.output.clone(),
+                    control: ControlFlow::None,
+                });
+            }
+            let program = parse_source(&runnable, &mut self.interner, &self.arities)
+                .map_err(|error| VmError::new(error.to_string()))?;
+            let chunk = Compiler::new()
+                .compile_program(&program)
+                .map_err(|error| VmError::new(error.to_string()))?;
+            self.run(&chunk)
+        })();
+        result.map_err(|error| self.remember_error(error))
     }
 
     pub fn define_procedure(
@@ -342,11 +351,22 @@ impl Vm {
                     let value = self.load_thing(*symbol)?;
                     stack.push(value);
                 }
-                Instruction::Call { callee, argc } => {
+                Instruction::Call {
+                    callee,
+                    argc,
+                    expects_value,
+                } => {
                     let args = pop_args(&mut stack, *argc)?;
                     match self.call(*callee, args)? {
                         PrimitiveResult::Value(value) => stack.push(value),
-                        PrimitiveResult::NoValue => {}
+                        PrimitiveResult::NoValue => {
+                            if *expects_value {
+                                return Err(VmError::new(format!(
+                                    "{} didn't output a value",
+                                    self.interner.spelling(*callee)
+                                )));
+                            }
+                        }
                         PrimitiveResult::Control(control) => break control,
                     }
                 }
@@ -1227,16 +1247,23 @@ impl Vm {
         expect_arity("catch", &args, 2)?;
         let tag = args[0].clone();
         let list = list_input(&args[1], "CATCH")?;
-        match self.execute_instruction_list(list)? {
-            ControlFlow::Throw {
-                tag: thrown_tag,
-                value,
-            } if thrown_tag.equalp(&tag, &self.interner) => Ok(PrimitiveResult::Value(value)),
-            ControlFlow::None | ControlFlow::Stop => Ok(PrimitiveResult::NoValue),
-            ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
-            ControlFlow::Throw { tag, value } => {
-                Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
-            }
+        
+        match self.execute_instruction_list(list) {
+            Ok(control) => match control {
+                ControlFlow::Throw {
+                    tag: thrown_tag,
+                    value,
+                } if thrown_tag.equalp(&tag, &self.interner) => Ok(PrimitiveResult::Value(value)),
+                ControlFlow::None | ControlFlow::Stop => Ok(PrimitiveResult::NoValue),
+                ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
+                ControlFlow::Throw { tag, value } => {
+                    Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
+                }
+            },
+            Err(error) if is_error_catch_tag(&tag, &self.interner) => Ok(PrimitiveResult::Value(
+                Value::word(&mut self.interner, error.message),
+            )),
+            Err(error) => Err(error),
         }
     }
 
@@ -1592,6 +1619,13 @@ fn logo_truth(value: &Value, interner: &Interner) -> bool {
         Value::List(list) => !list.is_empty(),
         Value::Array(array) => !array.is_empty(),
     }
+}
+
+fn is_error_catch_tag(value: &Value, interner: &Interner) -> bool {
+    matches!(
+        value,
+        Value::Word(symbol) if interner.canonical_spelling(*symbol).eq("error")
+    )
 }
 
 fn first_char_value(interner: &mut Interner, text: &str) -> Result<Value, VmError> {
@@ -1952,6 +1986,36 @@ mod tests {
     fn wait_zero_is_noop_and_error_outputs_last_error_word() {
         let (result, _) = run("wait 0 print error").unwrap();
         assert_eq!(result.output, "\n");
+    }
+
+    #[test]
+    fn error_primitive_reports_last_failure_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("print").unwrap_err();
+        assert!(error.message.starts_with("not enough inputs to print"));
+        let result = vm.eval_source("print error").unwrap();
+        assert!(result.output.starts_with("not enough inputs to print"));
+    }
+
+    #[test]
+    fn catch_error_returns_last_failure_message() {
+        let mut vm = Vm::new();
+        let result = vm
+            .eval_source("print catch \"error [print]")
+            .unwrap();
+        assert!(result.output.starts_with("not enough inputs to print"));
+    }
+
+    #[test]
+    fn procedure_used_as_input_reports_missing_output() {
+        let mut vm = Vm::new();
+        let error = vm
+            .eval_source("to noop :x
+             print :x
+             end
+             print noop 5")
+            .unwrap_err();
+        assert!(error.message.starts_with("noop didn't output a value"));
     }
 
     #[test]

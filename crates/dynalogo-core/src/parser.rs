@@ -278,7 +278,7 @@ impl<'a> Parser<'a> {
             None => return Err(self.error_at_end("expected an expression")),
         };
         match token.kind {
-            TokenKind::Word(word) => self.word_expr(word),
+            TokenKind::Word(word) => self.word_expr(word, token.line, token.col),
             TokenKind::QuotedWord(word) => Ok(Expr::Literal(Value::word(self.interner, word))),
             TokenKind::ColonWord(word) => Ok(Expr::Thing(self.interner.intern(word))),
             TokenKind::LBracket => self.list_literal(token.line, token.col).map(Expr::Literal),
@@ -293,7 +293,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn word_expr(&mut self, word: String) -> Result<Expr, ParseError> {
+    fn word_expr(&mut self, word: String, line: usize, col: usize) -> Result<Expr, ParseError> {
         if let Some(number) = parse_logo_number(&word) {
             return Ok(Expr::Literal(Value::number(number)));
         }
@@ -303,7 +303,21 @@ impl<'a> Parser<'a> {
             Some(Arity::Exact(arity)) => {
                 let mut args = Vec::with_capacity(arity);
                 for _ in 0..arity {
-                    args.push(self.parse_expression(0)?);
+                    match self.parse_expression(0) {
+                        Ok(arg) => args.push(arg),
+                        Err(error)
+                            if error.line == 0
+                                || error.message == "unexpected delimiter"
+                                || error.message == "unexpected closing delimiter" =>
+                        {
+                            return Err(ParseError {
+                                message: format!("not enough inputs to {word}"),
+                                line,
+                                col,
+                            });
+                        }
+                        Err(error) => return Err(error),
+                    }
                 }
                 Ok(Expr::Call {
                     callee,
@@ -622,5 +636,12 @@ mod tests {
         let mut interner = Interner::new();
         let error = parse_source("[fd 100", &mut interner, &ArityTable::default()).unwrap_err();
         assert!(error.message.contains("]"));
+    }
+
+    #[test]
+    fn reports_not_enough_inputs_to_known_procedure() {
+        let mut interner = Interner::new();
+        let error = parse_source("print", &mut interner, &ArityTable::default()).unwrap_err();
+        assert_eq!(error.message, "not enough inputs to print");
     }
 }
