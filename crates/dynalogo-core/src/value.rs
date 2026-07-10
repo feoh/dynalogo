@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Symbol(u32);
@@ -166,7 +166,7 @@ impl Value {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct List(Option<Rc<ConsCell>>);
+pub struct List(Option<Arc<ConsCell>>);
 
 #[derive(Debug, Clone, PartialEq)]
 struct ConsCell {
@@ -180,7 +180,7 @@ impl List {
     }
 
     pub fn cons(head: Value, tail: List) -> Self {
-        Self(Some(Rc::new(ConsCell { head, tail })))
+        Self(Some(Arc::new(ConsCell { head, tail })))
     }
 
     pub fn from_values(values: impl IntoIterator<Item = Value>) -> Self {
@@ -221,7 +221,7 @@ impl List {
     }
 
     pub fn pointer_identity(&self) -> Option<usize> {
-        self.0.as_ref().map(|cell| Rc::as_ptr(cell) as usize)
+        self.0.as_ref().map(|cell| Arc::as_ptr(cell) as usize)
     }
 
     pub fn equalp(&self, other: &List, interner: &Interner) -> bool {

@@ -4,6 +4,7 @@ pub mod demon;
 pub mod dynaturtle;
 pub mod lexer;
 pub mod parser;
+pub mod runtime;
 pub mod sim;
 pub mod turtle;
 pub mod value;
