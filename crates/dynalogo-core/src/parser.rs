@@ -40,6 +40,8 @@ impl ArityTable {
             ("IFELSE", 3),
             ("RUN", 1),
             ("RUNRESULT", 1),
+            ("PARSE", 1),
+            ("RUNPARSE", 1),
             ("APPLY", 2),
             ("FOREACH", 2),
             ("MAP", 2),

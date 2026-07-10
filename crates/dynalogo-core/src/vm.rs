@@ -354,6 +354,8 @@ impl Vm {
             "ifelse" => self.ifelse(args),
             "run" => self.run_list(args),
             "runresult" => self.runresult(args),
+            "parse" => self.parse(args),
+            "runparse" => self.runparse(args),
             "apply" => self.apply(args),
             "foreach" => self.foreach(args),
             "map" => self.map(args),
@@ -811,6 +813,30 @@ impl Vm {
         result_value(result).map(PrimitiveResult::Value)
     }
 
+    fn parse(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("parse", &args, 1)?;
+        let text = source_text_input(&args[0], &self.interner);
+        let tokens = lex(&text).map_err(|error| VmError::new(error.to_string()))?;
+        let values = tokens
+            .into_iter()
+            .filter_map(|token| token_to_data_value(token.kind, &mut self.interner))
+            .collect::<Vec<_>>();
+        Ok(PrimitiveResult::Value(Value::List(List::from_values(
+            values,
+        ))))
+    }
+
+    fn runparse(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("runparse", &args, 1)?;
+        let text = source_text_input(&args[0], &self.interner);
+        let program = parse_source(&text, &mut self.interner, &self.arities)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        let chunk = Compiler::new()
+            .compile_program(&program)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        result_value(self.run(&chunk)?).map(PrimitiveResult::Value)
+    }
+
     fn apply(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("apply", &args, 2)?;
         let arg_list = list_input(&args[1], "APPLY")?;
@@ -1201,6 +1227,35 @@ fn variable_name_input(value: &Value, interner: &Interner) -> Result<String, VmE
     }
 }
 
+fn source_text_input(value: &Value, interner: &Interner) -> String {
+    match value {
+        Value::Word(symbol) => interner.spelling(*symbol).to_string(),
+        _ => value.show(interner),
+    }
+}
+
+fn token_to_data_value(kind: TokenKind, interner: &mut Interner) -> Option<Value> {
+    match kind {
+        TokenKind::Word(word) => Some(number_or_word_value(interner, word)),
+        TokenKind::QuotedWord(word) => Some(Value::word(interner, word)),
+        TokenKind::ColonWord(word) => Some(Value::word(interner, format!(":{word}"))),
+        TokenKind::Infix(op) => Some(Value::word(interner, op.to_string())),
+        TokenKind::LBracket => Some(Value::word(interner, "[")),
+        TokenKind::RBracket => Some(Value::word(interner, "]")),
+        TokenKind::LParen => Some(Value::word(interner, "(")),
+        TokenKind::RParen => Some(Value::word(interner, ")")),
+        TokenKind::LBrace => Some(Value::word(interner, "{")),
+        TokenKind::RBrace => Some(Value::word(interner, "}")),
+    }
+}
+
+fn number_or_word_value(interner: &mut Interner, word: String) -> Value {
+    match word.parse::<f64>() {
+        Ok(number) if number.is_finite() => Value::number(number),
+        _ => Value::word(interner, word),
+    }
+}
+
 fn starts_with_logo_word(line: &str, word: &str) -> bool {
     let mut parts = line.split_whitespace();
     matches!(parts.next(), Some(first) if first.eq_ignore_ascii_case(word))
@@ -1541,6 +1596,12 @@ mod tests {
              print runresult [sum 7 8]")
         .unwrap();
         assert_eq!(result.output, "[2 3 4]\n[2 3]\n10\na\nb\n30\n15\n");
+    }
+
+    #[test]
+    fn parse_and_runparse() {
+        let (result, _) = run("print parse \"|sum 1 2| print runparse \"|sum 3 4|").unwrap();
+        assert_eq!(result.output, "[sum 1 2]\n7\n");
     }
 
     #[test]
