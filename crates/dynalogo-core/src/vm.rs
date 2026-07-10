@@ -8,9 +8,10 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::bytecode::{Chunk, Instruction};
+use crate::bytecode::{Chunk, Compiler, Instruction};
 use crate::lexer::InfixOp;
-use crate::value::{Interner, LogoNumber, Symbol, Value};
+use crate::parser::{parse_source, ArityTable};
+use crate::value::{Interner, List, LogoNumber, Symbol, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ControlFlow {
@@ -92,11 +93,23 @@ impl Environment {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Vm {
     interner: Interner,
     env: Environment,
     output: String,
+    arities: ArityTable,
+}
+
+impl Default for Vm {
+    fn default() -> Self {
+        Self {
+            interner: Interner::new(),
+            env: Environment::new(),
+            output: String::new(),
+            arities: ArityTable::default(),
+        }
+    }
 }
 
 impl Vm {
@@ -188,12 +201,35 @@ impl Vm {
             "product" | "*" => self.number_binop(args, |a, b| a * b),
             "quotient" | "/" => self.number_binop(args, |a, b| a / b),
             "remainder" => self.number_binop(args, |a, b| a % b),
+            "and" => self.logic_and(args),
+            "or" => self.logic_or(args),
+            "not" => self.logic_not(args),
             "equalp" | "equal?" => self.equalp(args),
+            "emptyp" | "empty?" => self.emptyp(args),
+            "memberp" | "member?" => self.memberp(args),
+            "first" => self.first(args),
+            "butfirst" | "bf" => self.butfirst(args),
+            "last" => self.last(args),
+            "butlast" | "bl" => self.butlast(args),
+            "fput" => self.fput(args),
+            "lput" => self.lput(args),
+            "sentence" | "se" => self.sentence(args),
+            "list" => self.list(args),
+            "word" => self.word(args),
+            "count" => self.count(args),
+            "item" => self.item(args),
             "print" | "pr" => self.print(args),
             "show" => self.show(args),
             "type" => self.r#type(args),
+            "readlist" | "rl" => self.readlist(args),
             "make" | "name" => self.make(args),
             "thing" => self.thing(args),
+            "local" => self.local(args),
+            "repeat" => self.repeat(args),
+            "if" => self.r#if(args),
+            "ifelse" => self.ifelse(args),
+            "run" => self.run_list(args),
+            "repcount" => self.repcount(args),
             "output" | "op" => self.output_control(args),
             "stop" => {
                 expect_arity(&name, &args, 0).map(|()| PrimitiveResult::Control(ControlFlow::Stop))
@@ -248,6 +284,27 @@ impl Vm {
         Ok(PrimitiveResult::Value(self.logo_bool(op(a, b))))
     }
 
+    fn logic_and(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("and", &args, 2)?;
+        Ok(PrimitiveResult::Value(self.logo_bool(
+            logo_truth(&args[0], &self.interner) && logo_truth(&args[1], &self.interner),
+        )))
+    }
+
+    fn logic_or(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("or", &args, 2)?;
+        Ok(PrimitiveResult::Value(self.logo_bool(
+            logo_truth(&args[0], &self.interner) || logo_truth(&args[1], &self.interner),
+        )))
+    }
+
+    fn logic_not(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("not", &args, 1)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(!logo_truth(&args[0], &self.interner)),
+        ))
+    }
+
     fn equalp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("equalp", &args, 2)?;
         Ok(PrimitiveResult::Value(
@@ -260,6 +317,187 @@ impl Vm {
         Ok(PrimitiveResult::Value(
             self.logo_bool(!args[0].equalp(&args[1], &self.interner)),
         ))
+    }
+
+    fn emptyp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("emptyp", &args, 1)?;
+        let empty = match &args[0] {
+            Value::Word(symbol) => self.interner.spelling(*symbol).is_empty(),
+            Value::Number(_) => false,
+            Value::List(list) => list.is_empty(),
+        };
+        Ok(PrimitiveResult::Value(self.logo_bool(empty)))
+    }
+
+    fn memberp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("memberp", &args, 2)?;
+        let member = match &args[1] {
+            Value::List(list) => list
+                .iter()
+                .any(|value| args[0].equalp(value, &self.interner)),
+            Value::Word(symbol) => self
+                .interner
+                .spelling(*symbol)
+                .contains(&args[0].show(&self.interner)),
+            Value::Number(_) => false,
+        };
+        Ok(PrimitiveResult::Value(self.logo_bool(member)))
+    }
+
+    fn first(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("first", &args, 1)?;
+        let value = match &args[0] {
+            Value::Word(symbol) => {
+                let text = self.interner.spelling(*symbol).to_string();
+                first_char_value(&mut self.interner, &text)?
+            }
+            Value::Number(number) => {
+                let text = Value::Number(*number).show(&self.interner);
+                first_char_value(&mut self.interner, &text)?
+            }
+            Value::List(list) => list
+                .first()
+                .cloned()
+                .ok_or_else(|| VmError::new("FIRST of empty list"))?,
+        };
+        Ok(PrimitiveResult::Value(value))
+    }
+
+    fn butfirst(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("butfirst", &args, 1)?;
+        let value = match &args[0] {
+            Value::Word(symbol) => {
+                let text = drop_first_char(self.interner.spelling(*symbol));
+                Value::word(&mut self.interner, text)
+            }
+            Value::Number(number) => {
+                let text = drop_first_char(&Value::Number(*number).show(&self.interner));
+                Value::word(&mut self.interner, text)
+            }
+            Value::List(list) => Value::List(list.butfirst().cloned().unwrap_or_else(List::empty)),
+        };
+        Ok(PrimitiveResult::Value(value))
+    }
+
+    fn last(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("last", &args, 1)?;
+        let value = match &args[0] {
+            Value::Word(symbol) => {
+                let text = self.interner.spelling(*symbol).to_string();
+                last_char_value(&mut self.interner, &text)?
+            }
+            Value::Number(number) => {
+                let text = Value::Number(*number).show(&self.interner);
+                last_char_value(&mut self.interner, &text)?
+            }
+            Value::List(list) => list
+                .iter()
+                .last()
+                .cloned()
+                .ok_or_else(|| VmError::new("LAST of empty list"))?,
+        };
+        Ok(PrimitiveResult::Value(value))
+    }
+
+    fn butlast(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("butlast", &args, 1)?;
+        let value = match &args[0] {
+            Value::Word(symbol) => {
+                let text = drop_last_char(self.interner.spelling(*symbol));
+                Value::word(&mut self.interner, text)
+            }
+            Value::Number(number) => {
+                let text = drop_last_char(&Value::Number(*number).show(&self.interner));
+                Value::word(&mut self.interner, text)
+            }
+            Value::List(list) => {
+                let mut values: Vec<Value> = list.iter().cloned().collect();
+                values.pop();
+                Value::List(List::from_values(values))
+            }
+        };
+        Ok(PrimitiveResult::Value(value))
+    }
+
+    fn fput(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("fput", &args, 2)?;
+        let Value::List(list) = &args[1] else {
+            return Err(VmError::new("FPUT second input must be a list"));
+        };
+        Ok(PrimitiveResult::Value(Value::List(List::cons(
+            args[0].clone(),
+            list.clone(),
+        ))))
+    }
+
+    fn lput(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("lput", &args, 2)?;
+        let Value::List(list) = &args[1] else {
+            return Err(VmError::new("LPUT second input must be a list"));
+        };
+        let mut values: Vec<Value> = list.iter().cloned().collect();
+        values.push(args[0].clone());
+        Ok(PrimitiveResult::Value(Value::List(List::from_values(
+            values,
+        ))))
+    }
+
+    fn sentence(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("sentence", &args, 2)?;
+        let mut values = Vec::new();
+        sentence_part(&args[0], &mut values);
+        sentence_part(&args[1], &mut values);
+        Ok(PrimitiveResult::Value(Value::List(List::from_values(
+            values,
+        ))))
+    }
+
+    fn list(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("list", &args, 2)?;
+        Ok(PrimitiveResult::Value(Value::List(List::from_values(args))))
+    }
+
+    fn word(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("word", &args, 2)?;
+        let text = format!(
+            "{}{}",
+            args[0].show(&self.interner),
+            args[1].show(&self.interner)
+        );
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            text,
+        )))
+    }
+
+    fn count(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("count", &args, 1)?;
+        let count = match &args[0] {
+            Value::Word(symbol) => self.interner.spelling(*symbol).chars().count(),
+            Value::Number(number) => Value::Number(*number).show(&self.interner).chars().count(),
+            Value::List(list) => list.len(),
+        };
+        Ok(PrimitiveResult::Value(Value::number(count as f64)))
+    }
+
+    fn item(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("item", &args, 2)?;
+        let index = number_input(&args[0], &self.interner)? as usize;
+        let value = match &args[1] {
+            Value::Word(symbol) => {
+                let text = self.interner.spelling(*symbol).to_string();
+                nth_char_value(&mut self.interner, &text, index)?
+            }
+            Value::Number(number) => {
+                let text = Value::Number(*number).show(&self.interner);
+                nth_char_value(&mut self.interner, &text, index)?
+            }
+            Value::List(list) => list
+                .item(index)
+                .cloned()
+                .ok_or_else(|| VmError::new("ITEM index out of range"))?,
+        };
+        Ok(PrimitiveResult::Value(value))
     }
 
     fn print(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -282,6 +520,13 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn readlist(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("readlist", &args, 0)?;
+        Err(VmError::new(
+            "READLIST is not connected to an input stream yet",
+        ))
+    }
+
     fn make(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("make", &args, 2)?;
         let name = variable_name_input(&args[0], &self.interner)?;
@@ -297,6 +542,84 @@ impl Vm {
             .get(&name)
             .cloned()
             .ok_or_else(|| VmError::new(format!("{name} has no value")))?;
+        Ok(PrimitiveResult::Value(value))
+    }
+
+    fn local(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("local", &args, 1)?;
+        let names = local_names(&args[0], &self.interner)?;
+        for name in names {
+            self.env.define_local(name, Value::List(List::empty()));
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn repeat(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("repeat", &args, 2)?;
+        let count = number_input(&args[0], &self.interner)? as usize;
+        let list = list_input(&args[1], "REPEAT")?;
+        for i in 1..=count {
+            self.env.define_local("repcount", Value::number(i as f64));
+            match self.execute_instruction_list(list)? {
+                ControlFlow::None => {}
+                control => return Ok(PrimitiveResult::Control(control)),
+            }
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn r#if(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("if", &args, 2)?;
+        if logo_truth(&args[0], &self.interner) {
+            let list = list_input(&args[1], "IF")?;
+            match self.execute_instruction_list(list)? {
+                ControlFlow::None => Ok(PrimitiveResult::NoValue),
+                control => Ok(PrimitiveResult::Control(control)),
+            }
+        } else {
+            Ok(PrimitiveResult::NoValue)
+        }
+    }
+
+    fn ifelse(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("ifelse", &args, 3)?;
+        let list = if logo_truth(&args[0], &self.interner) {
+            list_input(&args[1], "IFELSE")?
+        } else {
+            list_input(&args[2], "IFELSE")?
+        };
+        match self.execute_instruction_list(list)? {
+            ControlFlow::None => Ok(PrimitiveResult::NoValue),
+            control => Ok(PrimitiveResult::Control(control)),
+        }
+    }
+
+    fn run_list(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("run", &args, 1)?;
+        let list = list_input(&args[0], "RUN")?;
+        match self.execute_instruction_list(list)? {
+            ControlFlow::None => Ok(PrimitiveResult::NoValue),
+            control => Ok(PrimitiveResult::Control(control)),
+        }
+    }
+
+    fn execute_instruction_list(&mut self, list: &List) -> Result<ControlFlow, VmError> {
+        let source = list_to_source(list, &self.interner, &self.arities);
+        let program = parse_source(&source, &mut self.interner, &self.arities)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        let chunk = Compiler::new()
+            .compile_program(&program)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        Ok(self.run(&chunk)?.control)
+    }
+
+    fn repcount(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("repcount", &args, 0)?;
+        let value = self
+            .env
+            .get("repcount")
+            .cloned()
+            .ok_or_else(|| VmError::new("REPCOUNT is only available inside REPEAT"))?;
         Ok(PrimitiveResult::Value(value))
     }
 
@@ -352,6 +675,108 @@ fn variable_name_input(value: &Value, interner: &Interner) -> Result<String, VmE
             value.show(interner)
         ))),
     }
+}
+
+fn list_input<'a>(value: &'a Value, name: &str) -> Result<&'a List, VmError> {
+    match value {
+        Value::List(list) => Ok(list),
+        _ => Err(VmError::new(format!("{name} input must be a list"))),
+    }
+}
+
+fn sentence_part(value: &Value, values: &mut Vec<Value>) {
+    match value {
+        Value::List(list) => values.extend(list.iter().cloned()),
+        _ => values.push(value.clone()),
+    }
+}
+
+fn local_names(value: &Value, interner: &Interner) -> Result<Vec<String>, VmError> {
+    match value {
+        Value::Word(symbol) => Ok(vec![interner.spelling(*symbol).to_string()]),
+        Value::List(list) => list
+            .iter()
+            .map(|value| variable_name_input(value, interner))
+            .collect(),
+        _ => Err(VmError::new(format!(
+            "{} is not a variable name or list of names",
+            value.show(interner)
+        ))),
+    }
+}
+
+fn logo_truth(value: &Value, interner: &Interner) -> bool {
+    match value {
+        Value::Word(symbol) => !interner.canonical_spelling(*symbol).eq("false"),
+        Value::Number(number) => number.get() != 0.0,
+        Value::List(list) => !list.is_empty(),
+    }
+}
+
+fn first_char_value(interner: &mut Interner, text: &str) -> Result<Value, VmError> {
+    let first = text
+        .chars()
+        .next()
+        .ok_or_else(|| VmError::new("FIRST of empty word"))?;
+    Ok(Value::word(interner, first.to_string()))
+}
+
+fn last_char_value(interner: &mut Interner, text: &str) -> Result<Value, VmError> {
+    let last = text
+        .chars()
+        .next_back()
+        .ok_or_else(|| VmError::new("LAST of empty word"))?;
+    Ok(Value::word(interner, last.to_string()))
+}
+
+fn nth_char_value(
+    interner: &mut Interner,
+    text: &str,
+    one_based_index: usize,
+) -> Result<Value, VmError> {
+    if one_based_index == 0 {
+        return Err(VmError::new("ITEM index out of range"));
+    }
+    let ch = text
+        .chars()
+        .nth(one_based_index - 1)
+        .ok_or_else(|| VmError::new("ITEM index out of range"))?;
+    Ok(Value::word(interner, ch.to_string()))
+}
+
+fn drop_first_char(text: &str) -> String {
+    text.chars().skip(1).collect()
+}
+
+fn drop_last_char(text: &str) -> String {
+    let mut chars: Vec<char> = text.chars().collect();
+    chars.pop();
+    chars.into_iter().collect()
+}
+
+fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> String {
+    list.iter()
+        .map(|value| match value {
+            Value::List(inner) => format!("[{}]", list_to_source(inner, interner, arities)),
+            Value::Word(symbol) => {
+                let spelling = interner.spelling(*symbol);
+                if arities.get(spelling).is_some() || is_operator_word(spelling) {
+                    spelling.to_string()
+                } else {
+                    format!("\"{spelling}")
+                }
+            }
+            _ => value.show(interner),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn is_operator_word(text: &str) -> bool {
+    matches!(
+        text,
+        "+" | "-" | "*" | "/" | "=" | "<" | ">" | "<=" | ">=" | "<>"
+    )
 }
 
 #[cfg(test)]
@@ -433,5 +858,52 @@ mod tests {
         assert_eq!(vm.env().get("x"), Some(&Value::number(2.0)));
         vm.env_mut().pop_frame();
         assert_eq!(vm.env().get("x"), Some(&Value::number(1.0)));
+    }
+
+    #[test]
+    fn word_and_list_primitives() {
+        let (result, _) = run("print first \"hello \
+             print butfirst \"hello \
+             print last \"hello \
+             print butlast \"hello \
+             print word \"hi \"there \
+             print list \"a \"b \
+             print sentence [a b] [c d] \
+             print fput \"z [a b] \
+             print lput \"z [a b]")
+        .unwrap();
+        assert_eq!(
+            result.output,
+            "h\nello\no\nhell\nhithere\n[a b]\n[a b c d]\n[z a b]\n[a b z]\n"
+        );
+    }
+
+    #[test]
+    fn count_item_empty_and_member_primitives() {
+        let (result, _) = run("print count [a b c] \
+             print item 2 [a b c] \
+             print emptyp [] \
+             print emptyp \" \
+             print memberp \"b [a b c] \
+             print memberp \"x [a b c]")
+        .unwrap();
+        assert_eq!(result.output, "3\nb\ntrue\ntrue\ntrue\nfalse\n");
+    }
+
+    #[test]
+    fn logic_primitives() {
+        let (result, _) =
+            run("print and \"true \"true print or \"false \"true print not \"false").unwrap();
+        assert_eq!(result.output, "true\ntrue\ntrue\n");
+    }
+
+    #[test]
+    fn repeat_if_ifelse_and_run_execute_instruction_lists() {
+        let (result, _) = run("repeat 3 [print repcount] \
+             if \"true [print \"yes] \
+             ifelse \"false [print \"bad] [print \"good] \
+             run [print sum 4 5]")
+        .unwrap();
+        assert_eq!(result.output, "1\n2\n3\nyes\ngood\n9\n");
     }
 }
