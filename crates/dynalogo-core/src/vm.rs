@@ -104,6 +104,7 @@ pub struct Vm {
     output: String,
     arities: ArityTable,
     procedures: HashMap<String, Procedure>,
+    property_lists: HashMap<String, HashMap<String, Value>>,
     turtle: TurtleWorld<HeadlessTurtleBackend>,
     test_result: Option<bool>,
     last_error: Option<String>,
@@ -138,6 +139,7 @@ impl Default for Vm {
             output: String::new(),
             arities: ArityTable::default(),
             procedures: HashMap::new(),
+            property_lists: HashMap::new(),
             turtle: TurtleWorld::new(HeadlessTurtleBackend::new()),
             test_result: None,
             last_error: None,
@@ -176,6 +178,10 @@ impl Vm {
 
     pub fn procedures(&self) -> &HashMap<String, Procedure> {
         &self.procedures
+    }
+
+    pub fn property_lists(&self) -> &HashMap<String, HashMap<String, Value>> {
+        &self.property_lists
     }
 
     pub fn turtle(&self) -> &TurtleWorld<HeadlessTurtleBackend> {
@@ -349,6 +355,10 @@ impl Vm {
             "make" | "name" => self.make(args),
             "thing" => self.thing(args),
             "local" => self.local(args),
+            "pprop" => self.pprop(args),
+            "gprop" => self.gprop(args),
+            "remprop" => self.remprop(args),
+            "plist" => self.plist(args),
             "repeat" => self.repeat(args),
             "if" => self.r#if(args),
             "ifelse" => self.ifelse(args),
@@ -741,6 +751,57 @@ impl Vm {
             self.env.define_local(name, Value::List(List::empty()));
         }
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn pprop(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pprop", &args, 3)?;
+        let plist_name = property_key_input(&args[0], &self.interner)?;
+        let property_name = property_key_input(&args[1], &self.interner)?;
+        self.property_lists
+            .entry(plist_name)
+            .or_default()
+            .insert(property_name, args[2].clone());
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn gprop(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("gprop", &args, 2)?;
+        let plist_name = property_key_input(&args[0], &self.interner)?;
+        let property_name = property_key_input(&args[1], &self.interner)?;
+        let value = self
+            .property_lists
+            .get(&plist_name)
+            .and_then(|plist| plist.get(&property_name))
+            .cloned()
+            .unwrap_or_else(|| Value::List(List::empty()));
+        Ok(PrimitiveResult::Value(value))
+    }
+
+    fn remprop(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("remprop", &args, 2)?;
+        let plist_name = property_key_input(&args[0], &self.interner)?;
+        let property_name = property_key_input(&args[1], &self.interner)?;
+        if let Some(plist) = self.property_lists.get_mut(&plist_name) {
+            plist.remove(&property_name);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn plist(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("plist", &args, 1)?;
+        let plist_name = property_key_input(&args[0], &self.interner)?;
+        let mut values = Vec::new();
+        if let Some(plist) = self.property_lists.get(&plist_name) {
+            let mut entries: Vec<_> = plist.iter().collect();
+            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            for (name, value) in entries {
+                values.push(Value::word(&mut self.interner, name));
+                values.push(value.clone());
+            }
+        }
+        Ok(PrimitiveResult::Value(Value::List(List::from_values(
+            values,
+        ))))
     }
 
     fn repeat(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1227,6 +1288,17 @@ fn variable_name_input(value: &Value, interner: &Interner) -> Result<String, VmE
     }
 }
 
+fn property_key_input(value: &Value, interner: &Interner) -> Result<String, VmError> {
+    match value {
+        Value::Word(symbol) => Ok(interner.canonical_spelling(*symbol).to_string()),
+        Value::Number(_) => Ok(value.show(interner)),
+        Value::List(_) => Err(VmError::new(format!(
+            "{} is not a property-list key",
+            value.show(interner)
+        ))),
+    }
+}
+
 fn source_text_input(value: &Value, interner: &Interner) -> String {
     match value {
         Value::Word(symbol) => interner.spelling(*symbol).to_string(),
@@ -1596,6 +1668,19 @@ mod tests {
              print runresult [sum 7 8]")
         .unwrap();
         assert_eq!(result.output, "[2 3 4]\n[2 3]\n10\na\nb\n30\n15\n");
+    }
+
+    #[test]
+    fn property_list_primitives() {
+        let (result, vm) = run("pprop \"animal \"legs 4 \
+             pprop \"animal \"sound \"woof \
+             print gprop \"animal \"legs \
+             print plist \"animal \
+             remprop \"animal \"legs \
+             print gprop \"animal \"legs")
+        .unwrap();
+        assert_eq!(result.output, "4\n[legs 4 sound woof]\n[]\n");
+        assert!(vm.property_lists().contains_key("animal"));
     }
 
     #[test]
