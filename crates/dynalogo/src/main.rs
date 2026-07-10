@@ -108,6 +108,13 @@ fn eval_and_print(vm: &mut Vm, source: &str) -> Result<(), String> {
             println!("{}", value.show(vm.interner()));
         }
         ControlFlow::Stop => {}
+        ControlFlow::Throw { tag, value } => {
+            println!(
+                "Uncaught THROW {} {}",
+                tag.show(vm.interner()),
+                value.show(vm.interner())
+            );
+        }
     }
     Ok(())
 }

@@ -7,6 +7,8 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::thread;
+use std::time::Duration;
 
 use crate::bytecode::{Chunk, Compiler, Instruction};
 use crate::lexer::{lex, InfixOp, TokenKind};
@@ -19,6 +21,7 @@ pub enum ControlFlow {
     None,
     Output(Value),
     Stop,
+    Throw { tag: Value, value: Value },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,6 +105,8 @@ pub struct Vm {
     arities: ArityTable,
     procedures: HashMap<String, Procedure>,
     turtle: TurtleWorld<HeadlessTurtleBackend>,
+    test_result: Option<bool>,
+    last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -134,6 +139,8 @@ impl Default for Vm {
             arities: ArityTable::default(),
             procedures: HashMap::new(),
             turtle: TurtleWorld::new(HeadlessTurtleBackend::new()),
+            test_result: None,
+            last_error: None,
         }
     }
 }
@@ -347,6 +354,15 @@ impl Vm {
             "ifelse" => self.ifelse(args),
             "run" => self.run_list(args),
             "repcount" => self.repcount(args),
+            "test" => self.test(args),
+            "iftrue" | "ift" => self.iftrue(args),
+            "iffalse" | "iff" => self.iffalse(args),
+            "wait" => self.wait(args),
+            "catch" => self.catch(args),
+            "throw" => self.throw(args),
+            "error" => self.error(args),
+            "pause" => self.pause(args),
+            "continue" => self.continue_(args),
             "forward" | "fd" => self.turtle_forward(args),
             "back" | "bk" => self.turtle_back(args),
             "left" | "lt" => self.turtle_left(args),
@@ -397,6 +413,9 @@ impl Vm {
         match result?.control {
             ControlFlow::None | ControlFlow::Stop => Ok(PrimitiveResult::NoValue),
             ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
+            ControlFlow::Throw { tag, value } => {
+                Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
+            }
         }
     }
 
@@ -783,6 +802,93 @@ impl Vm {
             .cloned()
             .ok_or_else(|| VmError::new("REPCOUNT is only available inside REPEAT"))?;
         Ok(PrimitiveResult::Value(value))
+    }
+
+    fn test(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("test", &args, 1)?;
+        self.test_result = Some(logo_truth(&args[0], &self.interner));
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn iftrue(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("iftrue", &args, 1)?;
+        match self.test_result {
+            Some(true) => {
+                let list = list_input(&args[0], "IFTRUE")?;
+                match self.execute_instruction_list(list)? {
+                    ControlFlow::None => Ok(PrimitiveResult::NoValue),
+                    control => Ok(PrimitiveResult::Control(control)),
+                }
+            }
+            Some(false) => Ok(PrimitiveResult::NoValue),
+            None => Err(VmError::new("TEST has not been run")),
+        }
+    }
+
+    fn iffalse(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("iffalse", &args, 1)?;
+        match self.test_result {
+            Some(false) => {
+                let list = list_input(&args[0], "IFFALSE")?;
+                match self.execute_instruction_list(list)? {
+                    ControlFlow::None => Ok(PrimitiveResult::NoValue),
+                    control => Ok(PrimitiveResult::Control(control)),
+                }
+            }
+            Some(true) => Ok(PrimitiveResult::NoValue),
+            None => Err(VmError::new("TEST has not been run")),
+        }
+    }
+
+    fn wait(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("wait", &args, 1)?;
+        let sixtieths = number_input(&args[0], &self.interner)?.max(0.0);
+        thread::sleep(Duration::from_secs_f64(sixtieths / 60.0));
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn catch(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("catch", &args, 2)?;
+        let tag = args[0].clone();
+        let list = list_input(&args[1], "CATCH")?;
+        match self.execute_instruction_list(list)? {
+            ControlFlow::Throw {
+                tag: thrown_tag,
+                value,
+            } if thrown_tag.equalp(&tag, &self.interner) => Ok(PrimitiveResult::Value(value)),
+            ControlFlow::None | ControlFlow::Stop => Ok(PrimitiveResult::NoValue),
+            ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
+            ControlFlow::Throw { tag, value } => {
+                Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
+            }
+        }
+    }
+
+    fn throw(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("throw", &args, 2)?;
+        Ok(PrimitiveResult::Control(ControlFlow::Throw {
+            tag: args[0].clone(),
+            value: args[1].clone(),
+        }))
+    }
+
+    fn error(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("error", &args, 0)?;
+        let message = self.last_error.clone().unwrap_or_default();
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            message,
+        )))
+    }
+
+    fn pause(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pause", &args, 0)?;
+        Err(VmError::new("PAUSE debugger is not implemented yet"))
+    }
+
+    fn continue_(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("continue", &args, 0)?;
+        Err(VmError::new("CONTINUE debugger is not implemented yet"))
     }
 
     fn turtle_forward(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1269,6 +1375,37 @@ mod tests {
              countdown 3")
         .unwrap();
         assert_eq!(result.output, "3\n2\n1\n");
+    }
+
+    #[test]
+    fn test_iftrue_and_iffalse_use_last_test_result() {
+        let (result, _) = run("test equalp 1 1 iftrue [print \"yes] iffalse [print \"no] \
+             test equalp 1 2 iftrue [print \"bad] iffalse [print \"good]")
+        .unwrap();
+        assert_eq!(result.output, "yes\ngood\n");
+    }
+
+    #[test]
+    fn catch_returns_matching_throw_value() {
+        let (result, _) = run("print catch \"tag [throw \"tag \"value print \"bad]").unwrap();
+        assert_eq!(result.output, "value\n");
+    }
+
+    #[test]
+    fn uncaught_throw_propagates_as_control_flow() {
+        let (result, vm) = run("throw \"outer 17 print \"bad").unwrap();
+        let ControlFlow::Throw { tag, value } = result.control else {
+            panic!("expected uncaught THROW");
+        };
+        assert_eq!(tag.show(vm.interner()), "outer");
+        assert_eq!(value, Value::number(17.0));
+        assert_eq!(result.output, "");
+    }
+
+    #[test]
+    fn wait_zero_is_noop_and_error_outputs_last_error_word() {
+        let (result, _) = run("wait 0 print error").unwrap();
+        assert_eq!(result.output, "\n");
     }
 
     #[test]
