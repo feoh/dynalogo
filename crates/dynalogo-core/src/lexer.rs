@@ -261,7 +261,9 @@ impl<'a> Lexer<'a> {
     }
 
     fn consume_operator(&mut self) -> InfixOp {
-        let c = self.bump().expect("operator start");
+        let Some(c) = self.bump() else {
+            unreachable!("consume_operator is called only after peeking an operator");
+        };
         match c {
             '+' => InfixOp::Plus,
             '-' => InfixOp::Minus,
@@ -380,7 +382,10 @@ mod tests {
     use super::*;
 
     fn kinds(source: &str) -> Vec<TokenKind> {
-        lex(source).unwrap().into_iter().map(|t| t.kind).collect()
+        match lex(source) {
+            Ok(tokens) => tokens.into_iter().map(|t| t.kind).collect(),
+            Err(error) => panic!("lexing should succeed: {error}"),
+        }
     }
 
     fn word(s: &str) -> TokenKind {
@@ -550,7 +555,10 @@ mod tests {
 
     #[test]
     fn space_before_tracking_for_unary_minus() {
-        let tokens = lex("fd -5 3-4").unwrap();
+        let tokens = match lex("fd -5 3-4") {
+            Ok(tokens) => tokens,
+            Err(error) => panic!("lexing should succeed: {error}"),
+        };
         let minus_positions: Vec<(usize, bool)> = tokens
             .iter()
             .enumerate()
@@ -565,7 +573,10 @@ mod tests {
 
     #[test]
     fn positions() {
-        let tokens = lex("fd 100\nrt 90").unwrap();
+        let tokens = match lex("fd 100\nrt 90") {
+            Ok(tokens) => tokens,
+            Err(error) => panic!("lexing should succeed: {error}"),
+        };
         assert_eq!((tokens[0].line, tokens[0].col), (1, 1));
         assert_eq!((tokens[1].line, tokens[1].col), (1, 4));
         assert_eq!((tokens[2].line, tokens[2].col), (2, 1));
