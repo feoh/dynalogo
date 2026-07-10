@@ -103,6 +103,7 @@ impl ArityTable {
             ("PRIMITIVE?", 1),
             ("TEXT", 1),
             ("FULLTEXT", 1),
+            ("COPYDEF", 2),
             ("PPROP", 3),
             ("GPROP", 2),
             ("REMPROP", 2),

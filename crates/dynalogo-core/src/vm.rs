@@ -481,6 +481,7 @@ impl Vm {
             "primitivep" | "primitive?" => self.primitivep(args),
             "text" => self.text(args),
             "fulltext" => self.fulltext(args),
+            "copydef" => self.copydef(args),
             "pprop" => self.pprop(args),
             "gprop" => self.gprop(args),
             "remprop" => self.remprop(args),
@@ -947,6 +948,20 @@ impl Vm {
             &mut self.interner,
             true,
         )?)))
+    }
+
+    fn copydef(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("copydef", &args, 2)?;
+        let new_name = variable_name_input(&args[0], &self.interner)?;
+        let procedure = self.workspace_procedure(&args[1])?.clone();
+        let params = procedure
+            .params()
+            .iter()
+            .map(|param| self.interner.spelling(*param).to_string())
+            .collect::<Vec<_>>();
+        let body_source = procedure.body_source().to_string();
+        self.define_procedure(new_name, params, &body_source)?;
+        Ok(PrimitiveResult::NoValue)
     }
 
     fn workspace_procedure(&self, value: &Value) -> Result<&Procedure, VmError> {
@@ -2218,6 +2233,19 @@ mod tests {
             result.output,
             "[[to square :x] [output product :x :x]]\n[[to square :x] [output product :x :x] [end]]\n"
         );
+    }
+
+    #[test]
+    fn copydef_clones_a_workspace_procedure() {
+        let mut vm = Vm::new();
+        vm.eval_source("to square :x
+             output product :x :x
+             end
+             copydef \"quad \"square")
+            .unwrap();
+        let result = vm.eval_source("print quad 6 print text \"quad").unwrap();
+        assert_eq!(result.output, "36\n[[to quad :x] [output product :x :x]]\n");
+        assert!(vm.procedures().contains_key("quad"));
     }
 
     #[test]
