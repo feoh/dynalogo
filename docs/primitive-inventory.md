@@ -1,0 +1,79 @@
+# Primitive inventory snapshot
+
+This document is a snapshot of the primitives and library-level procedures that
+are currently implemented in DynaLOGO. It is intended as a working baseline for
+manual comparison against the UCBLogo reference.
+
+## Core control and evaluation
+
+- `OUTPUT`, `OP`, `STOP`
+- `REPEAT`, `REPCOUNT`
+- `IF`, `IFELSE`, `RUN`, `RUNRESULT`
+- `PARSE`, `RUNPARSE`, `APPLY`
+- `TEST`, `IFTRUE`/`IFT`, `IFFALSE`/`IFF`
+- `CATCH`, `THROW`, `ERROR`, `WAIT`
+- `PAUSE`, `CONTINUE` currently exist but still return "not implemented yet"
+
+## Library control structures
+
+Loaded at VM startup as Logo procedures rather than Rust primitives:
+
+- `FOR`
+- `WHILE`
+- `UNTIL`
+- `DO.WHILE`
+- `CASE`
+- `COND`
+
+## Templates and collection processing
+
+- `FOREACH`
+- `MAP`
+- `FILTER`
+- `REDUCE`
+
+## Words, lists, arrays, and property lists
+
+- `FIRST`, `BUTFIRST`/`BF`, `LAST`, `BUTLAST`/`BL`
+- `FPUT`, `LPUT`, `SENTENCE`/`SE`, `LIST`, `WORD`
+- `COUNT`, `ITEM`, `EMPTYP`/`EMPTY?`, `EQUALP`/`EQUAL?`, `MEMBERP`/`MEMBER?`
+- `ARRAY`, `SETITEM`, `LISTTOARRAY`, `ARRAYTOLIST`
+- `PPROP`, `GPROP`, `REMPROP`, `PLIST`
+
+## Variables and workspace predicates
+
+- `MAKE`, `NAME`, `THING`, `LOCAL`
+- `DEFINEDP`/`DEFINED?`
+- `PRIMITIVEP`/`PRIMITIVE?`
+
+## Arithmetic, comparison, and logic
+
+- `SUM`, `DIFFERENCE`, `PRODUCT`, `QUOTIENT`, `REMAINDER`
+- Infix operators: `+`, `-`, `*`, `/`, `<`, `>`, `=`, `<=`, `>=`, `<>`
+- `AND`, `OR`, `NOT`
+
+## Console I/O
+
+- `PRINT`/`PR`
+- `SHOW`
+- `TYPE`
+- `READLIST`/`RL`
+
+## Turtle graphics
+
+- `FORWARD`/`FD`, `BACK`/`BK`
+- `LEFT`/`LT`, `RIGHT`/`RT`
+- `SETXY`, `SETPOS`, `SETHEADING`/`SETH`
+- `HOME`, `CLEARSCREEN`/`CS`
+- `PENUP`/`PU`, `PENDOWN`/`PD`
+- `SETPENCOLOR`/`SETPC`, `SETPENSIZE`
+- `HIDETURTLE`/`HT`, `SHOWTURTLE`/`ST`
+- `POS`, `HEADING`, `XCOR`, `YCOR`
+
+## Notes
+
+Not yet implemented from nearby roadmap/workspace tasks include the broader
+workspace-management family (`PO*`, `ERASE`, `TEXT`, `COPYDEF`, bury/unbury),
+file I/O (`LOAD`, `SAVE`, streams), macros, richer graphics primitives like
+`LABEL`/`FILL`, and the dynaturtle-specific runtime commands such as `TELL`,
+`ASK`, velocity, and collision/event APIs.

@@ -94,8 +94,9 @@ v0.1 feature set:
 
 Early development, but the current REPL and window frontend are already useful
 for experimenting with core Logo and static turtle graphics. See
-[ROADMAP.md](ROADMAP.md) for the version plan and [PLAN.md](PLAN.md) for the
-architecture.
+[ROADMAP.md](ROADMAP.md) for the version plan, [PLAN.md](PLAN.md) for the
+architecture, and [docs/primitive-inventory.md](docs/primitive-inventory.md)
+for a snapshot of the currently implemented primitive surface.
 
 ## License
 
