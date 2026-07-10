@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::bytecode::{Chunk, Compiler, Instruction};
-use crate::lexer::InfixOp;
-use crate::parser::{parse_source, ArityTable};
+use crate::lexer::{lex, InfixOp, TokenKind};
+use crate::parser::{parse_source, Arity, ArityTable};
 use crate::value::{Interner, List, LogoNumber, Symbol, Value};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -99,6 +99,28 @@ pub struct Vm {
     env: Environment,
     output: String,
     arities: ArityTable,
+    procedures: HashMap<String, Procedure>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Procedure {
+    name: Symbol,
+    params: Vec<Symbol>,
+    chunk: Chunk,
+}
+
+impl Procedure {
+    pub fn name(&self) -> Symbol {
+        self.name
+    }
+
+    pub fn params(&self) -> &[Symbol] {
+        &self.params
+    }
+
+    pub fn chunk(&self) -> &Chunk {
+        &self.chunk
+    }
 }
 
 impl Default for Vm {
@@ -108,6 +130,7 @@ impl Default for Vm {
             env: Environment::new(),
             output: String::new(),
             arities: ArityTable::default(),
+            procedures: HashMap::new(),
         }
     }
 }
@@ -139,6 +162,56 @@ impl Vm {
 
     pub fn clear_output(&mut self) {
         self.output.clear();
+    }
+
+    pub fn procedures(&self) -> &HashMap<String, Procedure> {
+        &self.procedures
+    }
+
+    pub fn eval_source(&mut self, source: &str) -> Result<RunResult, VmError> {
+        let runnable = self.define_procedures_in_source(source)?;
+        if runnable.trim().is_empty() {
+            return Ok(RunResult {
+                stack: Vec::new(),
+                output: self.output.clone(),
+                control: ControlFlow::None,
+            });
+        }
+        let program = parse_source(&runnable, &mut self.interner, &self.arities)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        let chunk = Compiler::new()
+            .compile_program(&program)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        self.run(&chunk)
+    }
+
+    pub fn define_procedure(
+        &mut self,
+        name: impl AsRef<str>,
+        params: Vec<String>,
+        body: &str,
+    ) -> Result<(), VmError> {
+        let name = name.as_ref();
+        let name_symbol = self.interner.intern(name);
+        let param_symbols: Vec<Symbol> = params
+            .iter()
+            .map(|param| self.interner.intern(param))
+            .collect();
+        self.arities.insert(name, Arity::Exact(param_symbols.len()));
+        let program = parse_source(body, &mut self.interner, &self.arities)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        let chunk = Compiler::new()
+            .compile_program(&program)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        self.procedures.insert(
+            name.to_ascii_lowercase(),
+            Procedure {
+                name: name_symbol,
+                params: param_symbols,
+                chunk,
+            },
+        );
+        Ok(())
     }
 
     pub fn run(&mut self, chunk: &Chunk) -> Result<RunResult, VmError> {
@@ -193,6 +266,39 @@ impl Vm {
             .ok_or_else(|| VmError::new(format!("{name} has no value")))
     }
 
+    fn define_procedures_in_source(&mut self, source: &str) -> Result<String, VmError> {
+        let mut runnable = Vec::new();
+        let mut lines = source.lines().peekable();
+
+        while let Some(line) = lines.next() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if !starts_with_logo_word(trimmed, "to") {
+                runnable.push(line.to_string());
+                continue;
+            }
+
+            let (name, params) = parse_to_header(trimmed)?;
+            let mut body = Vec::new();
+            let mut saw_end = false;
+            for body_line in lines.by_ref() {
+                if body_line.trim().eq_ignore_ascii_case("end") {
+                    saw_end = true;
+                    break;
+                }
+                body.push(body_line.to_string());
+            }
+            if !saw_end {
+                return Err(VmError::new(format!("procedure {name} is missing END")));
+            }
+            self.define_procedure(name, params, &body.join("\n"))?;
+        }
+
+        Ok(runnable.join("\n"))
+    }
+
     fn call(&mut self, callee: Symbol, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         let name = self.interner.canonical_spelling(callee).to_string();
         match name.as_str() {
@@ -234,7 +340,33 @@ impl Vm {
             "stop" => {
                 expect_arity(&name, &args, 0).map(|()| PrimitiveResult::Control(ControlFlow::Stop))
             }
-            _ => Err(VmError::new(format!("I don't know how to {name}"))),
+            _ => self.call_user_procedure(&name, args),
+        }
+    }
+
+    fn call_user_procedure(
+        &mut self,
+        name: &str,
+        args: Vec<Value>,
+    ) -> Result<PrimitiveResult, VmError> {
+        let procedure = self
+            .procedures
+            .get(name)
+            .cloned()
+            .ok_or_else(|| VmError::new(format!("I don't know how to {name}")))?;
+        expect_arity(name, &args, procedure.params.len())?;
+
+        self.env.push_frame();
+        for (param, value) in procedure.params.iter().zip(args) {
+            let name = self.interner.spelling(*param).to_string();
+            self.env.define_local(name, value);
+        }
+        let result = self.run(&procedure.chunk);
+        self.env.pop_frame();
+
+        match result?.control {
+            ControlFlow::None | ControlFlow::Stop => Ok(PrimitiveResult::NoValue),
+            ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
         }
     }
 
@@ -677,6 +809,34 @@ fn variable_name_input(value: &Value, interner: &Interner) -> Result<String, VmE
     }
 }
 
+fn starts_with_logo_word(line: &str, word: &str) -> bool {
+    let mut parts = line.split_whitespace();
+    matches!(parts.next(), Some(first) if first.eq_ignore_ascii_case(word))
+}
+
+fn parse_to_header(line: &str) -> Result<(String, Vec<String>), VmError> {
+    let tokens = lex(line).map_err(|error| VmError::new(error.to_string()))?;
+    let mut iter = tokens.into_iter();
+    match iter.next().map(|token| token.kind) {
+        Some(TokenKind::Word(word)) if word.eq_ignore_ascii_case("to") => {}
+        _ => return Err(VmError::new("expected TO header")),
+    }
+
+    let name = match iter.next().map(|token| token.kind) {
+        Some(TokenKind::Word(name)) => name,
+        _ => return Err(VmError::new("TO requires a procedure name")),
+    };
+
+    let mut params = Vec::new();
+    for token in iter {
+        match token.kind {
+            TokenKind::ColonWord(param) => params.push(param),
+            _ => return Err(VmError::new("TO parameters must be written as :name")),
+        }
+    }
+    Ok((name, params))
+}
+
 fn list_input<'a>(value: &'a Value, name: &str) -> Result<&'a List, VmError> {
     match value {
         Value::List(list) => Ok(list),
@@ -782,17 +942,9 @@ fn is_operator_word(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bytecode::Compiler;
-    use crate::parser::{parse_source, ArityTable};
-
     fn run(source: &str) -> Result<(RunResult, Vm), VmError> {
         let mut vm = Vm::new();
-        let program = parse_source(source, vm.interner_mut(), &ArityTable::default())
-            .map_err(|error| VmError::new(error.to_string()))?;
-        let chunk = Compiler::new()
-            .compile_program(&program)
-            .map_err(|error| VmError::new(error.to_string()))?;
-        let result = vm.run(&chunk)?;
+        let result = vm.eval_source(source)?;
         Ok((result, vm))
     }
 
@@ -905,5 +1057,40 @@ mod tests {
              run [print sum 4 5]")
         .unwrap();
         assert_eq!(result.output, "1\n2\n3\nyes\ngood\n9\n");
+    }
+
+    #[test]
+    fn defines_and_calls_outputting_procedure() {
+        let (result, vm) = run("to square :x\n\
+             output product :x :x\n\
+             end\n\
+             print square 5")
+        .unwrap();
+        assert_eq!(result.output, "25\n");
+        assert!(vm.procedures().contains_key("square"));
+    }
+
+    #[test]
+    fn procedure_arguments_are_dynamically_scoped() {
+        let (result, _) = run("to showx :x\n\
+             print :x\n\
+             end\n\
+             make \"x 10\n\
+             showx 99\n\
+             print :x")
+        .unwrap();
+        assert_eq!(result.output, "99\n10\n");
+    }
+
+    #[test]
+    fn recursive_procedure_can_call_itself() {
+        let (result, _) = run("to countdown :n\n\
+             if equalp :n 0 [stop]\n\
+             print :n\n\
+             countdown difference :n 1\n\
+             end\n\
+             countdown 3")
+        .unwrap();
+        assert_eq!(result.output, "3\n2\n1\n");
     }
 }
