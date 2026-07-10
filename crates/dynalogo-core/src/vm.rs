@@ -299,7 +299,7 @@ impl Vm {
             let program = parse_source(&runnable, &mut self.interner, &self.arities)
                 .map_err(|error| VmError::new(error.to_string()))?;
             let chunk = Compiler::new()
-                .compile_program(&program)
+                .compile_effect_program(&program)
                 .map_err(|error| VmError::new(error.to_string()))?;
             self.run(&chunk)
         })();
@@ -322,7 +322,7 @@ impl Vm {
         let program = parse_source(body, &mut self.interner, &self.arities)
             .map_err(|error| VmError::new(error.to_string()))?;
         let chunk = Compiler::new()
-            .compile_program(&program)
+            .compile_effect_program(&program)
             .map_err(|error| VmError::new(error.to_string()))?;
         self.procedures.insert(
             name.to_ascii_lowercase(),
@@ -378,6 +378,14 @@ impl Vm {
                         .pop()
                         .ok_or_else(|| VmError::new("infix operator missing left input"))?;
                     stack.push(self.eval_infix(*op, left, right)?);
+                }
+                Instruction::CheckNoValue => {
+                    if let Some(value) = stack.pop() {
+                        return Err(VmError::new(format!(
+                            "You don't say what to do with {}",
+                            value.show(&self.interner)
+                        )));
+                    }
                 }
                 Instruction::Halt => break ControlFlow::None,
             }
@@ -1035,7 +1043,17 @@ impl Vm {
     }
 
     fn execute_instruction_list(&mut self, list: &List) -> Result<ControlFlow, VmError> {
-        Ok(self.execute_instruction_list_result(list)?.control)
+        Ok(self.execute_instruction_list_effect(list)?.control)
+    }
+
+    fn execute_instruction_list_effect(&mut self, list: &List) -> Result<RunResult, VmError> {
+        let source = list_to_source(list, &self.interner, &self.arities);
+        let program = parse_source(&source, &mut self.interner, &self.arities)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        let chunk = Compiler::new()
+            .compile_effect_program(&program)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        self.run(&chunk)
     }
 
     fn execute_instruction_list_result(&mut self, list: &List) -> Result<RunResult, VmError> {
@@ -1169,7 +1187,25 @@ impl Vm {
         template: &List,
         values: Vec<Value>,
     ) -> Result<ControlFlow, VmError> {
-        Ok(self.execute_template_result(template, values)?.control)
+        Ok(self.execute_template_effect(template, values)?.control)
+    }
+
+    fn execute_template_effect(
+        &mut self,
+        template: &List,
+        values: Vec<Value>,
+    ) -> Result<RunResult, VmError> {
+        self.env.push_frame();
+        for (index, value) in values.iter().cloned().enumerate() {
+            let numbered = format!("?{}", index + 1);
+            self.env.define_local(numbered, value.clone());
+            if index == 0 {
+                self.env.define_local("?", value);
+            }
+        }
+        let result = self.execute_instruction_list_effect(template);
+        self.env.pop_frame();
+        result
     }
 
     fn execute_template_result(
@@ -1986,6 +2022,22 @@ mod tests {
     fn wait_zero_is_noop_and_error_outputs_last_error_word() {
         let (result, _) = run("wait 0 print error").unwrap();
         assert_eq!(result.output, "\n");
+    }
+
+    #[test]
+    fn top_level_unused_value_is_an_error() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("sum 2 3 print 9").unwrap_err();
+        assert_eq!(error.message, "You don't say what to do with 5");
+        assert_eq!(vm.output(), "");
+    }
+
+    #[test]
+    fn run_rejects_unused_values_inside_instruction_lists() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("run [sum 2 3 print 9]").unwrap_err();
+        assert_eq!(error.message, "You don't say what to do with 5");
+        assert_eq!(vm.output(), "");
     }
 
     #[test]

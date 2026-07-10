@@ -22,7 +22,14 @@ pub enum Instruction {
         expects_value: bool,
     },
     Infix(InfixOp),
+    CheckNoValue,
     Halt,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompileMode {
+    Effect,
+    Result,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,9 +73,24 @@ impl Compiler {
     }
 
     pub fn compile_program(&self, program: &Program) -> Result<Chunk, CompileError> {
+        self.compile_program_in_mode(program, CompileMode::Result)
+    }
+
+    pub fn compile_effect_program(&self, program: &Program) -> Result<Chunk, CompileError> {
+        self.compile_program_in_mode(program, CompileMode::Effect)
+    }
+
+    fn compile_program_in_mode(
+        &self,
+        program: &Program,
+        mode: CompileMode,
+    ) -> Result<Chunk, CompileError> {
         let mut instructions = Vec::new();
         for expression in program.expressions() {
             self.compile_expr(expression, &mut instructions, false)?;
+            if mode == CompileMode::Effect {
+                instructions.push(Instruction::CheckNoValue);
+            }
         }
         instructions.push(Instruction::Halt);
         Ok(Chunk::new(instructions))
@@ -222,9 +244,16 @@ mod tests {
         (chunk, interner)
     }
 
+    fn compile_effect(source: &str) -> (Chunk, Interner) {
+        let mut interner = Interner::new();
+        let program = parse_source(source, &mut interner, &ArityTable::default()).unwrap();
+        let chunk = Compiler::new().compile_effect_program(&program).unwrap();
+        (chunk, interner)
+    }
+
     #[test]
     fn compiles_prefix_call_stack_order() {
-        let (chunk, mut interner) = compile("print sum 1 2");
+        let (chunk, mut interner) = compile_effect("print sum 1 2");
         let instructions = chunk.instructions();
         assert_eq!(instructions[0], Instruction::Push(Value::number(1.0)));
         assert_eq!(instructions[1], Instruction::Push(Value::number(2.0)));
@@ -247,7 +276,28 @@ mod tests {
                 expects_value: false
             }
         );
-        assert_eq!(instructions[4], Instruction::Halt);
+        assert_eq!(instructions[4], Instruction::CheckNoValue);
+        assert_eq!(instructions[5], Instruction::Halt);
+    }
+
+    #[test]
+    fn effect_programs_check_for_unused_values() {
+        let (chunk, mut interner) = compile_effect("sum 2 3");
+        let sum = interner.intern("sum");
+        assert_eq!(
+            chunk.instructions(),
+            &[
+                Instruction::Push(Value::number(2.0)),
+                Instruction::Push(Value::number(3.0)),
+                Instruction::Call {
+                    callee: sum,
+                    argc: 2,
+                    expects_value: false,
+                },
+                Instruction::CheckNoValue,
+                Instruction::Halt,
+            ]
+        );
     }
 
     #[test]
