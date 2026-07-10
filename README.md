@@ -41,10 +41,61 @@ END
 
 `dynalogo-core` is headless and has no graphics dependencies.
 
+## Running DynaLOGO
+
+### Terminal REPL
+
+```bash
+cargo run -p dynalogo --bin dynalogo
+```
+
+Useful commands:
+
+- `cargo run -p dynalogo --bin dynalogo -- --eval 'print sum 2 3'`
+- `cargo run -p dynalogo --bin dynalogo < examples/square.lgo`
+
+### Native turtle window
+
+```bash
+cargo run -p dynalogo --bin dynalogo-window
+```
+
+The window frontend keeps a small command log at the bottom and renders turtle
+lines on a centered Cartesian canvas.
+
+## Current feature snapshot
+
+Implemented today:
+
+- `TO ... END` procedures with dynamic scope and recursion
+- Core control: `REPEAT IF IFELSE RUN RUNRESULT REPCOUNT`
+- Richer v0.3 control: `TEST IFTRUE IFFALSE CATCH THROW ERROR WAIT`
+- Library control structures: `FOR WHILE UNTIL DO.WHILE CASE COND`
+- Lists/words: `FIRST BUTFIRST LAST BUTLAST FPUT LPUT SENTENCE LIST WORD`
+- Data utilities: `COUNT ITEM EMPTYP EQUALP MEMBERP`
+- Arithmetic, infix operators, comparisons, and boolean logic
+- Variables and property lists: `MAKE THING LOCAL PPROP GPROP PLIST REMPROP`
+- Arrays and templates: `ARRAY SETITEM LISTTOARRAY ARRAYTOLIST MAP FILTER REDUCE FOREACH APPLY`
+- Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD SETPC SETPENSIZE HT ST POS HEADING XCOR YCOR`
+
+Still in progress: file/workspace primitives, macro support, full UCBLogo error
+parity, dynaturtle simulation commands, and browser/WASM support.
+
+## Example programs
+
+See [`examples/`](examples/) for small programs that run against the current
+v0.1 feature set:
+
+- `square.lgo` — the smallest turtle demo
+- `flower.lgo` — procedures + repeated drawing
+- `spiral.lgo` — arithmetic, variables, and looping
+
 ## Status
 
-Early development. See [ROADMAP.md](ROADMAP.md) for the version plan and
-[PLAN.md](PLAN.md) for the architecture.
+Early development, but the current REPL and window frontend are already useful
+for experimenting with core Logo and static turtle graphics. See
+[ROADMAP.md](ROADMAP.md) for the version plan and [PLAN.md](PLAN.md) for the
+architecture.
 
 ## License
 

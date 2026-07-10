@@ -1,0 +1,7 @@
+to petal
+  repeat 2 [fd 80 rt 60 fd 80 rt 120]
+end
+
+cs
+repeat 6 [petal rt 60]
+ht

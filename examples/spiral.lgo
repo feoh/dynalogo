@@ -1,0 +1,8 @@
+to step :size
+  fd :size
+  rt 89
+end
+
+make "size 5
+repeat 40 [step :size make "size sum :size 3]
+ht
