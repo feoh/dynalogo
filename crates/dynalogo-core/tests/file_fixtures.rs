@@ -32,11 +32,12 @@ fn run_fixture(input_path: &Path) {
     let mut vm = Vm::new();
     match (stdout_path.exists(), error_path.exists()) {
         (true, false) => {
-            let expected = fs::read_to_string(&stdout_path)
-                .unwrap_or_else(|error| panic!("failed to read {}: {error}", stdout_path.display()));
-            let result = vm.eval_source(&source).unwrap_or_else(|error| {
-                panic!("fixture {} failed: {error}", input_path.display())
+            let expected = fs::read_to_string(&stdout_path).unwrap_or_else(|error| {
+                panic!("failed to read {}: {error}", stdout_path.display())
             });
+            let result = vm
+                .eval_source(&source)
+                .unwrap_or_else(|error| panic!("fixture {} failed: {error}", input_path.display()));
             assert_eq!(
                 result.control,
                 ControlFlow::None,
@@ -56,7 +57,8 @@ fn run_fixture(input_path: &Path) {
             let error = match vm.eval_source(&source) {
                 Ok(result) => panic!(
                     "fixture {} unexpectedly succeeded with output {:?}",
-                    input_path.display(), result.output
+                    input_path.display(),
+                    result.output
                 ),
                 Err(error) => error,
             };

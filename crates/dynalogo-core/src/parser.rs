@@ -101,6 +101,8 @@ impl ArityTable {
             ("DEFINED?", 1),
             ("PRIMITIVEP", 1),
             ("PRIMITIVE?", 1),
+            ("TEXT", 1),
+            ("FULLTEXT", 1),
             ("PPROP", 3),
             ("GPROP", 2),
             ("REMPROP", 2),

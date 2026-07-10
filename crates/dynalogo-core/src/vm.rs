@@ -196,6 +196,7 @@ pub struct Procedure {
     name: Symbol,
     params: Vec<Symbol>,
     chunk: Chunk,
+    body_source: String,
 }
 
 impl Procedure {
@@ -209,6 +210,10 @@ impl Procedure {
 
     pub fn chunk(&self) -> &Chunk {
         &self.chunk
+    }
+
+    pub fn body_source(&self) -> &str {
+        &self.body_source
     }
 }
 
@@ -330,6 +335,7 @@ impl Vm {
                 name: name_symbol,
                 params: param_symbols,
                 chunk,
+                body_source: body.to_string(),
             },
         );
         Ok(())
@@ -473,6 +479,8 @@ impl Vm {
             "local" => self.local(args),
             "definedp" | "defined?" => self.definedp(args),
             "primitivep" | "primitive?" => self.primitivep(args),
+            "text" => self.text(args),
+            "fulltext" => self.fulltext(args),
             "pprop" => self.pprop(args),
             "gprop" => self.gprop(args),
             "remprop" => self.remprop(args),
@@ -908,15 +916,44 @@ impl Vm {
     fn definedp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("definedp", &args, 1)?;
         let name = variable_name_input(&args[0], &self.interner)?;
-        Ok(PrimitiveResult::Value(
-            self.logo_bool(self.procedures.contains_key(&name.to_ascii_lowercase())),
-        ))
+        Ok(PrimitiveResult::Value(self.logo_bool(
+            self.procedures.contains_key(&name.to_ascii_lowercase()),
+        )))
     }
 
     fn primitivep(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("primitivep", &args, 1)?;
         let name = variable_name_input(&args[0], &self.interner)?;
-        Ok(PrimitiveResult::Value(self.logo_bool(is_primitive_name(&name))))
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(is_primitive_name(&name)),
+        ))
+    }
+
+    fn text(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("text", &args, 1)?;
+        let procedure = self.workspace_procedure(&args[0])?.clone();
+        Ok(PrimitiveResult::Value(Value::List(procedure_text(
+            &procedure,
+            &mut self.interner,
+            false,
+        )?)))
+    }
+
+    fn fulltext(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("fulltext", &args, 1)?;
+        let procedure = self.workspace_procedure(&args[0])?.clone();
+        Ok(PrimitiveResult::Value(Value::List(procedure_text(
+            &procedure,
+            &mut self.interner,
+            true,
+        )?)))
+    }
+
+    fn workspace_procedure(&self, value: &Value) -> Result<&Procedure, VmError> {
+        let name = variable_name_input(value, &self.interner)?;
+        self.procedures
+            .get(&name.to_ascii_lowercase())
+            .ok_or_else(|| VmError::new(format!("I don't know how to {name}")))
     }
 
     fn pprop(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1299,7 +1336,7 @@ impl Vm {
         expect_arity("catch", &args, 2)?;
         let tag = args[0].clone();
         let list = list_input(&args[1], "CATCH")?;
-        
+
         match self.execute_instruction_list(list) {
             Ok(control) => match control {
                 ControlFlow::Throw {
@@ -1678,6 +1715,41 @@ fn is_error_catch_tag(value: &Value, interner: &Interner) -> bool {
         value,
         Value::Word(symbol) if interner.canonical_spelling(*symbol).eq("error")
     )
+}
+
+fn procedure_text(
+    procedure: &Procedure,
+    interner: &mut Interner,
+    include_end: bool,
+) -> Result<List, VmError> {
+    let mut lines = vec![procedure_header_line(procedure, interner)];
+    for line in procedure.body_source().lines() {
+        lines.push(parse_source_line(line, interner)?);
+    }
+    if include_end {
+        lines.push(parse_source_line("end", interner)?);
+    }
+    Ok(List::from_values(lines.into_iter().map(Value::List)))
+}
+
+fn procedure_header_line(procedure: &Procedure, interner: &mut Interner) -> List {
+    let mut values = vec![Value::word(interner, "to"), Value::Word(procedure.name())];
+    values.extend(
+        procedure
+            .params()
+            .iter()
+            .map(|param| Value::word(interner, format!(":{}", interner.spelling(*param)))),
+    );
+    List::from_values(values)
+}
+
+fn parse_source_line(line: &str, interner: &mut Interner) -> Result<List, VmError> {
+    let tokens = lex(line).map_err(|error| VmError::new(error.to_string()))?;
+    let values = tokens
+        .into_iter()
+        .filter_map(|token| token_to_data_value(token.kind, interner))
+        .collect::<Vec<_>>();
+    Ok(List::from_values(values))
 }
 
 fn is_primitive_name(name: &str) -> bool {
@@ -2135,6 +2207,20 @@ mod tests {
     }
 
     #[test]
+    fn text_and_fulltext_expose_workspace_procedure_source() {
+        let (result, _) = run("to square :x
+             output product :x :x
+             end
+             print text \"square
+             print fulltext \"square")
+        .unwrap();
+        assert_eq!(
+            result.output,
+            "[[to square :x] [output product :x :x]]\n[[to square :x] [output product :x :x] [end]]\n"
+        );
+    }
+
+    #[test]
     fn parse_and_runparse() {
         let (result, _) = run("print parse \"|sum 1 2| print runparse \"|sum 3 4|").unwrap();
         assert_eq!(result.output, "[sum 1 2]\n7\n");
@@ -2199,9 +2285,7 @@ mod tests {
     #[test]
     fn catch_error_returns_last_failure_message() {
         let mut vm = Vm::new();
-        let result = vm
-            .eval_source("print catch \"error [print]")
-            .unwrap();
+        let result = vm.eval_source("print catch \"error [print]").unwrap();
         assert!(result.output.starts_with("not enough inputs to print"));
     }
 
@@ -2209,10 +2293,12 @@ mod tests {
     fn procedure_used_as_input_reports_missing_output() {
         let mut vm = Vm::new();
         let error = vm
-            .eval_source("to noop :x
+            .eval_source(
+                "to noop :x
              print :x
              end
-             print noop 5")
+             print noop 5",
+            )
             .unwrap_err();
         assert!(error.message.starts_with("noop didn't output a value"));
     }
