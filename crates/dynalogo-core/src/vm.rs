@@ -14,7 +14,7 @@ use crate::bytecode::{Chunk, Compiler, Instruction};
 use crate::lexer::{lex, InfixOp, TokenKind};
 use crate::parser::{parse_source, Arity, ArityTable};
 use crate::turtle::{HeadlessTurtleBackend, Point, TurtleWorld};
-use crate::value::{Interner, List, LogoNumber, Symbol, Value};
+use crate::value::{Interner, List, LogoArray, LogoNumber, Symbol, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ControlFlow {
@@ -359,6 +359,10 @@ impl Vm {
             "gprop" => self.gprop(args),
             "remprop" => self.remprop(args),
             "plist" => self.plist(args),
+            "array" => self.array(args),
+            "setitem" => self.setitem(args),
+            "listtoarray" => self.listtoarray(args),
+            "arraytolist" => self.arraytolist(args),
             "repeat" => self.repeat(args),
             "if" => self.r#if(args),
             "ifelse" => self.ifelse(args),
@@ -524,6 +528,7 @@ impl Vm {
             Value::Word(symbol) => self.interner.spelling(*symbol).is_empty(),
             Value::Number(_) => false,
             Value::List(list) => list.is_empty(),
+            Value::Array(array) => array.is_empty(),
         };
         Ok(PrimitiveResult::Value(self.logo_bool(empty)))
     }
@@ -539,6 +544,10 @@ impl Vm {
                 .spelling(*symbol)
                 .contains(&args[0].show(&self.interner)),
             Value::Number(_) => false,
+            Value::Array(array) => array
+                .to_list()
+                .iter()
+                .any(|value| args[0].equalp(value, &self.interner)),
         };
         Ok(PrimitiveResult::Value(self.logo_bool(member)))
     }
@@ -558,6 +567,9 @@ impl Vm {
                 .first()
                 .cloned()
                 .ok_or_else(|| VmError::new("FIRST of empty list"))?,
+            Value::Array(array) => array
+                .item(array.origin())
+                .ok_or_else(|| VmError::new("FIRST of empty array"))?,
         };
         Ok(PrimitiveResult::Value(value))
     }
@@ -574,6 +586,13 @@ impl Vm {
                 Value::word(&mut self.interner, text)
             }
             Value::List(list) => Value::List(list.butfirst().cloned().unwrap_or_else(List::empty)),
+            Value::Array(array) => Value::List(
+                array
+                    .to_list()
+                    .butfirst()
+                    .cloned()
+                    .unwrap_or_else(List::empty),
+            ),
         };
         Ok(PrimitiveResult::Value(value))
     }
@@ -594,6 +613,12 @@ impl Vm {
                 .last()
                 .cloned()
                 .ok_or_else(|| VmError::new("LAST of empty list"))?,
+            Value::Array(array) => array
+                .to_list()
+                .iter()
+                .last()
+                .cloned()
+                .ok_or_else(|| VmError::new("LAST of empty array"))?,
         };
         Ok(PrimitiveResult::Value(value))
     }
@@ -611,6 +636,11 @@ impl Vm {
             }
             Value::List(list) => {
                 let mut values: Vec<Value> = list.iter().cloned().collect();
+                values.pop();
+                Value::List(List::from_values(values))
+            }
+            Value::Array(array) => {
+                let mut values: Vec<Value> = array.to_list().iter().cloned().collect();
                 values.pop();
                 Value::List(List::from_values(values))
             }
@@ -675,6 +705,7 @@ impl Vm {
             Value::Word(symbol) => self.interner.spelling(*symbol).chars().count(),
             Value::Number(number) => Value::Number(*number).show(&self.interner).chars().count(),
             Value::List(list) => list.len(),
+            Value::Array(array) => array.len(),
         };
         Ok(PrimitiveResult::Value(Value::number(count as f64)))
     }
@@ -694,6 +725,9 @@ impl Vm {
             Value::List(list) => list
                 .item(index)
                 .cloned()
+                .ok_or_else(|| VmError::new("ITEM index out of range"))?,
+            Value::Array(array) => array
+                .item(index as isize)
                 .ok_or_else(|| VmError::new("ITEM index out of range"))?,
         };
         Ok(PrimitiveResult::Value(value))
@@ -802,6 +836,45 @@ impl Vm {
         Ok(PrimitiveResult::Value(Value::List(List::from_values(
             values,
         ))))
+    }
+
+    fn array(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("array", &args, 1)?;
+        let size = number_input(&args[0], &self.interner)?;
+        if size < 0.0 {
+            return Err(VmError::new("ARRAY size must be non-negative"));
+        }
+        Ok(PrimitiveResult::Value(Value::Array(LogoArray::new(
+            size as usize,
+        ))))
+    }
+
+    fn setitem(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setitem", &args, 3)?;
+        let index = number_input(&args[0], &self.interner)? as isize;
+        let Value::Array(array) = &args[1] else {
+            return Err(VmError::new("SETITEM second input must be an array"));
+        };
+        if !array.set_item(index, args[2].clone()) {
+            return Err(VmError::new("SETITEM index out of range"));
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn listtoarray(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("listtoarray", &args, 1)?;
+        let list = list_input(&args[0], "LISTTOARRAY")?;
+        Ok(PrimitiveResult::Value(Value::Array(
+            LogoArray::from_values(list.iter().cloned()),
+        )))
+    }
+
+    fn arraytolist(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("arraytolist", &args, 1)?;
+        let Value::Array(array) = &args[0] else {
+            return Err(VmError::new("ARRAYTOLIST input must be an array"));
+        };
+        Ok(PrimitiveResult::Value(Value::List(array.to_list())))
     }
 
     fn repeat(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1292,7 +1365,7 @@ fn property_key_input(value: &Value, interner: &Interner) -> Result<String, VmEr
     match value {
         Value::Word(symbol) => Ok(interner.canonical_spelling(*symbol).to_string()),
         Value::Number(_) => Ok(value.show(interner)),
-        Value::List(_) => Err(VmError::new(format!(
+        Value::List(_) | Value::Array(_) => Err(VmError::new(format!(
             "{} is not a property-list key",
             value.show(interner)
         ))),
@@ -1400,6 +1473,7 @@ fn point_input(value: &Value, interner: &Interner) -> Result<Point, VmError> {
 fn sentence_part(value: &Value, values: &mut Vec<Value>) {
     match value {
         Value::List(list) => values.extend(list.iter().cloned()),
+        Value::Array(array) => values.extend(array.to_list().iter().cloned()),
         _ => values.push(value.clone()),
     }
 }
@@ -1408,6 +1482,11 @@ fn local_names(value: &Value, interner: &Interner) -> Result<Vec<String>, VmErro
     match value {
         Value::Word(symbol) => Ok(vec![interner.spelling(*symbol).to_string()]),
         Value::List(list) => list
+            .iter()
+            .map(|value| variable_name_input(value, interner))
+            .collect(),
+        Value::Array(array) => array
+            .to_list()
             .iter()
             .map(|value| variable_name_input(value, interner))
             .collect(),
@@ -1423,6 +1502,7 @@ fn logo_truth(value: &Value, interner: &Interner) -> bool {
         Value::Word(symbol) => !interner.canonical_spelling(*symbol).eq("false"),
         Value::Number(number) => number.get() != 0.0,
         Value::List(list) => !list.is_empty(),
+        Value::Array(array) => !array.is_empty(),
     }
 }
 
@@ -1668,6 +1748,18 @@ mod tests {
              print runresult [sum 7 8]")
         .unwrap();
         assert_eq!(result.output, "[2 3 4]\n[2 3]\n10\na\nb\n30\n15\n");
+    }
+
+    #[test]
+    fn array_primitives() {
+        let (result, _) = run("make \"a array 3 \
+             setitem 2 :a \"middle \
+             print item 2 :a \
+             print count :a \
+             print arraytolist :a \
+             print arraytolist listtoarray [x y]")
+        .unwrap();
+        assert_eq!(result.output, "middle\n3\n[[] middle []]\n[x y]\n");
     }
 
     #[test]

@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Symbol(u32);
@@ -112,11 +112,24 @@ impl From<f64> for LogoNumber {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Word(Symbol),
     Number(LogoNumber),
     List(List),
+    Array(LogoArray),
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Word(a), Value::Word(b)) => a == b,
+            (Value::Number(a), Value::Number(b)) => a == b,
+            (Value::List(a), Value::List(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => a.ptr_eq(b),
+            _ => false,
+        }
+    }
 }
 
 impl Value {
@@ -132,11 +145,15 @@ impl Value {
         Self::List(List::from_values(values))
     }
 
+    pub fn array(size: usize) -> Self {
+        Self::Array(LogoArray::new(size))
+    }
+
     pub fn as_number(&self, interner: &Interner) -> Option<f64> {
         match self {
             Value::Number(number) => Some(number.get()),
             Value::Word(symbol) => parse_logo_number(interner.spelling(*symbol)),
-            Value::List(_) => None,
+            Value::List(_) | Value::Array(_) => None,
         }
     }
 
@@ -149,6 +166,7 @@ impl Value {
             (Value::Number(a), Value::Number(b)) => number_equal(a.get(), b.get()),
             (Value::Word(a), Value::Word(b)) => interner.equal_symbols(*a, *b),
             (Value::List(a), Value::List(b)) => a.equalp(b, interner),
+            (Value::Array(a), Value::Array(b)) => a.equalp(b, interner),
             _ => match (self.as_number(interner), other.as_number(interner)) {
                 (Some(a), Some(b)) => number_equal(a, b),
                 _ => false,
@@ -161,7 +179,95 @@ impl Value {
             Value::Word(symbol) => interner.spelling(*symbol).to_string(),
             Value::Number(number) => format_logo_number(number.get()),
             Value::List(list) => list.show(interner),
+            Value::Array(array) => array.show(interner),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LogoArray {
+    values: Arc<RwLock<Vec<Value>>>,
+    origin: isize,
+}
+
+impl LogoArray {
+    pub fn new(size: usize) -> Self {
+        Self {
+            values: Arc::new(RwLock::new(vec![Value::List(List::empty()); size])),
+            origin: 1,
+        }
+    }
+
+    pub fn from_values(values: impl IntoIterator<Item = Value>) -> Self {
+        Self {
+            values: Arc::new(RwLock::new(values.into_iter().collect())),
+            origin: 1,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.values.read().expect("array lock poisoned").len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn origin(&self) -> isize {
+        self.origin
+    }
+
+    pub fn item(&self, index: isize) -> Option<Value> {
+        let zero_based = usize::try_from(index - self.origin).ok()?;
+        self.values
+            .read()
+            .expect("array lock poisoned")
+            .get(zero_based)
+            .cloned()
+    }
+
+    pub fn set_item(&self, index: isize, value: Value) -> bool {
+        let Ok(zero_based) = usize::try_from(index - self.origin) else {
+            return false;
+        };
+        let mut values = self.values.write().expect("array lock poisoned");
+        let Some(slot) = values.get_mut(zero_based) else {
+            return false;
+        };
+        *slot = value;
+        true
+    }
+
+    pub fn to_list(&self) -> List {
+        List::from_values(self.values.read().expect("array lock poisoned").clone())
+    }
+
+    fn ptr_eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.values, &other.values)
+    }
+
+    fn equalp(&self, other: &Self, interner: &Interner) -> bool {
+        let a = self.values.read().expect("array lock poisoned");
+        let b = other.values.read().expect("array lock poisoned");
+        a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.equalp(b, interner))
+    }
+
+    fn show(&self, interner: &Interner) -> String {
+        let mut out = String::from("{");
+        for (i, value) in self
+            .values
+            .read()
+            .expect("array lock poisoned")
+            .iter()
+            .enumerate()
+        {
+            if i > 0 {
+                out.push(' ');
+            }
+            out.push_str(&value.show(interner));
+        }
+        out.push('}');
+        out
     }
 }
 
