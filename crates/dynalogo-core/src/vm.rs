@@ -353,6 +353,12 @@ impl Vm {
             "if" => self.r#if(args),
             "ifelse" => self.ifelse(args),
             "run" => self.run_list(args),
+            "runresult" => self.runresult(args),
+            "apply" => self.apply(args),
+            "foreach" => self.foreach(args),
+            "map" => self.map(args),
+            "filter" => self.filter(args),
+            "reduce" => self.reduce(args),
             "repcount" => self.repcount(args),
             "test" => self.test(args),
             "iftrue" | "ift" => self.iftrue(args),
@@ -785,13 +791,135 @@ impl Vm {
     }
 
     fn execute_instruction_list(&mut self, list: &List) -> Result<ControlFlow, VmError> {
+        Ok(self.execute_instruction_list_result(list)?.control)
+    }
+
+    fn execute_instruction_list_result(&mut self, list: &List) -> Result<RunResult, VmError> {
         let source = list_to_source(list, &self.interner, &self.arities);
         let program = parse_source(&source, &mut self.interner, &self.arities)
             .map_err(|error| VmError::new(error.to_string()))?;
         let chunk = Compiler::new()
             .compile_program(&program)
             .map_err(|error| VmError::new(error.to_string()))?;
-        Ok(self.run(&chunk)?.control)
+        self.run(&chunk)
+    }
+
+    fn runresult(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("runresult", &args, 1)?;
+        let list = list_input(&args[0], "RUNRESULT")?;
+        let result = self.execute_instruction_list_result(list)?;
+        result_value(result).map(PrimitiveResult::Value)
+    }
+
+    fn apply(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("apply", &args, 2)?;
+        let arg_list = list_input(&args[1], "APPLY")?;
+        match &args[0] {
+            Value::Word(symbol) => {
+                let source = format!(
+                    "{} {}",
+                    self.interner.spelling(*symbol),
+                    list_to_source(arg_list, &self.interner, &self.arities)
+                );
+                let program = parse_source(&source, &mut self.interner, &self.arities)
+                    .map_err(|error| VmError::new(error.to_string()))?;
+                let chunk = Compiler::new()
+                    .compile_program(&program)
+                    .map_err(|error| VmError::new(error.to_string()))?;
+                result_value(self.run(&chunk)?).map(PrimitiveResult::Value)
+            }
+            Value::List(template) => self
+                .eval_template_with_values(template, list_values(arg_list))
+                .map(PrimitiveResult::Value),
+            _ => Err(VmError::new(
+                "APPLY first input must be a word or template list",
+            )),
+        }
+    }
+
+    fn foreach(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("foreach", &args, 2)?;
+        let values = list_values(list_input(&args[1], "FOREACH")?);
+        let template = list_input(&args[0], "FOREACH")?.clone();
+        for value in values {
+            self.execute_template_for_effect(&template, vec![value])?;
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn map(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("map", &args, 2)?;
+        let values = list_values(list_input(&args[1], "MAP")?);
+        let template = list_input(&args[0], "MAP")?.clone();
+        let mut mapped = Vec::new();
+        for value in values {
+            mapped.push(self.eval_template_with_values(&template, vec![value])?);
+        }
+        Ok(PrimitiveResult::Value(Value::List(List::from_values(
+            mapped,
+        ))))
+    }
+
+    fn filter(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("filter", &args, 2)?;
+        let values = list_values(list_input(&args[1], "FILTER")?);
+        let template = list_input(&args[0], "FILTER")?.clone();
+        let mut kept = Vec::new();
+        for value in values {
+            let keep = self.eval_template_with_values(&template, vec![value.clone()])?;
+            if logo_truth(&keep, &self.interner) {
+                kept.push(value);
+            }
+        }
+        Ok(PrimitiveResult::Value(Value::List(List::from_values(kept))))
+    }
+
+    fn reduce(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("reduce", &args, 2)?;
+        let mut values = list_values(list_input(&args[1], "REDUCE")?).into_iter();
+        let Some(mut acc) = values.next() else {
+            return Err(VmError::new("REDUCE cannot reduce an empty list"));
+        };
+        let template = list_input(&args[0], "REDUCE")?.clone();
+        for value in values {
+            acc = self.eval_template_with_values(&template, vec![acc, value])?;
+        }
+        Ok(PrimitiveResult::Value(acc))
+    }
+
+    fn eval_template_with_values(
+        &mut self,
+        template: &List,
+        values: Vec<Value>,
+    ) -> Result<Value, VmError> {
+        let result = self.execute_template_result(template, values)?;
+        result_value(result)
+    }
+
+    fn execute_template_for_effect(
+        &mut self,
+        template: &List,
+        values: Vec<Value>,
+    ) -> Result<ControlFlow, VmError> {
+        Ok(self.execute_template_result(template, values)?.control)
+    }
+
+    fn execute_template_result(
+        &mut self,
+        template: &List,
+        values: Vec<Value>,
+    ) -> Result<RunResult, VmError> {
+        self.env.push_frame();
+        for (index, value) in values.iter().cloned().enumerate() {
+            let numbered = format!("?{}", index + 1);
+            self.env.define_local(numbered, value.clone());
+            if index == 0 {
+                self.env.define_local("?", value);
+            }
+        }
+        let result = self.execute_instruction_list_result(template);
+        self.env.pop_frame();
+        result
     }
 
     fn repcount(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1108,6 +1236,23 @@ fn list_input<'a>(value: &'a Value, name: &str) -> Result<&'a List, VmError> {
     }
 }
 
+fn list_values(list: &List) -> Vec<Value> {
+    list.iter().cloned().collect()
+}
+
+fn result_value(result: RunResult) -> Result<Value, VmError> {
+    match result.control {
+        ControlFlow::None => result
+            .stack
+            .last()
+            .cloned()
+            .ok_or_else(|| VmError::new("instruction list did not output a value")),
+        ControlFlow::Output(value) => Ok(value),
+        ControlFlow::Stop => Err(VmError::new("instruction list stopped without output")),
+        ControlFlow::Throw { tag, value } => Ok(Value::List(List::from_values([tag, value]))),
+    }
+}
+
 fn point_input(value: &Value, interner: &Interner) -> Result<Point, VmError> {
     let list = list_input(value, "SETPOS")?;
     let x = list
@@ -1201,7 +1346,9 @@ fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> Str
             Value::List(inner) => format!("[{}]", list_to_source(inner, interner, arities)),
             Value::Word(symbol) => {
                 let spelling = interner.spelling(*symbol);
-                if arities.get(spelling).is_some() || is_operator_word(spelling) {
+                if is_placeholder_word(spelling) {
+                    format!(":{spelling}")
+                } else if arities.get(spelling).is_some() || is_operator_word(spelling) {
                     spelling.to_string()
                 } else {
                     format!("\"{spelling}")
@@ -1218,6 +1365,13 @@ fn is_operator_word(text: &str) -> bool {
         text,
         "+" | "-" | "*" | "/" | "=" | "<" | ">" | "<=" | ">=" | "<>"
     )
+}
+
+fn is_placeholder_word(text: &str) -> bool {
+    text == "?"
+        || text
+            .strip_prefix('?')
+            .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
 }
 
 #[cfg(test)]
@@ -1375,6 +1529,18 @@ mod tests {
              countdown 3")
         .unwrap();
         assert_eq!(result.output, "3\n2\n1\n");
+    }
+
+    #[test]
+    fn template_primitives_map_filter_reduce_foreach_apply() {
+        let (result, _) = run("print map [sum ? 1] [1 2 3] \
+             print filter [? > 1] [0 1 2 3] \
+             print reduce [sum ?1 ?2] [1 2 3 4] \
+             foreach [print ?] [a b] \
+             print apply \"sum [10 20] \
+             print runresult [sum 7 8]")
+        .unwrap();
+        assert_eq!(result.output, "[2 3 4]\n[2 3]\n10\na\nb\n30\n15\n");
     }
 
     #[test]
