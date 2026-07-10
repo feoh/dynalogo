@@ -11,6 +11,7 @@ use std::fmt;
 use crate::bytecode::{Chunk, Compiler, Instruction};
 use crate::lexer::{lex, InfixOp, TokenKind};
 use crate::parser::{parse_source, Arity, ArityTable};
+use crate::turtle::{HeadlessTurtleBackend, Point, TurtleWorld};
 use crate::value::{Interner, List, LogoNumber, Symbol, Value};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,6 +101,7 @@ pub struct Vm {
     output: String,
     arities: ArityTable,
     procedures: HashMap<String, Procedure>,
+    turtle: TurtleWorld<HeadlessTurtleBackend>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -131,6 +133,7 @@ impl Default for Vm {
             output: String::new(),
             arities: ArityTable::default(),
             procedures: HashMap::new(),
+            turtle: TurtleWorld::new(HeadlessTurtleBackend::new()),
         }
     }
 }
@@ -166,6 +169,14 @@ impl Vm {
 
     pub fn procedures(&self) -> &HashMap<String, Procedure> {
         &self.procedures
+    }
+
+    pub fn turtle(&self) -> &TurtleWorld<HeadlessTurtleBackend> {
+        &self.turtle
+    }
+
+    pub fn turtle_mut(&mut self) -> &mut TurtleWorld<HeadlessTurtleBackend> {
+        &mut self.turtle
     }
 
     pub fn eval_source(&mut self, source: &str) -> Result<RunResult, VmError> {
@@ -336,6 +347,25 @@ impl Vm {
             "ifelse" => self.ifelse(args),
             "run" => self.run_list(args),
             "repcount" => self.repcount(args),
+            "forward" | "fd" => self.turtle_forward(args),
+            "back" | "bk" => self.turtle_back(args),
+            "left" | "lt" => self.turtle_left(args),
+            "right" | "rt" => self.turtle_right(args),
+            "setxy" => self.turtle_setxy(args),
+            "setpos" => self.turtle_setpos(args),
+            "setheading" | "seth" => self.turtle_setheading(args),
+            "home" => self.turtle_home(args),
+            "clearscreen" | "cs" => self.turtle_clearscreen(args),
+            "penup" | "pu" => self.turtle_penup(args),
+            "pendown" | "pd" => self.turtle_pendown(args),
+            "setpencolor" | "setpc" => self.turtle_setpencolor(args),
+            "setpensize" => self.turtle_setpensize(args),
+            "hideturtle" | "ht" => self.turtle_hide(args),
+            "showturtle" | "st" => self.turtle_show(args),
+            "pos" => self.turtle_pos(args),
+            "heading" => self.turtle_heading(args),
+            "xcor" => self.turtle_xcor(args),
+            "ycor" => self.turtle_ycor(args),
             "output" | "op" => self.output_control(args),
             "stop" => {
                 expect_arity(&name, &args, 0).map(|()| PrimitiveResult::Control(ControlFlow::Stop))
@@ -755,6 +785,134 @@ impl Vm {
         Ok(PrimitiveResult::Value(value))
     }
 
+    fn turtle_forward(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("forward", &args, 1)?;
+        let distance = number_input(&args[0], &self.interner)?;
+        self.turtle.forward(distance);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_back(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("back", &args, 1)?;
+        let distance = number_input(&args[0], &self.interner)?;
+        self.turtle.back(distance);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_left(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("left", &args, 1)?;
+        self.turtle.left(number_input(&args[0], &self.interner)?);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_right(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("right", &args, 1)?;
+        self.turtle.right(number_input(&args[0], &self.interner)?);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_setxy(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setxy", &args, 2)?;
+        let x = number_input(&args[0], &self.interner)?;
+        let y = number_input(&args[1], &self.interner)?;
+        self.turtle.set_xy(x, y);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_setpos(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setpos", &args, 1)?;
+        let point = point_input(&args[0], &self.interner)?;
+        self.turtle.set_pos(point);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_setheading(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setheading", &args, 1)?;
+        self.turtle
+            .set_heading(number_input(&args[0], &self.interner)?);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_home(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("home", &args, 0)?;
+        self.turtle.home();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_clearscreen(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("clearscreen", &args, 0)?;
+        self.turtle.clearscreen();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_penup(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("penup", &args, 0)?;
+        self.turtle.pen_up();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_pendown(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pendown", &args, 0)?;
+        self.turtle.pen_down();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_setpencolor(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setpencolor", &args, 1)?;
+        self.turtle
+            .set_pen_color(number_input(&args[0], &self.interner)? as u32);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_setpensize(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setpensize", &args, 1)?;
+        self.turtle
+            .set_pen_size(number_input(&args[0], &self.interner)?);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_hide(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("hideturtle", &args, 0)?;
+        self.turtle.hide_turtle();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_show(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("showturtle", &args, 0)?;
+        self.turtle.show_turtle();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_pos(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pos", &args, 0)?;
+        let position = self.turtle.state().position;
+        Ok(PrimitiveResult::Value(Value::List(List::from_values([
+            Value::number(position.x),
+            Value::number(position.y),
+        ]))))
+    }
+
+    fn turtle_heading(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("heading", &args, 0)?;
+        Ok(PrimitiveResult::Value(Value::number(
+            self.turtle.state().heading,
+        )))
+    }
+
+    fn turtle_xcor(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("xcor", &args, 0)?;
+        Ok(PrimitiveResult::Value(Value::number(
+            self.turtle.state().position.x,
+        )))
+    }
+
+    fn turtle_ycor(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("ycor", &args, 0)?;
+        Ok(PrimitiveResult::Value(Value::number(
+            self.turtle.state().position.y,
+        )))
+    }
+
     fn output_control(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("output", &args, 1)?;
         Ok(PrimitiveResult::Control(ControlFlow::Output(
@@ -842,6 +1000,23 @@ fn list_input<'a>(value: &'a Value, name: &str) -> Result<&'a List, VmError> {
         Value::List(list) => Ok(list),
         _ => Err(VmError::new(format!("{name} input must be a list"))),
     }
+}
+
+fn point_input(value: &Value, interner: &Interner) -> Result<Point, VmError> {
+    let list = list_input(value, "SETPOS")?;
+    let x = list
+        .item(1)
+        .ok_or_else(|| VmError::new("SETPOS requires a two-number list"))?;
+    let y = list
+        .item(2)
+        .ok_or_else(|| VmError::new("SETPOS requires a two-number list"))?;
+    if list.len() != 2 {
+        return Err(VmError::new("SETPOS requires a two-number list"));
+    }
+    Ok(Point::new(
+        number_input(x, interner)?,
+        number_input(y, interner)?,
+    ))
 }
 
 fn sentence_part(value: &Value, values: &mut Vec<Value>) {
@@ -942,6 +1117,8 @@ fn is_operator_word(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::turtle::{Point, TurtleEvent};
+
     fn run(source: &str) -> Result<(RunResult, Vm), VmError> {
         let mut vm = Vm::new();
         let result = vm.eval_source(source)?;
@@ -1092,5 +1269,56 @@ mod tests {
              countdown 3")
         .unwrap();
         assert_eq!(result.output, "3\n2\n1\n");
+    }
+
+    #[test]
+    fn turtle_motion_primitives_update_state_and_record_lines() {
+        let (result, vm) = run("fd 100 rt 90 fd 50 print pos print heading").unwrap();
+        assert_eq!(result.output, "[50 100]\n90\n");
+        assert_eq!(vm.turtle().state().position, Point::new(50.0, 100.0));
+        assert_eq!(vm.turtle().state().heading, 90.0);
+        let line_count = vm
+            .turtle()
+            .backend()
+            .events()
+            .iter()
+            .filter(|event| matches!(event, TurtleEvent::Line { .. }))
+            .count();
+        assert_eq!(line_count, 2);
+    }
+
+    #[test]
+    fn pen_and_visibility_primitives() {
+        let (result, vm) =
+            run("pu fd 10 pd setpc 3 setpensize 4 fd 5 ht st print xcor print ycor").unwrap();
+        assert_eq!(result.output, "0\n15\n");
+        let state = vm.turtle().state();
+        assert!(state.pen_down);
+        assert!(state.visible);
+        assert_eq!(state.pen_color, 3);
+        assert_eq!(state.pen_size, 4.0);
+        let line_count = vm
+            .turtle()
+            .backend()
+            .events()
+            .iter()
+            .filter(|event| matches!(event, TurtleEvent::Line { .. }))
+            .count();
+        assert_eq!(line_count, 1);
+    }
+
+    #[test]
+    fn setpos_setxy_home_and_clearscreen() {
+        let (_, mut vm) = run("setpos [10 20] setxy 30 40 home cs").unwrap();
+        assert_eq!(vm.turtle().state().position, Point::new(0.0, 0.0));
+        assert_eq!(vm.turtle().state().heading, 0.0);
+        assert!(vm
+            .turtle()
+            .backend()
+            .events()
+            .iter()
+            .any(|event| matches!(event, TurtleEvent::Clear)));
+        vm.turtle_mut().backend_mut().clear_events();
+        assert!(vm.turtle().backend().events().is_empty());
     }
 }
