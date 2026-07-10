@@ -471,6 +471,8 @@ impl Vm {
             "make" | "name" => self.make(args),
             "thing" => self.thing(args),
             "local" => self.local(args),
+            "definedp" | "defined?" => self.definedp(args),
+            "primitivep" | "primitive?" => self.primitivep(args),
             "pprop" => self.pprop(args),
             "gprop" => self.gprop(args),
             "remprop" => self.remprop(args),
@@ -901,6 +903,20 @@ impl Vm {
             self.env.define_local(name, Value::List(List::empty()));
         }
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn definedp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("definedp", &args, 1)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(self.procedures.contains_key(&name.to_ascii_lowercase())),
+        ))
+    }
+
+    fn primitivep(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("primitivep", &args, 1)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        Ok(PrimitiveResult::Value(self.logo_bool(is_primitive_name(&name))))
     }
 
     fn pprop(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1664,6 +1680,123 @@ fn is_error_catch_tag(value: &Value, interner: &Interner) -> bool {
     )
 }
 
+fn is_primitive_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "sum"
+            | "+"
+            | "difference"
+            | "-"
+            | "product"
+            | "*"
+            | "quotient"
+            | "/"
+            | "remainder"
+            | "and"
+            | "or"
+            | "not"
+            | "equalp"
+            | "equal?"
+            | "emptyp"
+            | "empty?"
+            | "memberp"
+            | "member?"
+            | "first"
+            | "butfirst"
+            | "bf"
+            | "last"
+            | "butlast"
+            | "bl"
+            | "fput"
+            | "lput"
+            | "sentence"
+            | "se"
+            | "list"
+            | "word"
+            | "count"
+            | "item"
+            | "print"
+            | "pr"
+            | "show"
+            | "type"
+            | "readlist"
+            | "rl"
+            | "make"
+            | "name"
+            | "thing"
+            | "local"
+            | "definedp"
+            | "defined?"
+            | "primitivep"
+            | "primitive?"
+            | "pprop"
+            | "gprop"
+            | "remprop"
+            | "plist"
+            | "array"
+            | "setitem"
+            | "listtoarray"
+            | "arraytolist"
+            | "repeat"
+            | "if"
+            | "ifelse"
+            | "run"
+            | "runresult"
+            | "parse"
+            | "runparse"
+            | "apply"
+            | "foreach"
+            | "map"
+            | "filter"
+            | "reduce"
+            | "repcount"
+            | "test"
+            | "iftrue"
+            | "ift"
+            | "iffalse"
+            | "iff"
+            | "wait"
+            | "catch"
+            | "throw"
+            | "error"
+            | "pause"
+            | "continue"
+            | "forward"
+            | "fd"
+            | "back"
+            | "bk"
+            | "left"
+            | "lt"
+            | "right"
+            | "rt"
+            | "setxy"
+            | "setpos"
+            | "setheading"
+            | "seth"
+            | "home"
+            | "clearscreen"
+            | "cs"
+            | "penup"
+            | "pu"
+            | "pendown"
+            | "pd"
+            | "setpencolor"
+            | "setpc"
+            | "setpensize"
+            | "hideturtle"
+            | "ht"
+            | "showturtle"
+            | "st"
+            | "pos"
+            | "heading"
+            | "xcor"
+            | "ycor"
+            | "output"
+            | "op"
+            | "stop"
+    )
+}
+
 fn first_char_value(interner: &mut Interner, text: &str) -> Result<Value, VmError> {
     let first = text
         .chars()
@@ -1985,6 +2118,20 @@ mod tests {
         .unwrap();
         assert_eq!(result.output, "4\n[legs 4 sound woof]\n[]\n");
         assert!(vm.property_lists().contains_key("animal"));
+    }
+
+    #[test]
+    fn workspace_predicates_report_defined_and_primitive_procedures() {
+        let (result, _) = run("to square :x
+             output product :x :x
+             end
+             print definedp \"square
+             print definedp \"sum
+             print primitivep \"sum
+             print primitivep \"square
+             print primitive? \"fd")
+        .unwrap();
+        assert_eq!(result.output, "true\nfalse\ntrue\nfalse\ntrue\n");
     }
 
     #[test]
