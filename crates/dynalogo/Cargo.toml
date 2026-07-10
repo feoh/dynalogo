@@ -9,3 +9,4 @@ authors.workspace = true
 
 [dependencies]
 dynalogo-core = { path = "../dynalogo-core" }
+macroquad = "0.4"
