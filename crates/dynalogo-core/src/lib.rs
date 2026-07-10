@@ -1,4 +1,5 @@
 pub mod bytecode;
+pub mod collision;
 pub mod dynaturtle;
 pub mod lexer;
 pub mod parser;
