@@ -26,7 +26,7 @@ pub enum Instruction {
     Halt,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompileMode {
     Effect,
     Result,
@@ -128,13 +128,14 @@ impl Compiler {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChunkKey {
     Procedure(Symbol),
-    InstructionList(usize),
+    InstructionList(usize, CompileMode),
     SourceHash(u64),
 }
 
 impl ChunkKey {
-    pub fn for_list(list: &List) -> Option<Self> {
-        list.pointer_identity().map(Self::InstructionList)
+    pub fn for_list(list: &List, mode: CompileMode) -> Option<Self> {
+        list.pointer_identity()
+            .map(|pointer| Self::InstructionList(pointer, mode))
     }
 }
 
@@ -372,7 +373,7 @@ mod tests {
     fn list_identity_key_tracks_nonempty_lists() {
         let list = List::from_values([Value::number(1.0)]);
         let empty = List::empty();
-        assert!(ChunkKey::for_list(&list).is_some());
-        assert!(ChunkKey::for_list(&empty).is_none());
+        assert!(ChunkKey::for_list(&list, CompileMode::Effect).is_some());
+        assert!(ChunkKey::for_list(&empty, CompileMode::Effect).is_none());
     }
 }

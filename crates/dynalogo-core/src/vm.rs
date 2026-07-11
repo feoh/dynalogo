@@ -11,7 +11,7 @@ use std::fmt;
 use std::thread;
 use std::time::Duration;
 
-use crate::bytecode::{Chunk, Compiler, Instruction};
+use crate::bytecode::{Chunk, ChunkCache, ChunkKey, CompileMode, Compiler, Instruction};
 use crate::lexer::{lex, InfixOp, TokenKind};
 use crate::parser::{parse_source, Arity, ArityTable};
 use crate::turtle::{HeadlessTurtleBackend, Point, TurtleWorld};
@@ -191,6 +191,7 @@ pub struct Vm {
     test_result: Option<bool>,
     last_error: Option<String>,
     random_seed: u64,
+    chunk_cache: ChunkCache,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -232,6 +233,7 @@ impl Default for Vm {
             test_result: None,
             last_error: None,
             random_seed: 0x4d595df4d0f33173,
+            chunk_cache: ChunkCache::new(),
         }
     }
 }
@@ -1528,23 +1530,31 @@ impl Vm {
     }
 
     fn execute_instruction_list_effect(&mut self, list: &List) -> Result<RunResult, VmError> {
-        let source = list_to_source(list, &self.interner, &self.arities);
-        let program = parse_source(&source, &mut self.interner, &self.arities)
-            .map_err(|error| VmError::new(error.to_string()))?;
-        let chunk = Compiler::new()
-            .compile_effect_program(&program)
-            .map_err(|error| VmError::new(error.to_string()))?;
+        let chunk = self.compile_list(list, CompileMode::Effect)?;
         self.run(&chunk)
     }
 
     fn execute_instruction_list_result(&mut self, list: &List) -> Result<RunResult, VmError> {
-        let source = list_to_source(list, &self.interner, &self.arities);
-        let program = parse_source(&source, &mut self.interner, &self.arities)
-            .map_err(|error| VmError::new(error.to_string()))?;
-        let chunk = Compiler::new()
-            .compile_program(&program)
-            .map_err(|error| VmError::new(error.to_string()))?;
+        let chunk = self.compile_list(list, CompileMode::Result)?;
         self.run(&chunk)
+    }
+
+    /// Instruction lists are immutable `Arc`-backed cons cells (see
+    /// `List::pointer_identity`), so once a list's bytecode is compiled it can
+    /// be reused for the lifetime of that list value with no invalidation
+    /// needed. This matters because the same body list is re-executed on every
+    /// iteration of `REPEAT`/`FOREVER`, every `WHEN` demon firing, etc. -
+    /// without caching, each of those re-runs a full lex/parse/compile pass.
+    fn compile_list(&mut self, list: &List, mode: CompileMode) -> Result<Chunk, VmError> {
+        if let Some(key) = ChunkKey::for_list(list, mode) {
+            if let Some(chunk) = self.chunk_cache.get(key) {
+                return Ok(chunk.clone());
+            }
+            let chunk = compile_list_source(list, mode, &mut self.interner, &self.arities)?;
+            self.chunk_cache.insert(key, chunk.clone());
+            return Ok(chunk);
+        }
+        compile_list_source(list, mode, &mut self.interner, &self.arities)
     }
 
     fn runresult(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2361,6 +2371,23 @@ fn drop_last_char(text: &str) -> String {
     chars.into_iter().collect()
 }
 
+fn compile_list_source(
+    list: &List,
+    mode: CompileMode,
+    interner: &mut Interner,
+    arities: &ArityTable,
+) -> Result<Chunk, VmError> {
+    let source = list_to_source(list, interner, arities);
+    let program = parse_source(&source, interner, arities)
+        .map_err(|error| VmError::new(error.to_string()))?;
+    let compiler = Compiler::new();
+    match mode {
+        CompileMode::Effect => compiler.compile_effect_program(&program),
+        CompileMode::Result => compiler.compile_program(&program),
+    }
+    .map_err(|error| VmError::new(error.to_string()))
+}
+
 fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> String {
     list.iter()
         .map(|value| match value {
@@ -2649,6 +2676,24 @@ mod tests {
              run [print sum 4 5]")
         .unwrap();
         assert_eq!(result.output, "1\n2\n3\nyes\ngood\n9\n");
+    }
+
+    #[test]
+    fn repeated_body_execution_reflects_fresh_state_each_iteration() {
+        let (result, vm) = run("repeat 10 [forward 1]").unwrap();
+        assert_eq!(result.output, "");
+        assert_eq!(vm.turtle().state().position, Point::new(0.0, 10.0));
+    }
+
+    #[test]
+    fn run_and_runresult_on_same_list_use_distinct_cached_bytecode() {
+        let (result, _) = run(
+            "make \"body [sum 2 3] \
+             make \"ignored catch \"error [run :body] \
+             print runresult :body",
+        )
+        .unwrap();
+        assert_eq!(result.output, "5\n");
     }
 
     #[test]
