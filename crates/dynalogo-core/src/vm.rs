@@ -12,6 +12,9 @@ use std::thread;
 use std::time::Duration;
 
 use crate::bytecode::{Chunk, ChunkCache, ChunkKey, CompileMode, Compiler, Instruction};
+use crate::collision::{self, detect_collisions, CollisionConfig};
+use crate::demon::{DemonCondition, DemonEvent, DemonScheduler};
+use crate::dynaturtle::{TurtleId, TurtleStore};
 use crate::lexer::{lex, InfixOp, TokenKind};
 use crate::parser::{parse_source, Arity, ArityTable};
 use crate::turtle::{HeadlessTurtleBackend, Point, TurtleWorld};
@@ -188,6 +191,10 @@ pub struct Vm {
     procedures: HashMap<String, Procedure>,
     property_lists: HashMap<String, HashMap<String, Value>>,
     turtle: TurtleWorld<HeadlessTurtleBackend>,
+    turtles: TurtleStore,
+    demons: DemonScheduler,
+    collision_config: CollisionConfig,
+    demon_fuel: usize,
     test_result: Option<bool>,
     last_error: Option<String>,
     random_seed: u64,
@@ -230,6 +237,10 @@ impl Default for Vm {
             procedures: HashMap::new(),
             property_lists: HashMap::new(),
             turtle: TurtleWorld::new(HeadlessTurtleBackend::new()),
+            turtles: TurtleStore::new(),
+            demons: DemonScheduler::new(),
+            collision_config: CollisionConfig::default(),
+            demon_fuel: 256,
             test_result: None,
             last_error: None,
             random_seed: 0x4d595df4d0f33173,
@@ -294,6 +305,49 @@ impl Vm {
 
     pub fn turtle_mut(&mut self) -> &mut TurtleWorld<HeadlessTurtleBackend> {
         &mut self.turtle
+    }
+
+    pub fn turtles(&self) -> &TurtleStore {
+        &self.turtles
+    }
+
+    pub fn turtles_mut(&mut self) -> &mut TurtleStore {
+        &mut self.turtles
+    }
+
+    pub fn demons(&self) -> &DemonScheduler {
+        &self.demons
+    }
+
+    pub fn set_collision_config(&mut self, config: CollisionConfig) {
+        self.collision_config = config;
+    }
+
+    pub fn set_demon_fuel(&mut self, fuel: usize) {
+        self.demon_fuel = fuel;
+    }
+
+    /// Advances the dynaturtle simulation by one fixed tick: integrates
+    /// velocities, runs collision detection, feeds the report into the demon
+    /// scheduler, and executes the bodies of demons that fire (fuel-limited so
+    /// a burst of events cannot stall a tick).
+    pub fn dynaturtle_tick(&mut self, dt_seconds: f64) -> Result<ControlFlow, VmError> {
+        self.turtles.integrate(dt_seconds);
+        let report = detect_collisions(&self.turtles, self.collision_config);
+        self.demons
+            .push_collision_report(report.turtle_pairs, report.edge_contacts);
+        let drained = self.demons.drain_with_fuel(self.demon_fuel).drained;
+        for item in drained {
+            let ids = demon_event_turtles(&item.event);
+            if !ids.is_empty() {
+                self.turtles.tell_many(ids);
+            }
+            match self.execute_instruction_list(&item.body)? {
+                ControlFlow::None => {}
+                control => return Ok(control),
+            }
+        }
+        Ok(ControlFlow::None)
     }
 
     pub fn eval_source(&mut self, source: &str) -> Result<RunResult, VmError> {
@@ -574,6 +628,15 @@ impl Vm {
             "heading" => self.turtle_heading(args),
             "xcor" => self.turtle_xcor(args),
             "ycor" => self.turtle_ycor(args),
+            "tell" => self.dyn_tell(args),
+            "ask" => self.dyn_ask(args),
+            "each" => self.dyn_each(args),
+            "who" => self.dyn_who(args),
+            "setvelocity" => self.dyn_setvelocity(args),
+            "setspeed" => self.dyn_setspeed(args),
+            "setshape" => self.dyn_setshape(args),
+            "touching" => self.dyn_touching(args),
+            "when" => self.dyn_when(args),
             "output" | "op" => self.output_control(args),
             "stop" => {
                 expect_arity(&name, &args, 0).map(|()| PrimitiveResult::Control(ControlFlow::Stop))
@@ -1989,6 +2052,154 @@ impl Vm {
     fn logo_bool(&mut self, value: bool) -> Value {
         Value::word(&mut self.interner, if value { "true" } else { "false" })
     }
+
+    fn turtle_id_from_value(&self, value: &Value) -> Result<TurtleId, VmError> {
+        Ok(TurtleId::new(number_input(value, &self.interner)? as usize))
+    }
+
+    fn turtle_ids_input(&self, value: &Value) -> Result<Vec<TurtleId>, VmError> {
+        match value {
+            Value::List(list) => list
+                .iter()
+                .map(|item| self.turtle_id_from_value(item))
+                .collect(),
+            _ => Ok(vec![self.turtle_id_from_value(value)?]),
+        }
+    }
+
+    fn dyn_tell(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("tell", &args, 1)?;
+        let ids = self.turtle_ids_input(&args[0])?;
+        if ids.is_empty() {
+            return Err(VmError::new("TELL requires at least one turtle"));
+        }
+        self.turtles.tell_many(ids);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn dyn_ask(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("ask", &args, 2)?;
+        let id = self.turtle_id_from_value(&args[0])?;
+        let list = list_input(&args[1], "ASK")?.clone();
+        let previous = self.turtles.active().to_vec();
+        self.turtles.tell_one(id);
+        let control = self.execute_instruction_list(&list)?;
+        self.turtles.tell_many(previous);
+        match control {
+            ControlFlow::None => Ok(PrimitiveResult::NoValue),
+            control => Ok(PrimitiveResult::Control(control)),
+        }
+    }
+
+    fn dyn_each(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("each", &args, 1)?;
+        let list = list_input(&args[0], "EACH")?.clone();
+        let ids = self.turtles.active().to_vec();
+        for id in ids {
+            self.turtles.tell_one(id);
+            match self.execute_instruction_list(&list)? {
+                ControlFlow::None => {}
+                control => return Ok(PrimitiveResult::Control(control)),
+            }
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn dyn_who(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("who", &args, 0)?;
+        let ids = self.turtles.active().to_vec();
+        Ok(PrimitiveResult::Value(Value::List(List::from_values(
+            ids.into_iter().map(|id| Value::number(id.index() as f64)),
+        ))))
+    }
+
+    fn dyn_setvelocity(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setvelocity", &args, 2)?;
+        let dx = number_input(&args[0], &self.interner)?;
+        let dy = number_input(&args[1], &self.interner)?;
+        let ids = self.turtles.active().to_vec();
+        for id in ids {
+            self.turtles.set_velocity(id, Point::new(dx, dy));
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn dyn_setspeed(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setspeed", &args, 1)?;
+        let speed = number_input(&args[0], &self.interner)?;
+        let ids = self.turtles.active().to_vec();
+        for id in ids {
+            self.turtles.set_speed(id, speed);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn dyn_setshape(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setshape", &args, 2)?;
+        let name = source_text_input(&args[0], &self.interner);
+        let radius = number_input(&args[1], &self.interner)?;
+        let ids = self.turtles.active().to_vec();
+        for id in ids {
+            self.turtles.set_shape(id, name.clone(), radius);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn dyn_touching(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("touching", &args, 2)?;
+        let a = self.turtle_id_from_value(&args[0])?;
+        let b = self.turtle_id_from_value(&args[1])?;
+        self.turtles.ensure(a);
+        self.turtles.ensure(b);
+        let radius_a = self.turtles.collision_radius(a).unwrap_or(8.0);
+        let radius_b = self.turtles.collision_radius(b).unwrap_or(8.0);
+        let touching = collision::touching(&self.turtles, a, b, (radius_a + radius_b) / 2.0);
+        Ok(PrimitiveResult::Value(self.logo_bool(touching)))
+    }
+
+    fn dyn_when(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("when", &args, 2)?;
+        let condition = self.parse_demon_condition(list_input(&args[0], "WHEN")?)?;
+        let body = list_input(&args[1], "WHEN")?.clone();
+        self.demons.register(condition, body);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn parse_demon_condition(&self, list: &List) -> Result<DemonCondition, VmError> {
+        let values = list_values(list);
+        let head = values
+            .first()
+            .ok_or_else(|| VmError::new("WHEN condition must name TOUCHING, EDGE, or OVERCOLOR"))?;
+        let Value::Word(symbol) = head else {
+            return Err(VmError::new("WHEN condition must start with a word"));
+        };
+        match self.interner.canonical_spelling(*symbol) {
+            "touching" if values.len() == 3 => {
+                let a = self.turtle_id_from_value(&values[1])?;
+                let b = self.turtle_id_from_value(&values[2])?;
+                Ok(DemonCondition::Touching(a, b))
+            }
+            "edge" if values.len() == 1 => Ok(DemonCondition::Edge(None)),
+            "edge" if values.len() == 2 => {
+                Ok(DemonCondition::Edge(Some(self.turtle_id_from_value(&values[1])?)))
+            }
+            "overcolor" if values.len() == 2 => {
+                let color = number_input(&values[1], &self.interner)? as u32;
+                Ok(DemonCondition::OverColor(color))
+            }
+            other => Err(VmError::new(format!(
+                "unrecognized WHEN condition: {other}"
+            ))),
+        }
+    }
+}
+
+fn demon_event_turtles(event: &DemonEvent) -> Vec<TurtleId> {
+    match event {
+        DemonEvent::Touching(pair) => vec![pair.a, pair.b],
+        DemonEvent::Edge(contact) => vec![contact.turtle],
+        DemonEvent::OverColor { turtle, .. } => vec![*turtle],
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2306,6 +2517,8 @@ fn primitive_names() -> &'static [&'static str] {
         "seth", "home", "clearscreen", "cs", "penup", "pu", "pendown", "pd",
         "setpencolor", "setpc", "setpensize", "hideturtle", "ht", "showturtle",
         "st", "pos", "heading", "xcor", "ycor", "output", "op", "stop",
+        "tell", "ask", "each", "who", "setvelocity", "setspeed", "setshape",
+        "touching", "when",
     ]
 }
 
@@ -3088,5 +3301,90 @@ mod tests {
             .events()
             .iter()
             .any(|event| matches!(event, TurtleEvent::Clear)));
+    }
+
+    #[test]
+    fn tell_ask_each_who_select_and_restore_active_turtles() {
+        let (result, _) = run("tell [1 2] ask 3 [print who] print who").unwrap();
+        assert_eq!(result.output, "[3]\n[1 2]\n");
+    }
+
+    #[test]
+    fn each_runs_body_once_per_active_turtle() {
+        let (result, _) = run("tell [1 2 3] each [print who]").unwrap();
+        assert_eq!(result.output, "[1]\n[2]\n[3]\n");
+    }
+
+    #[test]
+    fn setspeed_projects_velocity_along_turtle_stores_own_heading() {
+        let (_, vm) = run("tell 0 setspeed 20").unwrap();
+        assert_eq!(
+            vm.turtles().velocity(TurtleId::new(0)),
+            Some(Point::new(0.0, 20.0))
+        );
+    }
+
+    #[test]
+    fn setvelocity_writes_raw_velocity_to_the_turtle_store() {
+        let (_, vm) = run("tell 0 setvelocity 3 4").unwrap();
+        assert_eq!(
+            vm.turtles().velocity(TurtleId::new(0)),
+            Some(Point::new(3.0, 4.0))
+        );
+    }
+
+    #[test]
+    fn setshape_records_shape_name_and_collision_radius() {
+        let (_, vm) = run("tell 1 setshape \"ship 20").unwrap();
+        assert_eq!(vm.turtles().shape(TurtleId::new(1)), Some("ship"));
+        assert_eq!(vm.turtles().collision_radius(TurtleId::new(1)), Some(20.0));
+    }
+
+    #[test]
+    fn touching_reports_whether_two_turtles_overlap() {
+        let (_, mut vm) = run("init.turtle").unwrap();
+        vm.turtles_mut()
+            .set_position(TurtleId::new(0), Point::new(0.0, 0.0));
+        vm.turtles_mut()
+            .set_position(TurtleId::new(1), Point::new(5.0, 0.0));
+        vm.turtles_mut()
+            .set_position(TurtleId::new(2), Point::new(500.0, 500.0));
+        let result = vm.eval_source("print touching 0 1").unwrap();
+        assert_eq!(result.output, "true\n");
+        vm.clear_output();
+        let result = vm.eval_source("print touching 0 2").unwrap();
+        assert_eq!(result.output, "false\n");
+    }
+
+    #[test]
+    fn when_registers_a_touching_demon_condition_and_body() {
+        let (_, vm) = run("when [touching 0 1] [print \"boom]").unwrap();
+        assert_eq!(vm.demons().demons().len(), 1);
+        assert_eq!(
+            *vm.demons().demons()[0].condition(),
+            DemonCondition::Touching(TurtleId::new(0), TurtleId::new(1))
+        );
+    }
+
+    #[test]
+    fn dynaturtle_tick_integrates_detects_collisions_and_fires_demon_bodies() {
+        let mut vm = Vm::new();
+        vm.eval_source("when [touching 0 1] [print \"collided]")
+            .unwrap();
+        vm.turtles_mut()
+            .set_position(TurtleId::new(0), Point::new(0.0, 0.0));
+        vm.turtles_mut()
+            .set_position(TurtleId::new(1), Point::new(20.0, 0.0));
+        vm.turtles_mut()
+            .set_velocity(TurtleId::new(1), Point::new(-30.0, 0.0));
+        vm.clear_output();
+
+        vm.dynaturtle_tick(0.5).unwrap();
+
+        assert_eq!(
+            vm.turtles().positions()[TurtleId::new(1).index()],
+            Point::new(5.0, 0.0)
+        );
+        assert_eq!(vm.output(), "collided\n");
     }
 }

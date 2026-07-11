@@ -181,6 +181,15 @@ impl ArityTable {
             ("HEADING", 0),
             ("XCOR", 0),
             ("YCOR", 0),
+            ("TELL", 1),
+            ("ASK", 2),
+            ("EACH", 1),
+            ("WHO", 0),
+            ("SETVELOCITY", 2),
+            ("SETSPEED", 1),
+            ("SETSHAPE", 2),
+            ("TOUCHING", 2),
+            ("WHEN", 2),
         ] {
             table.insert(name, Arity::Exact(arity));
         }

@@ -101,7 +101,11 @@ fn runtime_loop(
             Err(RecvTimeoutError::Timeout) => {}
         }
 
+        let tick_seconds = config.tick.as_secs_f64();
         timestep.advance(config.tick, |tick| {
+            if let Err(error) = vm.dynaturtle_tick(tick_seconds) {
+                let _ = events.send(RuntimeEvent::Error(error.to_string()));
+            }
             let snapshot = TurtleSnapshot::single(tick, vm.turtle().state());
             let _ = events.send(RuntimeEvent::Snapshot(snapshot));
         });
