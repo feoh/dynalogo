@@ -6,6 +6,7 @@
 //! control signals.
 
 use std::collections::HashMap;
+use std::f64::consts::PI;
 use std::fmt;
 use std::thread;
 use std::time::Duration;
@@ -189,6 +190,7 @@ pub struct Vm {
     turtle: TurtleWorld<HeadlessTurtleBackend>,
     test_result: Option<bool>,
     last_error: Option<String>,
+    random_seed: u64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -229,6 +231,7 @@ impl Default for Vm {
             turtle: TurtleWorld::new(HeadlessTurtleBackend::new()),
             test_result: None,
             last_error: None,
+            random_seed: 0x4d595df4d0f33173,
         }
     }
 }
@@ -453,6 +456,15 @@ impl Vm {
             "product" | "*" => self.number_binop(args, |a, b| a * b),
             "quotient" | "/" => self.number_binop(args, |a, b| a / b),
             "remainder" => self.number_binop(args, |a, b| a % b),
+            "abs" => self.abs(args),
+            "int" => self.int(args),
+            "round" => self.round(args),
+            "sqrt" => self.sqrt(args),
+            "sin" => self.sin(args),
+            "cos" => self.cos(args),
+            "tan" => self.tan(args),
+            "random" => self.random(args),
+            "rerandom" => self.rerandom(args),
             "and" => self.logic_and(args),
             "or" => self.logic_or(args),
             "not" => self.logic_not(args),
@@ -477,6 +489,12 @@ impl Vm {
             "make" | "name" => self.make(args),
             "thing" => self.thing(args),
             "local" => self.local(args),
+            "namep" => self.namep(args),
+            "wordp" => self.wordp(args),
+            "listp" => self.listp(args),
+            "numberp" => self.numberp(args),
+            "intp" => self.intp(args),
+            "decimalp" => self.decimalp(args),
             "definedp" | "defined?" => self.definedp(args),
             "primitivep" | "primitive?" => self.primitivep(args),
             "text" => self.text(args),
@@ -612,6 +630,70 @@ impl Vm {
         let a = number_input(&args[0], &self.interner)?;
         let b = number_input(&args[1], &self.interner)?;
         Ok(PrimitiveResult::Value(self.logo_bool(op(a, b))))
+    }
+
+    fn unary_number_op(
+        &mut self,
+        name: &str,
+        args: Vec<Value>,
+        op: impl FnOnce(f64) -> f64,
+    ) -> Result<PrimitiveResult, VmError> {
+        expect_arity(name, &args, 1)?;
+        let value = number_input(&args[0], &self.interner)?;
+        Ok(PrimitiveResult::Value(Value::number(op(value))))
+    }
+
+    fn abs(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        self.unary_number_op("abs", args, f64::abs)
+    }
+
+    fn int(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        self.unary_number_op("int", args, f64::trunc)
+    }
+
+    fn round(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        self.unary_number_op("round", args, f64::round)
+    }
+
+    fn sqrt(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        self.unary_number_op("sqrt", args, f64::sqrt)
+    }
+
+    fn sin(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        self.unary_number_op("sin", args, |value| (value * PI / 180.0).sin())
+    }
+
+    fn cos(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        self.unary_number_op("cos", args, |value| (value * PI / 180.0).cos())
+    }
+
+    fn tan(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        self.unary_number_op("tan", args, |value| (value * PI / 180.0).tan())
+    }
+
+    fn random(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("random", &args, 1)?;
+        let upper = number_input(&args[0], &self.interner)?;
+        if upper <= 0.0 {
+            return Err(VmError::new("RANDOM input must be positive"));
+        }
+        let upper = upper.floor() as u64;
+        let value = self.next_random_u64() % upper;
+        Ok(PrimitiveResult::Value(Value::number(value as f64)))
+    }
+
+    fn rerandom(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("rerandom", &args, 0)?;
+        self.random_seed = 0x4d595df4d0f33173;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn next_random_u64(&mut self) -> u64 {
+        self.random_seed = self
+            .random_seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        self.random_seed
     }
 
     fn logic_and(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -912,6 +994,56 @@ impl Vm {
             self.env.define_local(name, Value::List(List::empty()));
         }
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn namep(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("namep", &args, 1)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(self.env.get(&name).is_some()),
+        ))
+    }
+
+    fn wordp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("wordp", &args, 1)?;
+        Ok(PrimitiveResult::Value(self.logo_bool(matches!(
+            args[0],
+            Value::Word(_) | Value::Number(_)
+        ))))
+    }
+
+    fn listp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("listp", &args, 1)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(matches!(args[0], Value::List(_))),
+        ))
+    }
+
+    fn numberp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("numberp", &args, 1)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(args[0].as_number(&self.interner).is_some()),
+        ))
+    }
+
+    fn intp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("intp", &args, 1)?;
+        let Some(number) = args[0].as_number(&self.interner) else {
+            return Ok(PrimitiveResult::Value(self.logo_bool(false)));
+        };
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(LogoNumber::new(number).is_integerish()),
+        ))
+    }
+
+    fn decimalp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("decimalp", &args, 1)?;
+        let Some(number) = args[0].as_number(&self.interner) else {
+            return Ok(PrimitiveResult::Value(self.logo_bool(false)));
+        };
+        Ok(PrimitiveResult::Value(self.logo_bool(
+            number.is_finite() && number.fract() != 0.0,
+        )))
     }
 
     fn definedp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2212,13 +2344,46 @@ mod tests {
         let (result, _) = run("to square :x
              output product :x :x
              end
+             make \"foo 99
              print definedp \"square
              print definedp \"sum
              print primitivep \"sum
              print primitivep \"square
-             print primitive? \"fd")
+             print primitive? \"fd
+             print namep \"foo
+             print wordp \"hello
+             print listp [a b]
+             print numberp \"123
+             print intp 5
+             print decimalp 5.5")
         .unwrap();
-        assert_eq!(result.output, "true\nfalse\ntrue\nfalse\ntrue\n");
+        assert_eq!(
+            result.output,
+            "true\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n"
+        );
+    }
+
+    #[test]
+    fn atari_math_primitives_cover_core_numeric_helpers() {
+        let (result, _) = run("print abs -3
+             print int 4.9
+             print round 4.6
+             print sqrt 9
+             print sin 30
+             print cos 60
+             rerandom
+             print random 10
+             rerandom
+             print random 10")
+        .unwrap();
+        let lines = result.output.lines().collect::<Vec<_>>();
+        assert_eq!(lines[0], "3");
+        assert_eq!(lines[1], "4");
+        assert_eq!(lines[2], "5");
+        assert_eq!(lines[3], "3");
+        assert_eq!(lines[4], "0.49999999999999994");
+        assert_eq!(lines[5], "0.5000000000000001");
+        assert_eq!(lines[6], lines[7]);
     }
 
     #[test]
@@ -2238,11 +2403,13 @@ mod tests {
     #[test]
     fn copydef_clones_a_workspace_procedure() {
         let mut vm = Vm::new();
-        vm.eval_source("to square :x
+        vm.eval_source(
+            "to square :x
              output product :x :x
              end
-             copydef \"quad \"square")
-            .unwrap();
+             copydef \"quad \"square",
+        )
+        .unwrap();
         let result = vm.eval_source("print quad 6 print text \"quad").unwrap();
         assert_eq!(result.output, "36\n[[to quad :x] [output product :x :x]]\n");
         assert!(vm.procedures().contains_key("quad"));

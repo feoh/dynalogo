@@ -37,12 +37,14 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `FIRST`, `BUTFIRST`/`BF`, `LAST`, `BUTLAST`/`BL`
 - `FPUT`, `LPUT`, `SENTENCE`/`SE`, `LIST`, `WORD`
 - `COUNT`, `ITEM`, `EMPTYP`/`EMPTY?`, `EQUALP`/`EQUAL?`, `MEMBERP`/`MEMBER?`
+- `WORDP`, `LISTP`, `NUMBERP`, `INTP`, `DECIMALP`
 - `ARRAY`, `SETITEM`, `LISTTOARRAY`, `ARRAYTOLIST`
 - `PPROP`, `GPROP`, `REMPROP`, `PLIST`
 
 ## Variables and workspace predicates
 
 - `MAKE`, `NAME`, `THING`, `LOCAL`
+- `NAMEP`
 - `DEFINEDP`/`DEFINED?`
 - `PRIMITIVEP`/`PRIMITIVE?`
 - `TEXT`, `FULLTEXT`, `COPYDEF`
@@ -50,6 +52,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Arithmetic, comparison, and logic
 
 - `SUM`, `DIFFERENCE`, `PRODUCT`, `QUOTIENT`, `REMAINDER`
+- `ABS`, `INT`, `ROUND`, `SQRT`, `SIN`, `COS`, `TAN`, `RANDOM`, `RERANDOM`
 - Infix operators: `+`, `-`, `*`, `/`, `<`, `>`, `=`, `<=`, `>=`, `<>`
 - `AND`, `OR`, `NOT`
 
