@@ -3031,6 +3031,18 @@ mod tests {
     }
 
     #[test]
+    fn adjacent_negative_literals_survive_instruction_list_execution() {
+        let (_, vm) = run("run [setxy -20 -30]").unwrap();
+        assert_eq!(vm.turtle().state().position, Point::new(-20.0, -30.0));
+    }
+
+    #[test]
+    fn adjacent_negative_literals_survive_direct_top_level_parsing() {
+        let (_, vm) = run("setxy -20 -30").unwrap();
+        assert_eq!(vm.turtle().state().position, Point::new(-20.0, -30.0));
+    }
+
+    #[test]
     fn init_turtle_resets_display_to_visible_default_turtle() {
         let (_, vm) = run("ht setxy 10 20 init.turtle").unwrap();
         let state = vm.turtle().state();

@@ -306,6 +306,9 @@ impl<'a> Parser<'a> {
         let mut left = self.parse_prefix()?;
 
         while let Some(op) = self.peek_infix() {
+            if op == InfixOp::Minus && self.minus_starts_new_value() {
+                break;
+            }
             let precedence = infix_precedence(op);
             if precedence < min_precedence {
                 break;
@@ -460,6 +463,19 @@ impl<'a> Parser<'a> {
             TokenKind::Word(word) => Ok(number_or_word(self.interner, word)),
             TokenKind::QuotedWord(word) => Ok(Value::word(self.interner, word)),
             TokenKind::ColonWord(word) => Ok(Value::word(self.interner, format!(":{word}"))),
+            TokenKind::Infix(InfixOp::Minus) => {
+                if let Some(next) = self.peek() {
+                    if !next.space_before {
+                        if let TokenKind::Word(word) = &next.kind {
+                            if let Some(number) = parse_logo_number(word) {
+                                self.advance();
+                                return Ok(Value::number(-number));
+                            }
+                        }
+                    }
+                }
+                Ok(Value::word(self.interner, InfixOp::Minus.to_string()))
+            }
             TokenKind::Infix(op) => Ok(Value::word(self.interner, op.to_string())),
             TokenKind::LBracket => self.list_literal(token.line, token.col),
             TokenKind::LParen => Ok(Value::word(self.interner, "(")),
@@ -488,6 +504,23 @@ impl<'a> Parser<'a> {
 
     fn is_at_end(&self) -> bool {
         self.pos >= self.tokens.len()
+    }
+
+    /// True when the minus at the current position (space before, no space
+    /// after) is the start of a fresh unary/negative value rather than a
+    /// binary subtraction continuing `left` — e.g. the second `-30` in
+    /// `setxy -20 -30`, which must not be swallowed as `-20 - 30`.
+    fn minus_starts_new_value(&self) -> bool {
+        let Some(minus) = self.peek() else {
+            return false;
+        };
+        if !minus.space_before {
+            return false;
+        }
+        match self.tokens.get(self.pos + 1) {
+            Some(next) => !next.space_before,
+            None => false,
+        }
     }
 
     fn check_closer(&self) -> bool {
@@ -670,6 +703,19 @@ mod tests {
             panic!("expected PRINT");
         };
         assert_eq!(args[0], Expr::Literal(Value::number(-5.0)));
+    }
+
+    #[test]
+    fn list_literals_preserve_adjacent_negative_literals() {
+        let (program, interner) = parse("[setxy -20 -30]");
+        let Expr::Literal(Value::List(list)) = &program.expressions()[0] else {
+            panic!("expected list");
+        };
+        let values: Vec<Value> = list.iter().cloned().collect();
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[1], Value::number(-20.0));
+        assert_eq!(values[2], Value::number(-30.0));
+        assert_eq!(list.show(&interner), "[setxy -20 -30]");
     }
 
     #[test]
