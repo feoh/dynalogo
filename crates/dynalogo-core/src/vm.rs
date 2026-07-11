@@ -7,12 +7,14 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::env;
 use std::f64::consts::PI;
 use std::fmt;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::bytecode::{Chunk, Compiler, Instruction};
 use crate::lexer::{lex, InfixOp, TokenKind};
@@ -244,6 +246,21 @@ pub struct Vm {
     test_result: Option<bool>,
     last_error: Option<String>,
     random_seed: u64,
+    edit_buffer: Option<EditSession>,
+    editor_override: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+struct EditContents {
+    procedures: Vec<String>,
+    variables: Vec<String>,
+    plists: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct EditSession {
+    contents: EditContents,
+    text: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -291,6 +308,8 @@ impl Default for Vm {
             test_result: None,
             last_error: None,
             random_seed: 0x4d595df4d0f33173,
+            edit_buffer: None,
+            editor_override: None,
         }
     }
 }
@@ -322,6 +341,14 @@ impl Vm {
 
     pub fn env_mut(&mut self) -> &mut Environment {
         &mut self.env
+    }
+
+    /// Override the command EDIT/ED launch instead of reading `$EDITOR`.
+    ///
+    /// Lets embedding frontends (and tests) supply a deterministic editor
+    /// command without mutating the process-wide environment.
+    pub fn set_editor_command(&mut self, command: impl Into<String>) {
+        self.editor_override = Some(command.into());
     }
 
     pub fn output(&self) -> &str {
@@ -604,6 +631,7 @@ impl Vm {
             "fulltext" => self.fulltext(args),
             "copydef" => self.copydef(args),
             "define" => self.define_from_data(args),
+            "edit" | "ed" => self.edit(args),
             "po" => self.po(args),
             "poall" => self.poall(args),
             "pons" => self.pons(args),
@@ -1397,7 +1425,10 @@ impl Vm {
                 stream.path.display()
             ))
         })?;
-        Ok(PrimitiveResult::Value(Value::word(&mut self.interner, line)))
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            line,
+        )))
     }
 
     fn make(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1580,6 +1611,121 @@ impl Vm {
             self.write_procedure_listing(&procedure, false, false)?;
         }
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn edit(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        if args.len() > 1 {
+            return Err(VmError::new(format!(
+                "edit expected 0 or 1 input(s), got {}",
+                args.len()
+            )));
+        }
+        let (contents, buffer_text) = match args.into_iter().next() {
+            Some(value) => {
+                let contents = contentslist_input(&value, &self.interner)?;
+                let text = self.render_edit_buffer(&contents)?;
+                (contents, text)
+            }
+            None => {
+                let session = self
+                    .edit_buffer
+                    .clone()
+                    .ok_or_else(|| VmError::new("EDIT needs a contents list to edit"))?;
+                (session.contents, session.text)
+            }
+        };
+
+        let edited = self.run_editor_on(&buffer_text)?;
+        self.edit_buffer = Some(EditSession {
+            contents,
+            text: edited.clone(),
+        });
+
+        let result = self.eval_source(&edited)?;
+        match result.control {
+            ControlFlow::None => Ok(PrimitiveResult::NoValue),
+            control => Ok(PrimitiveResult::Control(control)),
+        }
+    }
+
+    fn render_edit_buffer(&mut self, contents: &EditContents) -> Result<String, VmError> {
+        let mut buffer = String::new();
+        for name in &contents.procedures {
+            let key = name.to_ascii_lowercase();
+            match self.procedures.get(&key).cloned() {
+                Some(procedure) => {
+                    buffer.push_str(&procedure_definition_text(&procedure, &self.interner))
+                }
+                None => {
+                    buffer.push_str("to ");
+                    buffer.push_str(name);
+                    buffer.push_str("\nend\n");
+                }
+            }
+            buffer.push('\n');
+        }
+        for name in &contents.variables {
+            match self.env.get(name).cloned() {
+                Some(Value::Array(_)) => {
+                    buffer.push_str("; ");
+                    buffer.push_str(name);
+                    buffer.push_str(" is an array and cannot be edited as text\n");
+                }
+                Some(value) => {
+                    buffer.push_str("make \"");
+                    buffer.push_str(name);
+                    buffer.push(' ');
+                    buffer.push_str(&value_source_literal(&value, &self.interner));
+                    buffer.push('\n');
+                }
+                None => {
+                    buffer.push_str("make \"");
+                    buffer.push_str(name);
+                    buffer.push_str(" []\n");
+                }
+            }
+        }
+        for name in &contents.plists {
+            let key = name.to_ascii_lowercase();
+            if let Some(plist) = self.property_lists.get(&key) {
+                let mut entries: Vec<_> = plist.iter().collect();
+                entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+                for (prop, value) in entries {
+                    buffer.push_str("pprop \"");
+                    buffer.push_str(name);
+                    buffer.push_str(" \"");
+                    buffer.push_str(prop);
+                    buffer.push(' ');
+                    buffer.push_str(&value_source_literal(value, &self.interner));
+                    buffer.push('\n');
+                }
+            }
+        }
+        Ok(buffer)
+    }
+
+    fn run_editor_on(&self, text: &str) -> Result<String, VmError> {
+        let editor = resolve_editor_command(self.editor_override.as_deref(), env::var("EDITOR"))?;
+        let mut parts = editor.split_whitespace();
+        let program = parts
+            .next()
+            .ok_or_else(|| VmError::new("EDITOR is set but empty"))?;
+        let path = edit_temp_path();
+        fs::write(&path, text)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+
+        Command::new(program)
+            .args(parts)
+            .arg(&path)
+            .status()
+            .map_err(|error| {
+                VmError::new(format!("failed to launch EDITOR `{editor}`: {error}"))
+            })?;
+
+        let edited = fs::read_to_string(&path)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        let _ = fs::remove_file(&path);
+        Ok(edited)
     }
 
     fn primitives_command(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2563,6 +2709,72 @@ fn is_error_catch_tag(value: &Value, interner: &Interner) -> bool {
     )
 }
 
+fn procedure_definition_text(procedure: &Procedure, interner: &Interner) -> String {
+    let mut source = String::new();
+    source.push_str("to ");
+    source.push_str(interner.spelling(procedure.name()));
+    for param in procedure.params() {
+        source.push(' ');
+        source.push(':');
+        source.push_str(interner.spelling(*param));
+    }
+    source.push('\n');
+    if !procedure.body_source().is_empty() {
+        source.push_str(procedure.body_source());
+        if !procedure.body_source().ends_with('\n') {
+            source.push('\n');
+        }
+    }
+    source.push_str("end\n");
+    source
+}
+
+fn value_source_literal(value: &Value, interner: &Interner) -> String {
+    match value {
+        Value::Word(symbol) => format!("\"{}", interner.spelling(*symbol)),
+        _ => value.show(interner),
+    }
+}
+
+fn contentslist_input(value: &Value, interner: &Interner) -> Result<EditContents, VmError> {
+    if let Value::List(list) = value {
+        let parts: Vec<&Value> = list.iter().collect();
+        if parts.len() == 3 && parts.iter().all(|part| matches!(part, Value::List(_))) {
+            return Ok(EditContents {
+                procedures: local_names(parts[0], interner)?,
+                variables: local_names(parts[1], interner)?,
+                plists: local_names(parts[2], interner)?,
+            });
+        }
+    }
+    Ok(EditContents {
+        procedures: local_names(value, interner)?,
+        variables: Vec::new(),
+        plists: Vec::new(),
+    })
+}
+
+fn resolve_editor_command(
+    override_command: Option<&str>,
+    env_lookup: Result<String, env::VarError>,
+) -> Result<String, VmError> {
+    if let Some(command) = override_command {
+        return Ok(command.to_string());
+    }
+    env_lookup.map_err(|_| VmError::new("EDIT requires the EDITOR environment variable to be set"))
+}
+
+fn edit_temp_path() -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be after unix epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "dynalogo-edit-{}-{unique}.logo",
+        std::process::id()
+    ))
+}
+
 fn procedure_text(
     procedure: &Procedure,
     interner: &mut Interner,
@@ -2680,6 +2892,8 @@ fn primitive_names() -> &'static [&'static str] {
         "text",
         "fulltext",
         "copydef",
+        "edit",
+        "ed",
         "po",
         "poall",
         "pons",
@@ -3456,6 +3670,125 @@ mod tests {
 
         let _ = fs::remove_file(load_path);
         let _ = fs::remove_file(save_path);
+    }
+
+    #[cfg(unix)]
+    fn write_fake_editor(capture_path: &std::path::Path, append: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let script_path = temp_test_path("fake-editor");
+        let script = format!(
+            "#!/bin/sh\ncp \"$1\" \"{}\"\ncat >> \"$1\" <<'EOF'\n{append}\nEOF\n",
+            capture_path.display(),
+        );
+        fs::write(&script_path, script).unwrap();
+        let mut perms = fs::metadata(&script_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script_path, perms).unwrap();
+        script_path
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn edit_renders_procedure_and_reloads_appended_definition() {
+        let capture_path = temp_test_path("edit-capture-proc");
+        let editor_path = write_fake_editor(&capture_path, "to added\noutput 42\nend");
+
+        let mut vm = Vm::new();
+        vm.set_editor_command(editor_path.to_string_lossy().to_string());
+        vm.eval_source("to greet\nprint \"hi\nend").unwrap();
+
+        vm.eval_source("edit \"greet").unwrap();
+
+        let captured = fs::read_to_string(&capture_path).unwrap();
+        assert!(captured.contains("to greet"));
+        assert!(captured.contains("print \"hi"));
+
+        let result = vm.eval_source("greet print added").unwrap();
+        assert_eq!(result.output, "hi\n42\n");
+
+        let _ = fs::remove_file(capture_path);
+        let _ = fs::remove_file(editor_path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn edit_contentslist_form_renders_variable_and_plist_and_reloads_changes() {
+        let capture_path = temp_test_path("edit-capture-contents");
+        let editor_path = write_fake_editor(&capture_path, "pprop \"colors \"blue 2");
+
+        let mut vm = Vm::new();
+        vm.set_editor_command(editor_path.to_string_lossy().to_string());
+        vm.eval_source("make \"count 5 pprop \"colors \"red 1")
+            .unwrap();
+
+        vm.eval_source("edit [[] [count] [colors]]").unwrap();
+
+        let captured = fs::read_to_string(&capture_path).unwrap();
+        assert!(captured.contains("make \"count 5"));
+        assert!(captured.contains("pprop \"colors \"red 1"));
+
+        let result = vm
+            .eval_source("print gprop \"colors \"blue print gprop \"colors \"red print :count")
+            .unwrap();
+        assert_eq!(result.output, "2\n1\n5\n");
+
+        let _ = fs::remove_file(capture_path);
+        let _ = fs::remove_file(editor_path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn edit_with_no_args_reuses_previous_edit_buffer() {
+        let capture_path = temp_test_path("edit-capture-noargs");
+        let first_editor = write_fake_editor(&capture_path, "make \"first 1");
+
+        let mut vm = Vm::new();
+        vm.set_editor_command(first_editor.to_string_lossy().to_string());
+        vm.eval_source("edit \"nonexistent").unwrap();
+
+        let after_first = vm.eval_source("print :first").unwrap();
+        assert_eq!(after_first.output, "1\n");
+        vm.clear_output();
+
+        let noop_editor = write_fake_editor(&capture_path, "");
+        vm.set_editor_command(noop_editor.to_string_lossy().to_string());
+        vm.eval_source("(edit)").unwrap();
+
+        let after_second = vm.eval_source("print :first").unwrap();
+        assert_eq!(after_second.output, "1\n");
+
+        let _ = fs::remove_file(capture_path);
+        let _ = fs::remove_file(first_editor);
+        let _ = fs::remove_file(noop_editor);
+    }
+
+    #[test]
+    fn edit_rejects_more_than_one_input() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("(edit \"a \"b)").unwrap_err();
+        assert!(error.message.contains("edit expected 0 or 1 input"));
+    }
+
+    #[test]
+    fn edit_with_no_args_and_no_prior_session_is_an_error() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("(edit)").unwrap_err();
+        assert!(error.message.contains("EDIT needs a contents list"));
+    }
+
+    #[test]
+    fn resolve_editor_command_prefers_override_then_env_then_errors() {
+        assert_eq!(
+            resolve_editor_command(Some("nano"), Err(env::VarError::NotPresent)).unwrap(),
+            "nano"
+        );
+        assert_eq!(
+            resolve_editor_command(None, Ok("vim".to_string())).unwrap(),
+            "vim"
+        );
+        let error = resolve_editor_command(None, Err(env::VarError::NotPresent)).unwrap_err();
+        assert!(error.message.contains("EDITOR environment variable"));
     }
 
     #[test]

@@ -153,10 +153,10 @@ The Atari manual organizes features into these areas:
 - recursion and dynamic scope
 - `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`
 - `POTS`
+- `EDIT`/`ED` (shells out to `$EDITOR`; reloads definitions on exit)
 
 **Missing from Atari vocabulary**
 
-- `EDIT`/`ED`
 - `EDNS`, `EDSH`
 - Atari editor/screen behavior itself
 

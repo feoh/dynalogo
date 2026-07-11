@@ -14,12 +14,17 @@ Implemented today:
 - `COPYDEF`
 - `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `.PRIMITIVES`
 - `ERASE` / `ER`, `ERN`, `ERNS`, `ERPS`, `ERALL`
+- `EDIT` / `ED` — shells out to `$EDITOR` on a contentslist (procedure names,
+  or the 3-list `[[procs] [vars] [plists]]` form) and reloads the edited text
+  on exit. Note: the fixed-arity table means the bare 0-input "re-edit last
+  buffer" form must be written `(EDIT)` with parens; `EDIT`/`ED` alone always
+  expects exactly one contents argument.
 
 Still missing from the nearby workspace roadmap bucket:
 
 - `NODES`, `RECYCLE`
 - `BURY`, `UNBURY`, `BURIEDP`
-- editor-facing commands such as `EDIT`/`ED`, `EDNS`, `EDSH`
+- `EDNS`, `EDSH`
 
 ## File I/O still has follow-up gaps
 
@@ -35,7 +40,6 @@ Still missing from the wider file/device roadmap bucket:
 - `OPENREAD`, `OPENWRITE`
 - `READWORD`
 - `DRIBBLE`
-- `EDIT` integration with `$EDITOR`
 
 ## Macro system is still absent
 
