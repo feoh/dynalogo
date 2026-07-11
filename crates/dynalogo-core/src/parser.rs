@@ -190,6 +190,7 @@ impl ArityTable {
             ("SETSHAPE", 2),
             ("TOUCHING", 2),
             ("WHEN", 2),
+            ("TOOT", 4),
         ] {
             table.insert(name, Arity::Exact(arity));
         }

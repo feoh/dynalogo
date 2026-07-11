@@ -1,0 +1,21 @@
+make "barks 0
+
+to bark :a :b
+  make "barks sum :barks 1
+  toot 0 (sum 70 :barks) 6 15
+  print :barks
+end
+
+to setup.dogs
+  tell [0 1 2]
+  ask 0 [setshape "dog 12 setxy 20 20 setheading 45 setspeed 55]
+  ask 1 [setshape "dog 12 setxy 220 20 setheading 315 setspeed 55]
+  ask 2 [setshape "dog 12 setxy 120 200 setheading 180 setspeed 55]
+
+  when [touching 0 1] [bark 0 1]
+  when [touching 0 2] [bark 0 2]
+  when [touching 1 2] [bark 1 2]
+end
+
+setup.dogs
+print "Dogs-are-loose!

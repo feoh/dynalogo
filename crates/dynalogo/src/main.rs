@@ -95,6 +95,7 @@ fn repl() -> Result<(), String> {
 fn eval_and_print(vm: &mut Vm, source: &str) -> Result<(), String> {
     let result = vm.eval_source(source).map_err(|error| error.to_string())?;
     print!("{}", result.output);
+    vm.clear_output();
     io::stdout().flush().map_err(|error| error.to_string())?;
 
     match result.control {

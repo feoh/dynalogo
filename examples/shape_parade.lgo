@@ -1,0 +1,5 @@
+tell [0 1 2]
+ask 0 [setshape "turtle 10 setxy 20 110 setheading 45 fd 50 rt 35 fd 20]
+ask 1 [setshape "dog 12 setxy 160 70 setheading 0 fd 40 lt 90 fd 20]
+ask 2 [setshape "ship 12 setxy 300 120 setheading 225 bk 30 lt 45 fd 35]
+print "Shape-parade-ready!

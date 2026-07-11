@@ -197,6 +197,7 @@ pub struct Vm {
     test_result: Option<bool>,
     last_error: Option<String>,
     random_seed: u64,
+    last_toot: Option<[u8; 4]>,
     chunk_cache: ChunkCache,
 }
 
@@ -242,6 +243,7 @@ impl Default for Vm {
             test_result: None,
             last_error: None,
             random_seed: 0x4d595df4d0f33173,
+            last_toot: None,
             chunk_cache: ChunkCache::new(),
         }
     }
@@ -303,6 +305,10 @@ impl Vm {
 
     pub fn turtles_mut(&mut self) -> &mut TurtleStore {
         &mut self.turtles
+    }
+
+    pub fn last_toot(&self) -> Option<[u8; 4]> {
+        self.last_toot
     }
 
     pub fn demons(&self) -> &DemonScheduler {
@@ -627,6 +633,7 @@ impl Vm {
             "setshape" => self.dyn_setshape(args),
             "touching" => self.dyn_touching(args),
             "when" => self.dyn_when(args),
+            "toot" => self.toot(args),
             "output" | "op" => self.output_control(args),
             "stop" => {
                 expect_arity(&name, &args, 0).map(|()| PrimitiveResult::Control(ControlFlow::Stop))
@@ -2214,6 +2221,17 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn toot(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("toot", &args, 4)?;
+        self.last_toot = Some([
+            ranged_byte_input(&args[0], &self.interner, "TOOT", 255)?,
+            ranged_byte_input(&args[1], &self.interner, "TOOT", 255)?,
+            ranged_byte_input(&args[2], &self.interner, "TOOT", 255)?,
+            ranged_byte_input(&args[3], &self.interner, "TOOT", 255)?,
+        ]);
+        Ok(PrimitiveResult::NoValue)
+    }
+
     fn parse_demon_condition(&self, list: &List) -> Result<DemonCondition, VmError> {
         let values = list_values(list);
         let head = values
@@ -2309,6 +2327,22 @@ fn source_text_input(value: &Value, interner: &Interner) -> String {
         Value::Word(symbol) => interner.spelling(*symbol).to_string(),
         _ => value.show(interner),
     }
+}
+
+fn ranged_byte_input(
+    value: &Value,
+    interner: &Interner,
+    primitive: &str,
+    max: u8,
+) -> Result<u8, VmError> {
+    let number = number_input(value, interner)?;
+    if !number.is_finite() || number.fract() != 0.0 || number < 0.0 || number > f64::from(max) {
+        return Err(VmError::new(format!(
+            "{primitive} expected an integer between 0 and {max}, got {}",
+            value.show(interner)
+        )));
+    }
+    Ok(number as u8)
 }
 
 fn token_to_data_value(kind: TokenKind, interner: &mut Interner) -> Option<Value> {
@@ -2567,7 +2601,7 @@ fn primitive_names() -> &'static [&'static str] {
         "setpencolor", "setpc", "setpensize", "hideturtle", "ht", "showturtle",
         "st", "pos", "heading", "xcor", "ycor", "output", "op", "stop",
         "tell", "ask", "each", "who", "setvelocity", "setspeed", "setshape",
-        "touching", "when",
+        "touching", "when", "toot",
     ]
 }
 
@@ -3484,5 +3518,11 @@ mod tests {
             Point::new(5.0, 0.0)
         );
         assert_eq!(vm.output(), "collided\n");
+    }
+
+    #[test]
+    fn toot_records_last_sound_event() {
+        let (_, vm) = run("toot 0 64 10 15").unwrap();
+        assert_eq!(vm.last_toot(), Some([0, 64, 10, 15]));
     }
 }
