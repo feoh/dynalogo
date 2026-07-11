@@ -482,6 +482,7 @@ impl Vm {
             "word" => self.word(args),
             "count" => self.count(args),
             "item" => self.item(args),
+            "which" => self.which(args),
             "print" | "pr" => self.print(args),
             "show" => self.show(args),
             "type" => self.r#type(args),
@@ -952,6 +953,26 @@ impl Vm {
                 .ok_or_else(|| VmError::new("ITEM index out of range"))?,
         };
         Ok(PrimitiveResult::Value(value))
+    }
+
+    fn which(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("which", &args, 2)?;
+        let values = match &args[1] {
+            Value::List(list) => list.iter().cloned().collect::<Vec<_>>(),
+            Value::Array(array) => array.to_list().iter().cloned().collect::<Vec<_>>(),
+            _ => {
+                return Err(VmError::new(format!(
+                    "{} is not a list",
+                    args[1].show(&self.interner)
+                )))
+            }
+        };
+        let position = values
+            .iter()
+            .position(|value| args[0].equalp(value, &self.interner))
+            .map(|index| index as f64 + 1.0)
+            .unwrap_or(0.0);
+        Ok(PrimitiveResult::Value(Value::number(position)))
     }
 
     fn print(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2379,12 +2400,14 @@ mod tests {
     fn count_item_empty_and_member_primitives() {
         let (result, _) = run("print count [a b c] \
              print item 2 [a b c] \
+             print which \"b [a b c] \
+             print which \"z [a b c] \
              print emptyp [] \
              print emptyp \" \
              print memberp \"b [a b c] \
              print memberp \"x [a b c]")
         .unwrap();
-        assert_eq!(result.output, "3\nb\ntrue\ntrue\ntrue\nfalse\n");
+        assert_eq!(result.output, "3\nb\n2\n0\ntrue\ntrue\ntrue\nfalse\n");
     }
 
     #[test]

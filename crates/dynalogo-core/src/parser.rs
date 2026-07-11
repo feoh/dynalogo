@@ -73,6 +73,7 @@ impl ArityTable {
             ("WORD", 2),
             ("COUNT", 1),
             ("ITEM", 2),
+            ("WHICH", 2),
             ("EMPTYP", 1),
             ("EMPTY?", 1),
             ("EQUALP", 2),

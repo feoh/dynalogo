@@ -83,7 +83,7 @@ The Atari manual organizes features into these areas:
 **Implemented now**
 
 - `FIRST`, `BUTFIRST`/`BF`, `LAST`, `BUTLAST`/`BL`
-- `FPUT`, `LPUT`, `LIST`, `WORD`, `COUNT`, `ITEM`, `MEMBERP`
+- `FPUT`, `LPUT`, `LIST`, `WORD`, `COUNT`, `ITEM`, `WHICH`, `MEMBERP`
 - `EMPTYP`, `EQUALP`
 
 **Implemented now**
@@ -95,6 +95,24 @@ The Atari manual organizes features into these areas:
 - `RANK`, `RANPICK`
 - text/character helpers visible in Atari vocabulary such as `ASCII`, `CHAR`, `LOWERCASE`, `REV`, `REALWORDP`
 - assorted Atari examples/helpers referenced in the glossary that are not yet audited individually
+
+### 2b. Atari Useful Tools appendix
+
+**Implemented now**
+
+- `ABS` (now primitive-backed)
+- `COPYDEF`
+- `DEFINE`
+- `TEXT`
+- `WHICH`
+
+**Still missing from the appendix examples/tools**
+
+- `FOREVER`
+- `DOT`
+- `INIT.TURTLE`
+- `SORT`, `SUPERSORT`, `INSERT`, `BEFORE`
+- `READLINE` as used by Atari's file-backed TEXT example
 
 ### 3. Variables
 

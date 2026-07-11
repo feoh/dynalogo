@@ -36,7 +36,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 
 - `FIRST`, `BUTFIRST`/`BF`, `LAST`, `BUTLAST`/`BL`
 - `FPUT`, `LPUT`, `SENTENCE`/`SE`, `LIST`, `WORD`
-- `COUNT`, `ITEM`, `EMPTYP`/`EMPTY?`, `EQUALP`/`EQUAL?`, `MEMBERP`/`MEMBER?`
+- `COUNT`, `ITEM`, `WHICH`, `EMPTYP`/`EMPTY?`, `EQUALP`/`EQUAL?`, `MEMBERP`/`MEMBER?`
 - `WORDP`, `LISTP`, `NUMBERP`, `INTP`, `DECIMALP`
 - `ARRAY`, `SETITEM`, `LISTTOARRAY`, `ARRAYTOLIST`
 - `PPROP`, `GPROP`, `REMPROP`, `PLIST`
