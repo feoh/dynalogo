@@ -1,0 +1,61 @@
+---
+name: GitHub Pages demo
+
+"on":
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Install wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build browser demo
+        run: >-
+          cargo build --release -p dynalogo --bin dynalogo-window
+          --target wasm32-unknown-unknown
+
+      - name: Prepare Pages artifact
+        run: |
+          rm -rf site
+          mkdir -p site/examples
+          cp web/index.html site/index.html
+          cp web/mq_js_bundle.js site/mq_js_bundle.js
+          cp \
+            target/wasm32-unknown-unknown/release/dynalogo-window.wasm \
+            site/dynalogo-window.wasm
+          cp examples/*.lgo site/examples/
+          touch site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy-demo:
+    needs: build-demo
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

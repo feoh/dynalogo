@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DynaLOGO Web Demo</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    #glcanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #11161d;
+    }
+    #panel {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: min(360px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      background: rgba(12, 17, 24, 0.88);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(8px);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 1.15rem;
+    }
+    p {
+      margin: 0 0 10px;
+      line-height: 1.4;
+      color: #b8c3cf;
+      font-size: 0.95rem;
+    }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 10px;
+      resize: vertical;
+      font: 0.9rem/1.35 ui-monospace, SFMono-Regular, monospace;
+    }
+    #command {
+      min-height: 170px;
+      margin: 8px 0 10px;
+    }
+    #repl-log {
+      min-height: 120px;
+      margin-top: 10px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    button {
+      cursor: pointer;
+      border: 1px solid #3b82f6;
+      background: #1f6feb;
+      color: white;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+    button.secondary {
+      border-color: #30363d;
+      background: #161b22;
+      color: #e6edf3;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="glcanvas" tabindex="1"></canvas>
+
+  <aside id="panel">
+    <h1>DynaLOGO Web Demo</h1>
+    <p>
+      This page runs the native <code>dynalogo-window</code> frontend compiled to
+      WebAssembly. The canvas contains the turtle world; this side panel queues
+      Logo source into the in-page REPL.
+    </p>
+    <p>
+      Tip: try <strong>Shape Parade</strong> or <strong>Dogs in the Park</strong>,
+      then press <strong>Run in Demo</strong>.
+    </p>
+
+    <div class="row">
+      <button class="secondary" onclick="loadExample('shape_parade.lgo')">Shape Parade</button>
+      <button class="secondary" onclick="loadExample('dogs_in_the_park.lgo')">Dogs in the Park</button>
+      <button class="secondary" onclick="loadStarter()">Starter</button>
+    </div>
+
+    <textarea id="command" spellcheck="false"></textarea>
+
+    <div class="row">
+      <button onclick="queueCommand()">Run in Demo</button>
+      <button class="secondary" onclick="clearCommand()">Clear</button>
+    </div>
+
+    <textarea id="repl-log" readonly spellcheck="false"></textarea>
+  </aside>
+
+  <script>
+    window.__dynalogoCommands = [];
+
+    function clearCommand() {
+      document.getElementById('command').value = '';
+    }
+
+    function queueCommand() {
+      const source = document.getElementById('command').value.trim();
+      if (!source) return;
+      window.__dynalogoCommands.push(source);
+    }
+
+    async function loadExample(name) {
+      const text = await fetch(`examples/${name}`).then((response) => response.text());
+      document.getElementById('command').value = text;
+    }
+
+    function loadStarter() {
+      document.getElementById('command').value = [
+        'repeat 4 [fd 80 rt 90]',
+        '',
+        'tell [0 1 2]',
+        'ask 0 [setshape "turtle 10 setxy 20 110]',
+        'ask 1 [setshape "dog 12 setxy 160 70]',
+        'ask 2 [setshape "ship 12 setxy 300 120]',
+        'print "ready'
+      ].join('\n');
+    }
+
+    window.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault();
+        queueCommand();
+      }
+    });
+
+    loadStarter();
+  </script>
+
+  <script src="mq_js_bundle.js"></script>
+  <script>load('dynalogo-window.wasm');</script>
+</body>
+</html>

@@ -70,16 +70,32 @@ cargo run -p dynalogo --bin dynalogo-window
 The window frontend keeps a small command log at the bottom and renders turtle
 lines on a centered Cartesian canvas.
 
+### Browser demo (WASM)
+
+DynaLOGO now includes a browser-oriented macroquad build of
+`dynalogo-window`, plus a GitHub Pages workflow that publishes a small in-page
+REPL demo.
+
+You can validate the browser build locally with:
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo build -p dynalogo --bin dynalogo-window --target wasm32-unknown-unknown
+```
+
+The committed demo shell lives in `web/index.html`, and the Pages workflow
+copies that shell, the compiled `dynalogo-window.wasm`, and the example `.lgo`
+files into the published site artifact.
+
 ### WASM/core status
 
-The browser frontend is still a follow-up task, but `dynalogo-core` now builds
-for `wasm32-unknown-unknown` and exposes a cooperative runtime designed to be
-advanced from a browser render loop such as `requestAnimationFrame`.
+`dynalogo-core` also builds for `wasm32-unknown-unknown` and exposes a
+cooperative runtime designed to be advanced from a browser render loop such as
+`requestAnimationFrame`.
 
 You can validate the core build with:
 
 ```bash
-rustup target add wasm32-unknown-unknown
 cargo check -p dynalogo-core --target wasm32-unknown-unknown
 ```
 

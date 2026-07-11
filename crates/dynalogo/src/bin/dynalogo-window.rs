@@ -4,6 +4,13 @@ use dynalogo_core::vm::{ControlFlow, Vm};
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, Sound};
 use macroquad::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsCast;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsValue;
+#[cfg(target_arch = "wasm32")]
+use web_sys::HtmlTextAreaElement;
+
 const PROMPT_HEIGHT: f32 = 92.0;
 const LOG_LINES: usize = 5;
 const SIM_DT: f64 = 1.0 / 60.0;
@@ -15,6 +22,7 @@ async fn main() {
     loop {
         clear_background(Color::from_rgba(18, 20, 26, 255));
         app.handle_input();
+        app.handle_browser_commands();
         app.update_sim();
         app.update_audio();
         app.draw();
@@ -43,7 +51,7 @@ struct App {
 
 impl App {
     async fn new() -> Self {
-        Self {
+        let app = Self {
             vm: Vm::new(),
             input: String::new(),
             log: vec![
@@ -53,7 +61,9 @@ impl App {
             bark_sound: load_sound_from_bytes(&generate_bark_wav()).await.ok(),
             last_toot: None,
             bark_flash_until: 0.0,
-        }
+        };
+        sync_browser_log(&app.log);
+        app
     }
 
     fn handle_input(&mut self) {
@@ -77,6 +87,14 @@ impl App {
 
         if is_key_pressed(KeyCode::Escape) {
             self.input.clear();
+        }
+    }
+
+    fn handle_browser_commands(&mut self) {
+        for command in drain_browser_commands() {
+            if !command.trim().is_empty() {
+                self.eval_command(command);
+            }
         }
     }
 
@@ -251,6 +269,7 @@ impl App {
         if self.log.len() > keep {
             self.log.drain(0..self.log.len() - keep);
         }
+        sync_browser_log(&self.log);
     }
 }
 
@@ -361,7 +380,12 @@ fn draw_ship_sprite(center: Vec2, forward: Vec2, right: Vec2, phase: f32) {
     draw_triangle_lines(tip, left, right_point, 1.5, BLACK);
 
     let canopy = center + forward * 3.0;
-    draw_circle(canopy.x, canopy.y, 4.0, Color::from_rgba(220, 240, 255, 255));
+    draw_circle(
+        canopy.x,
+        canopy.y,
+        4.0,
+        Color::from_rgba(220, 240, 255, 255),
+    );
 
     let flame = 6.0 + (phase + 1.0) * 2.0;
     let thruster = center - forward * 11.0;
@@ -387,6 +411,53 @@ fn logo_color(color: u32) -> Color {
     Color::new(r, g, b, 1.0)
 }
 
+#[cfg(target_arch = "wasm32")]
+fn drain_browser_commands() -> Vec<String> {
+    let Some(window) = web_sys::window() else {
+        return Vec::new();
+    };
+    let global = JsValue::from(window);
+    let Ok(value) = js_sys::Reflect::get(&global, &JsValue::from_str("__dynalogoCommands")) else {
+        return Vec::new();
+    };
+    if !js_sys::Array::is_array(&value) {
+        return Vec::new();
+    }
+
+    let queue = js_sys::Array::from(&value);
+    let mut commands = Vec::new();
+    while queue.length() > 0 {
+        let value = queue.shift();
+        if let Some(command) = value.as_string() {
+            commands.push(command);
+        }
+    }
+    commands
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn drain_browser_commands() -> Vec<String> {
+    Vec::new()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn sync_browser_log(log: &[String]) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let Some(element) = document.get_element_by_id("repl-log") else {
+        return;
+    };
+    let Ok(textarea) = element.dyn_into::<HtmlTextAreaElement>() else {
+        return;
+    };
+    textarea.set_value(&log.join("\n"));
+    textarea.set_scroll_top(textarea.scroll_height());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn sync_browser_log(_log: &[String]) {}
+
 fn generate_bark_wav() -> Vec<u8> {
     let sample_rate = 22_050u32;
     let sample_count = (sample_rate as f32 * 0.22) as usize;
@@ -406,8 +477,8 @@ fn generate_bark_wav() -> Vec<u8> {
         let noise_sample = (((noise >> 16) & 0xff) as f32 / 127.5) - 1.0;
         let tone1 = if (t * 180.0).fract() < 0.5 { 1.0 } else { -1.0 };
         let tone2 = if (t * 320.0).fract() < 0.5 { 1.0 } else { -1.0 };
-        let sample = (env * (0.55 * tone1 + 0.25 * tone2 + 0.20 * noise_sample) * 0.4)
-            .clamp(-1.0, 1.0);
+        let sample =
+            (env * (0.55 * tone1 + 0.25 * tone2 + 0.20 * noise_sample) * 0.4).clamp(-1.0, 1.0);
         let sample_i16 = (sample * i16::MAX as f32) as i16;
         pcm.extend_from_slice(&sample_i16.to_le_bytes());
     }

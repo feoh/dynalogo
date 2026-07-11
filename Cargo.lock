@@ -234,7 +234,10 @@ name = "dynalogo"
 version = "0.1.0"
 dependencies = [
  "dynalogo-core",
+ "js-sys",
  "macroquad",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
