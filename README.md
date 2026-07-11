@@ -34,12 +34,17 @@ END
 
 ## Workspace layout
 
-| Crate | Purpose |
-| --- | --- |
-| `crates/dynalogo-core` | Lexer, parser, bytecode compiler, VM, values, dynaturtle sim engine. |
-| `crates/dynalogo` | Native frontend: window, turtle rendering, REPL. |
+- `crates/dynalogo-core` — lexer, parser, bytecode compiler, VM, values, and
+  the dynaturtle sim engine
+- `crates/dynalogo` — native frontend: window, turtle rendering, and REPL
 
 `dynalogo-core` is headless and has no graphics dependencies.
+
+## Documentation
+
+- [`docs/getting-started.md`](docs/getting-started.md) — the best place to
+  begin if you are new to DynaLOGO
+- [`docs/README.md`](docs/README.md) — documentation index
 
 ## Running DynaLOGO
 
@@ -75,28 +80,38 @@ Implemented today:
 - Data utilities: `COUNT ITEM EMPTYP EQUALP MEMBERP`
 - Arithmetic, infix operators, comparisons, and boolean logic
 - Variables and property lists: `MAKE THING LOCAL PPROP GPROP PLIST REMPROP`
-- Arrays and templates: `ARRAY SETITEM LISTTOARRAY ARRAYTOLIST MAP FILTER REDUCE FOREACH APPLY`
-- Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD SETPC SETPENSIZE HT ST POS HEADING XCOR YCOR`
+- Arrays and templates: `ARRAY SETITEM LISTTOARRAY ARRAYTOLIST MAP FILTER`
+  `REDUCE FOREACH APPLY`
+- Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD`
+  `SETPC SETPENSIZE HT ST POS HEADING XCOR YCOR`
 
 Still in progress: file/workspace primitives, macro support, full UCBLogo error
 parity, dynaturtle simulation commands, and browser/WASM support.
 
 ## Example programs
 
-See [`examples/`](examples/) for small programs that run against the current
-v0.1 feature set:
+See [`examples/`](examples/) for runnable programs.
+
+Classic turtle examples:
 
 - `square.lgo` — the smallest turtle demo
 - `flower.lgo` — procedures + repeated drawing
 - `spiral.lgo` — arithmetic, variables, and looping
 
+Dynaturtle examples:
+
+- `shape_parade.lgo` — animated turtle / dog / ship shapes
+- `dogs_in_the_park.lgo` — collision-driven barking with `WHEN` and `TOOT`
+
 ## Status
 
 Early development, but the current REPL and window frontend are already useful
-for experimenting with core Logo and static turtle graphics. See
-[ROADMAP.md](ROADMAP.md) for the version plan, [PLAN.md](PLAN.md) for the
-architecture, and [docs/primitive-inventory.md](docs/primitive-inventory.md)
-for a snapshot of the currently implemented primitive surface.
+for experimenting with core Logo, static turtle graphics, and early
+dynaturtle programs. See [ROADMAP.md](ROADMAP.md) for the version plan,
+[PLAN.md](PLAN.md) for the architecture,
+[docs/getting-started.md](docs/getting-started.md) for onboarding, and
+[docs/primitive-inventory.md](docs/primitive-inventory.md) for a snapshot of
+the currently implemented primitive surface.
 
 ## License
 
