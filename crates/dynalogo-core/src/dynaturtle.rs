@@ -4,7 +4,7 @@
 //! passes walk positions, headings, velocities, and flags as dense vectors.
 //! Language-level `TELL`, `ASK`, `EACH`, and `WHO` map to the active selection.
 
-use crate::turtle::{Point, TurtleState};
+use crate::turtle::{point_from_heading, Point, TurtleEvent, TurtleState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdgeMode {
@@ -58,6 +58,7 @@ pub struct TurtleStore {
     shape: Vec<String>,
     collision_radius: Vec<f64>,
     active: Vec<TurtleId>,
+    events: Vec<TurtleEvent>,
 }
 
 impl TurtleStore {
@@ -73,6 +74,7 @@ impl TurtleStore {
             shape: Vec::new(),
             collision_radius: Vec::new(),
             active: Vec::new(),
+            events: Vec::new(),
         };
         let turtle = store.spawn_default();
         store.active = vec![turtle];
@@ -194,6 +196,100 @@ impl TurtleStore {
     pub fn set_heading(&mut self, id: TurtleId, heading: f64) {
         self.ensure(id);
         self.headings[id.index()] = heading.rem_euclid(360.0);
+    }
+
+    /// Moves `id` to `to`, recording a draw line event if its pen is down.
+    pub fn goto(&mut self, id: TurtleId, to: Point) {
+        self.ensure(id);
+        let i = id.index();
+        if self.pen_down[i] {
+            self.events.push(TurtleEvent::Line {
+                from: self.positions[i],
+                to,
+                color: self.pen_color[i],
+                width: self.pen_size[i],
+            });
+        }
+        self.positions[i] = to;
+    }
+
+    pub fn forward(&mut self, id: TurtleId, distance: f64) {
+        self.ensure(id);
+        let i = id.index();
+        let to = point_from_heading(self.positions[i], self.headings[i], distance);
+        self.goto(id, to);
+    }
+
+    pub fn back(&mut self, id: TurtleId, distance: f64) {
+        self.forward(id, -distance);
+    }
+
+    pub fn left(&mut self, id: TurtleId, degrees: f64) {
+        self.ensure(id);
+        self.set_heading(id, self.headings[id.index()] - degrees);
+    }
+
+    pub fn right(&mut self, id: TurtleId, degrees: f64) {
+        self.ensure(id);
+        self.set_heading(id, self.headings[id.index()] + degrees);
+    }
+
+    pub fn set_xy(&mut self, id: TurtleId, x: f64, y: f64) {
+        self.goto(id, Point::new(x, y));
+    }
+
+    pub fn home(&mut self, id: TurtleId) {
+        self.goto(id, Point::new(0.0, 0.0));
+        self.set_heading(id, 0.0);
+    }
+
+    /// Erases the canvas and sends `ids` home, matching classic CLEARSCREEN
+    /// broadcast to the active turtle selection.
+    pub fn clearscreen(&mut self, ids: &[TurtleId]) {
+        self.events.push(TurtleEvent::Clear);
+        for &id in ids {
+            self.home(id);
+        }
+    }
+
+    pub fn set_pen_down(&mut self, id: TurtleId, down: bool) {
+        self.ensure(id);
+        self.pen_down[id.index()] = down;
+    }
+
+    pub fn set_pen_color(&mut self, id: TurtleId, color: u32) {
+        self.ensure(id);
+        self.pen_color[id.index()] = color;
+    }
+
+    pub fn set_pen_size(&mut self, id: TurtleId, size: f64) {
+        self.ensure(id);
+        self.pen_size[id.index()] = size;
+    }
+
+    pub fn set_visible(&mut self, id: TurtleId, visible: bool) {
+        self.ensure(id);
+        self.visible[id.index()] = visible;
+    }
+
+    /// Records a zero-length draw event at `target` without moving `id`.
+    pub fn draw_dot(&mut self, id: TurtleId, target: Point) {
+        self.ensure(id);
+        let i = id.index();
+        self.events.push(TurtleEvent::Line {
+            from: target,
+            to: target,
+            color: self.pen_color[i],
+            width: self.pen_size[i],
+        });
+    }
+
+    pub fn events(&self) -> &[TurtleEvent] {
+        &self.events
+    }
+
+    pub fn clear_events(&mut self) {
+        self.events.clear();
     }
 
     pub fn velocity(&self, id: TurtleId) -> Option<Point> {
@@ -424,6 +520,81 @@ mod tests {
         assert_eq!(
             store.velocity(TurtleId::new(0)).unwrap(),
             Point::new(3.0, 0.0)
+        );
+    }
+
+    fn approx_eq(a: f64, b: f64) {
+        assert!((a - b).abs() < 1e-9, "expected {a} ≈ {b}");
+    }
+
+    #[test]
+    fn forward_draws_a_line_when_pen_is_down() {
+        let mut store = TurtleStore::new();
+        store.forward(TurtleId::new(0), 100.0);
+
+        let TurtleEvent::Line { from, to, .. } = store.events()[0] else {
+            panic!("expected line event");
+        };
+        assert_eq!(from, Point::new(0.0, 0.0));
+        approx_eq(to.x, 0.0);
+        approx_eq(to.y, 100.0);
+    }
+
+    #[test]
+    fn right_turn_uses_logo_heading_convention() {
+        let mut store = TurtleStore::new();
+        let id = TurtleId::new(0);
+        store.right(id, 90.0);
+        store.forward(id, 50.0);
+        let TurtleEvent::Line { to, .. } = store.events()[0] else {
+            panic!("expected line event");
+        };
+        approx_eq(to.x, 50.0);
+        approx_eq(to.y, 0.0);
+    }
+
+    #[test]
+    fn pen_up_moves_without_drawing() {
+        let mut store = TurtleStore::new();
+        let id = TurtleId::new(0);
+        store.set_pen_down(id, false);
+        store.forward(id, 10.0);
+        assert!(store
+            .events()
+            .iter()
+            .all(|event| !matches!(event, TurtleEvent::Line { .. })));
+    }
+
+    #[test]
+    fn clearscreen_resets_position_and_heading_and_erases_lines() {
+        let mut store = TurtleStore::new();
+        let id = TurtleId::new(0);
+        store.right(id, 90.0);
+        store.forward(id, 10.0);
+        store.clearscreen(&[id]);
+        assert_eq!(store.state(id).unwrap().position, Point::new(0.0, 0.0));
+        assert_eq!(store.state(id).unwrap().heading, 0.0);
+        assert!(store
+            .events()
+            .iter()
+            .any(|event| matches!(event, TurtleEvent::Clear)));
+    }
+
+    #[test]
+    fn clearscreen_broadcasts_home_to_every_active_turtle() {
+        let mut store = TurtleStore::new();
+        store.tell_many([TurtleId::new(1), TurtleId::new(2)]);
+        store.set_position(TurtleId::new(1), Point::new(5.0, 5.0));
+        store.set_position(TurtleId::new(2), Point::new(-5.0, -5.0));
+        let ids = store.active().to_vec();
+        store.clearscreen(&ids);
+        assert_eq!(
+            store.state(TurtleId::new(1)).unwrap().position,
+            Point::new(0.0, 0.0)
+        );
+        assert_eq!(
+            store.state(TurtleId::new(2)).unwrap().position,
+            Point::new(0.0, 0.0)
         );
     }
 

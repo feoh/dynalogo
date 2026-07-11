@@ -113,7 +113,7 @@ impl App {
             Color::from_rgba(55, 60, 70, 255),
         );
 
-        for event in self.vm.turtle().backend().events() {
+        for event in self.vm.turtles().events() {
             if let TurtleEvent::Line {
                 from,
                 to,
@@ -134,7 +134,9 @@ impl App {
             }
         }
 
-        self.draw_turtle(self.vm.turtle().state(), canvas_height);
+        for state in self.vm.turtles().snapshots() {
+            self.draw_turtle(state, canvas_height);
+        }
     }
 
     fn draw_turtle(&self, state: TurtleState, canvas_height: f32) {

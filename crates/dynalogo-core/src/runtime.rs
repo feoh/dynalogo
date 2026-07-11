@@ -106,7 +106,10 @@ fn runtime_loop(
             if let Err(error) = vm.dynaturtle_tick(tick_seconds) {
                 let _ = events.send(RuntimeEvent::Error(error.to_string()));
             }
-            let snapshot = TurtleSnapshot::single(tick, vm.turtle().state());
+            let snapshot = TurtleSnapshot {
+                tick,
+                turtles: vm.turtles().snapshots(),
+            };
             let _ = events.send(RuntimeEvent::Snapshot(snapshot));
         });
     }

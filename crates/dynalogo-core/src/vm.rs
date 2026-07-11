@@ -17,7 +17,7 @@ use crate::demon::{DemonCondition, DemonEvent, DemonScheduler};
 use crate::dynaturtle::{TurtleId, TurtleStore};
 use crate::lexer::{lex, InfixOp, TokenKind};
 use crate::parser::{parse_source, Arity, ArityTable};
-use crate::turtle::{HeadlessTurtleBackend, Point, TurtleWorld};
+use crate::turtle::Point;
 use crate::value::{Interner, List, LogoArray, LogoNumber, Symbol, Value};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -190,7 +190,6 @@ pub struct Vm {
     arities: ArityTable,
     procedures: HashMap<String, Procedure>,
     property_lists: HashMap<String, HashMap<String, Value>>,
-    turtle: TurtleWorld<HeadlessTurtleBackend>,
     turtles: TurtleStore,
     demons: DemonScheduler,
     collision_config: CollisionConfig,
@@ -236,7 +235,6 @@ impl Default for Vm {
             arities: ArityTable::default(),
             procedures: HashMap::new(),
             property_lists: HashMap::new(),
-            turtle: TurtleWorld::new(HeadlessTurtleBackend::new()),
             turtles: TurtleStore::new(),
             demons: DemonScheduler::new(),
             collision_config: CollisionConfig::default(),
@@ -297,14 +295,6 @@ impl Vm {
 
     pub fn property_lists(&self) -> &HashMap<String, HashMap<String, Value>> {
         &self.property_lists
-    }
-
-    pub fn turtle(&self) -> &TurtleWorld<HeadlessTurtleBackend> {
-        &self.turtle
-    }
-
-    pub fn turtle_mut(&mut self) -> &mut TurtleWorld<HeadlessTurtleBackend> {
-        &mut self.turtle
     }
 
     pub fn turtles(&self) -> &TurtleStore {
@@ -1053,24 +1043,8 @@ impl Vm {
     fn dot(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("dot", &args, 1)?;
         let target = point_input(&args[0], &self.interner)?;
-        let state = self.turtle.state();
-
-        self.turtle.pen_up();
-        self.turtle.set_pos(target);
-        self.turtle.pen_down();
-        self.turtle.forward(0.0);
-        self.turtle.pen_up();
-        self.turtle.set_pos(state.position);
-        self.turtle.set_heading(state.heading);
-        self.turtle.set_pen_color(state.pen_color);
-        self.turtle.set_pen_size(state.pen_size);
-        if state.pen_down {
-            self.turtle.pen_down();
-        }
-        if state.visible {
-            self.turtle.show_turtle();
-        } else {
-            self.turtle.hide_turtle();
+        for id in self.turtles.active().to_vec() {
+            self.turtles.draw_dot(id, target);
         }
         Ok(PrimitiveResult::NoValue)
     }
@@ -1884,29 +1858,45 @@ impl Vm {
         Err(VmError::new("CONTINUE debugger is not implemented yet"))
     }
 
+    /// The single turtle classic query primitives (POS, HEADING, ...) read
+    /// from: the first member of the active TELL selection.
+    fn current_turtle(&self) -> TurtleId {
+        self.turtles.who().unwrap_or_else(|| TurtleId::new(0))
+    }
+
     fn turtle_forward(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("forward", &args, 1)?;
         let distance = number_input(&args[0], &self.interner)?;
-        self.turtle.forward(distance);
+        for id in self.turtles.active().to_vec() {
+            self.turtles.forward(id, distance);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_back(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("back", &args, 1)?;
         let distance = number_input(&args[0], &self.interner)?;
-        self.turtle.back(distance);
+        for id in self.turtles.active().to_vec() {
+            self.turtles.back(id, distance);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_left(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("left", &args, 1)?;
-        self.turtle.left(number_input(&args[0], &self.interner)?);
+        let degrees = number_input(&args[0], &self.interner)?;
+        for id in self.turtles.active().to_vec() {
+            self.turtles.left(id, degrees);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_right(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("right", &args, 1)?;
-        self.turtle.right(number_input(&args[0], &self.interner)?);
+        let degrees = number_input(&args[0], &self.interner)?;
+        for id in self.turtles.active().to_vec() {
+            self.turtles.right(id, degrees);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -1914,107 +1904,154 @@ impl Vm {
         expect_arity("setxy", &args, 2)?;
         let x = number_input(&args[0], &self.interner)?;
         let y = number_input(&args[1], &self.interner)?;
-        self.turtle.set_xy(x, y);
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_xy(id, x, y);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_setx(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setx", &args, 1)?;
         let x = number_input(&args[0], &self.interner)?;
-        let state = self.turtle.state();
-        self.turtle.set_xy(x, state.position.y);
+        for id in self.turtles.active().to_vec() {
+            let y = self
+                .turtles
+                .state(id)
+                .expect("active turtle exists in store")
+                .position
+                .y;
+            self.turtles.set_xy(id, x, y);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_sety(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("sety", &args, 1)?;
         let y = number_input(&args[0], &self.interner)?;
-        let state = self.turtle.state();
-        self.turtle.set_xy(state.position.x, y);
+        for id in self.turtles.active().to_vec() {
+            let x = self
+                .turtles
+                .state(id)
+                .expect("active turtle exists in store")
+                .position
+                .x;
+            self.turtles.set_xy(id, x, y);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_setpos(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setpos", &args, 1)?;
         let point = point_input(&args[0], &self.interner)?;
-        self.turtle.set_pos(point);
+        for id in self.turtles.active().to_vec() {
+            self.turtles.goto(id, point);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_setheading(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setheading", &args, 1)?;
-        self.turtle
-            .set_heading(number_input(&args[0], &self.interner)?);
+        let heading = number_input(&args[0], &self.interner)?;
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_heading(id, heading);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_home(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("home", &args, 0)?;
-        self.turtle.home();
+        for id in self.turtles.active().to_vec() {
+            self.turtles.home(id);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_clearscreen(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("clearscreen", &args, 0)?;
-        self.turtle.clearscreen();
+        let ids = self.turtles.active().to_vec();
+        self.turtles.clearscreen(&ids);
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_penup(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("penup", &args, 0)?;
-        self.turtle.pen_up();
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_pen_down(id, false);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_pendown(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("pendown", &args, 0)?;
-        self.turtle.pen_down();
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_pen_down(id, true);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_setpencolor(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setpencolor", &args, 1)?;
-        self.turtle
-            .set_pen_color(number_input(&args[0], &self.interner)? as u32);
+        let color = number_input(&args[0], &self.interner)? as u32;
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_pen_color(id, color);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_setpensize(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setpensize", &args, 1)?;
-        self.turtle
-            .set_pen_size(number_input(&args[0], &self.interner)?);
+        let width = number_input(&args[0], &self.interner)?;
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_pen_size(id, width);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_hide(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("hideturtle", &args, 0)?;
-        self.turtle.hide_turtle();
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_visible(id, false);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_show(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("showturtle", &args, 0)?;
-        self.turtle.show_turtle();
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_visible(id, true);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn init_turtle(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("init.turtle", &args, 0)?;
-        self.turtle.clearscreen();
-        self.turtle.show_turtle();
+        let ids = self.turtles.active().to_vec();
+        self.turtles.clearscreen(&ids);
+        for id in ids {
+            self.turtles.set_visible(id, true);
+        }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_shownp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("shownp", &args, 0)?;
-        Ok(PrimitiveResult::Value(
-            self.logo_bool(self.turtle.state().visible),
-        ))
+        let id = self.current_turtle();
+        let visible = self
+            .turtles
+            .state(id)
+            .expect("active turtle exists in store")
+            .visible;
+        Ok(PrimitiveResult::Value(self.logo_bool(visible)))
     }
 
     fn turtle_pos(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("pos", &args, 0)?;
-        let position = self.turtle.state().position;
+        let id = self.current_turtle();
+        let position = self
+            .turtles
+            .state(id)
+            .expect("active turtle exists in store")
+            .position;
         Ok(PrimitiveResult::Value(Value::List(List::from_values([
             Value::number(position.x),
             Value::number(position.y),
@@ -2023,23 +2060,35 @@ impl Vm {
 
     fn turtle_heading(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("heading", &args, 0)?;
-        Ok(PrimitiveResult::Value(Value::number(
-            self.turtle.state().heading,
-        )))
+        let id = self.current_turtle();
+        let heading = self
+            .turtles
+            .state(id)
+            .expect("active turtle exists in store")
+            .heading;
+        Ok(PrimitiveResult::Value(Value::number(heading)))
     }
 
     fn turtle_xcor(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("xcor", &args, 0)?;
-        Ok(PrimitiveResult::Value(Value::number(
-            self.turtle.state().position.x,
-        )))
+        let id = self.current_turtle();
+        let position = self
+            .turtles
+            .state(id)
+            .expect("active turtle exists in store")
+            .position;
+        Ok(PrimitiveResult::Value(Value::number(position.x)))
     }
 
     fn turtle_ycor(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("ycor", &args, 0)?;
-        Ok(PrimitiveResult::Value(Value::number(
-            self.turtle.state().position.y,
-        )))
+        let id = self.current_turtle();
+        let position = self
+            .turtles
+            .state(id)
+            .expect("active turtle exists in store")
+            .position;
+        Ok(PrimitiveResult::Value(Value::number(position.y)))
     }
 
     fn output_control(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2861,16 +2910,18 @@ mod tests {
     #[test]
     fn dot_draws_at_target_without_moving_the_turtle() {
         let (_, vm) = run("setxy 10 20 dot [30 40] print pos").unwrap();
-        assert_eq!(vm.turtle().state().position, Point::new(10.0, 20.0));
-        let line = vm
-            .turtle()
-            .backend()
-            .events()
-            .iter()
-            .find_map(|event| match event {
-                TurtleEvent::Line { from, to, .. } if *from == Point::new(30.0, 40.0) && *to == Point::new(30.0, 40.0) => Some((*from, *to)),
-                _ => None,
-            });
+        assert_eq!(
+            vm.turtles().state(TurtleId::new(0)).unwrap().position,
+            Point::new(10.0, 20.0)
+        );
+        let line = vm.turtles().events().iter().find_map(|event| match event {
+            TurtleEvent::Line { from, to, .. }
+                if *from == Point::new(30.0, 40.0) && *to == Point::new(30.0, 40.0) =>
+            {
+                Some((*from, *to))
+            }
+            _ => None,
+        });
         assert!(line.is_some());
     }
 
@@ -2895,7 +2946,10 @@ mod tests {
     fn repeated_body_execution_reflects_fresh_state_each_iteration() {
         let (result, vm) = run("repeat 10 [forward 1]").unwrap();
         assert_eq!(result.output, "");
-        assert_eq!(vm.turtle().state().position, Point::new(0.0, 10.0));
+        assert_eq!(
+            vm.turtles().state(TurtleId::new(0)).unwrap().position,
+            Point::new(0.0, 10.0)
+        );
     }
 
     #[test]
@@ -3233,11 +3287,11 @@ mod tests {
     fn turtle_motion_primitives_update_state_and_record_lines() {
         let (result, vm) = run("fd 100 rt 90 fd 50 print pos print heading").unwrap();
         assert_eq!(result.output, "[50 100]\n90\n");
-        assert_eq!(vm.turtle().state().position, Point::new(50.0, 100.0));
-        assert_eq!(vm.turtle().state().heading, 90.0);
+        let state = vm.turtles().state(TurtleId::new(0)).unwrap();
+        assert_eq!(state.position, Point::new(50.0, 100.0));
+        assert_eq!(state.heading, 90.0);
         let line_count = vm
-            .turtle()
-            .backend()
+            .turtles()
             .events()
             .iter()
             .filter(|event| matches!(event, TurtleEvent::Line { .. }))
@@ -3250,14 +3304,13 @@ mod tests {
         let (result, vm) =
             run("pu fd 10 pd setpc 3 setpensize 4 fd 5 ht st print xcor print ycor").unwrap();
         assert_eq!(result.output, "0\n15\n");
-        let state = vm.turtle().state();
+        let state = vm.turtles().state(TurtleId::new(0)).unwrap();
         assert!(state.pen_down);
         assert!(state.visible);
         assert_eq!(state.pen_color, 3);
         assert_eq!(state.pen_size, 4.0);
         let line_count = vm
-            .turtle()
-            .backend()
+            .turtles()
             .events()
             .iter()
             .filter(|event| matches!(event, TurtleEvent::Line { .. }))
@@ -3268,36 +3321,36 @@ mod tests {
     #[test]
     fn setpos_setxy_home_and_clearscreen() {
         let (_, mut vm) = run("setpos [10 20] setxy 30 40 home cs").unwrap();
-        assert_eq!(vm.turtle().state().position, Point::new(0.0, 0.0));
-        assert_eq!(vm.turtle().state().heading, 0.0);
+        let state = vm.turtles().state(TurtleId::new(0)).unwrap();
+        assert_eq!(state.position, Point::new(0.0, 0.0));
+        assert_eq!(state.heading, 0.0);
         assert!(vm
-            .turtle()
-            .backend()
+            .turtles()
             .events()
             .iter()
             .any(|event| matches!(event, TurtleEvent::Clear)));
-        vm.turtle_mut().backend_mut().clear_events();
-        assert!(vm.turtle().backend().events().is_empty());
+        vm.turtles_mut().clear_events();
+        assert!(vm.turtles().events().is_empty());
     }
 
     #[test]
     fn atari_turtle_state_primitives_setx_sety_and_shownp() {
         let (result, vm) = run("ht print shownp setx 25 sety -10 st print shownp print pos").unwrap();
         assert_eq!(result.output, "false\ntrue\n[25 -10]\n");
-        assert_eq!(vm.turtle().state().position, Point::new(25.0, -10.0));
-        assert!(vm.turtle().state().visible);
+        let state = vm.turtles().state(TurtleId::new(0)).unwrap();
+        assert_eq!(state.position, Point::new(25.0, -10.0));
+        assert!(state.visible);
     }
 
     #[test]
     fn init_turtle_resets_display_to_visible_default_turtle() {
         let (_, vm) = run("ht setxy 10 20 init.turtle").unwrap();
-        let state = vm.turtle().state();
+        let state = vm.turtles().state(TurtleId::new(0)).unwrap();
         assert_eq!(state.position, Point::new(0.0, 0.0));
         assert_eq!(state.heading, 0.0);
         assert!(state.visible);
         assert!(vm
-            .turtle()
-            .backend()
+            .turtles()
             .events()
             .iter()
             .any(|event| matches!(event, TurtleEvent::Clear)));
@@ -3313,6 +3366,51 @@ mod tests {
     fn each_runs_body_once_per_active_turtle() {
         let (result, _) = run("tell [1 2 3] each [print who]").unwrap();
         assert_eq!(result.output, "[1]\n[2]\n[3]\n");
+    }
+
+    #[test]
+    fn tell_selects_which_turtle_classic_motion_primitives_move() {
+        let (_, vm) = run("tell 3 forward 10").unwrap();
+        assert_eq!(
+            vm.turtles().state(TurtleId::new(3)).unwrap().position,
+            Point::new(0.0, 10.0)
+        );
+        assert_eq!(
+            vm.turtles().state(TurtleId::new(0)).unwrap().position,
+            Point::new(0.0, 0.0)
+        );
+    }
+
+    #[test]
+    fn tell_many_broadcasts_classic_motion_and_pen_primitives() {
+        let (_, vm) = run("tell [1 2] right 90 forward 5 penup").unwrap();
+        for id in [TurtleId::new(1), TurtleId::new(2)] {
+            let state = vm.turtles().state(id).unwrap();
+            assert_eq!(state.heading, 90.0);
+            assert!((state.position.x - 5.0).abs() < 1e-9);
+            assert!(state.position.y.abs() < 1e-9);
+            assert!(!state.pen_down);
+        }
+        let untouched = vm.turtles().state(TurtleId::new(0)).unwrap();
+        assert_eq!(untouched.position, Point::new(0.0, 0.0));
+        assert!(untouched.pen_down);
+    }
+
+    #[test]
+    fn ask_scopes_classic_motion_primitives_to_a_single_turtle() {
+        let (_, vm) = run("tell [0 1] ask 5 [forward 20]").unwrap();
+        assert_eq!(
+            vm.turtles().state(TurtleId::new(5)).unwrap().position,
+            Point::new(0.0, 20.0)
+        );
+        assert_eq!(
+            vm.turtles().state(TurtleId::new(0)).unwrap().position,
+            Point::new(0.0, 0.0)
+        );
+        assert_eq!(
+            vm.turtles().state(TurtleId::new(1)).unwrap().position,
+            Point::new(0.0, 0.0)
+        );
     }
 
     #[test]
