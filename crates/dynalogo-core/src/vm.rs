@@ -500,6 +500,17 @@ impl Vm {
             "text" => self.text(args),
             "fulltext" => self.fulltext(args),
             "copydef" => self.copydef(args),
+            "po" => self.po(args),
+            "poall" => self.poall(args),
+            "pons" => self.pons(args),
+            "pops" => self.pops(args),
+            "pots" => self.pots(args),
+            ".primitives" => self.primitives_command(args),
+            "erase" | "er" => self.erase(args),
+            "ern" => self.ern(args),
+            "erns" => self.erns(args),
+            "erps" => self.erps(args),
+            "erall" => self.erall(args),
             "pprop" => self.pprop(args),
             "gprop" => self.gprop(args),
             "remprop" => self.remprop(args),
@@ -1096,11 +1107,160 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn po(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("po", &args, 1)?;
+        let names = local_names(&args[0], &self.interner)?;
+        for name in names {
+            let procedure = self
+                .procedures
+                .get(&name.to_ascii_lowercase())
+                .cloned()
+                .ok_or_else(|| VmError::new(format!("I don't know how to {name}")))?;
+            self.write_procedure_listing(&procedure, true, true)?;
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn poall(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("poall", &args, 0)?;
+        let procedures = self.visible_workspace_procedures();
+        for procedure in procedures {
+            self.write_procedure_listing(&procedure, true, true)?;
+        }
+        self.write_variable_listing();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn pons(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pons", &args, 0)?;
+        self.write_variable_listing();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn pops(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pops", &args, 0)?;
+        for procedure in self.visible_workspace_procedures() {
+            self.write_procedure_listing(&procedure, true, true)?;
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn pots(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pots", &args, 0)?;
+        for procedure in self.visible_workspace_procedures() {
+            self.write_procedure_listing(&procedure, false, false)?;
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn primitives_command(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity(".primitives", &args, 0)?;
+        self.output.push_str(&primitive_names().join(" "));
+        self.output.push('\n');
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn erase(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("erase", &args, 1)?;
+        for name in local_names(&args[0], &self.interner)? {
+            let key = name.to_ascii_lowercase();
+            if is_protected_workspace_procedure(&key) {
+                continue;
+            }
+            self.procedures.remove(&key);
+            self.arities.remove(&key);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn ern(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("ern", &args, 1)?;
+        for name in local_names(&args[0], &self.interner)? {
+            self.env.globals.remove(&name.to_ascii_lowercase());
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn erns(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("erns", &args, 0)?;
+        self.env.globals.clear();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn erps(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("erps", &args, 0)?;
+        let removable = self
+            .procedures
+            .keys()
+            .filter(|name| !is_protected_workspace_procedure(name))
+            .cloned()
+            .collect::<Vec<_>>();
+        for name in removable {
+            self.procedures.remove(&name);
+            self.arities.remove(&name);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn erall(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("erall", &args, 0)?;
+        self.erns(vec![])?;
+        self.erps(vec![])?;
+        self.property_lists.clear();
+        Ok(PrimitiveResult::NoValue)
+    }
+
     fn workspace_procedure(&self, value: &Value) -> Result<&Procedure, VmError> {
         let name = variable_name_input(value, &self.interner)?;
         self.procedures
             .get(&name.to_ascii_lowercase())
             .ok_or_else(|| VmError::new(format!("I don't know how to {name}")))
+    }
+
+    fn visible_workspace_procedures(&self) -> Vec<Procedure> {
+        let mut procedures = self
+            .procedures
+            .iter()
+            .filter(|(name, _)| !is_protected_workspace_procedure(name))
+            .map(|(_, procedure)| procedure.clone())
+            .collect::<Vec<_>>();
+        procedures.sort_by_key(|procedure| {
+            self.interner
+                .canonical_spelling(procedure.name())
+                .to_string()
+        });
+        procedures
+    }
+
+    fn write_variable_listing(&mut self) {
+        let mut names = self.env.globals.keys().cloned().collect::<Vec<_>>();
+        names.sort();
+        for name in names {
+            if let Some(value) = self.env.globals.get(&name) {
+                self.output.push_str(&name);
+                self.output.push(' ');
+                self.output.push_str(&value.show(&self.interner));
+                self.output.push('\n');
+            }
+        }
+    }
+
+    fn write_procedure_listing(
+        &mut self,
+        procedure: &Procedure,
+        include_body: bool,
+        include_end: bool,
+    ) -> Result<(), VmError> {
+        let lines = if include_body {
+            procedure_text(procedure, &mut self.interner, include_end)?
+        } else {
+            List::from_values([Value::List(procedure_header_line(procedure, &mut self.interner))])
+        };
+        for line in lines.iter() {
+            self.output.push_str(&line.show(&self.interner));
+            self.output.push('\n');
+        }
+        Ok(())
     }
 
     fn pprop(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1899,120 +2059,48 @@ fn parse_source_line(line: &str, interner: &mut Interner) -> Result<List, VmErro
     Ok(List::from_values(values))
 }
 
+fn primitive_names() -> &'static [&'static str] {
+    &[
+        "sum", "+", "difference", "-", "product", "*", "quotient", "/",
+        "remainder", "abs", "int", "round", "sqrt", "sin", "cos", "tan",
+        "random", "rerandom", "and", "or", "not", "equalp", "equal?",
+        "emptyp", "empty?", "memberp", "member?", "first", "butfirst", "bf",
+        "last", "butlast", "bl", "fput", "lput", "sentence", "se", "list",
+        "word", "count", "item", "wordp", "listp", "numberp", "intp",
+        "decimalp", "print", "pr", "show", "type", "readlist", "rl", "make",
+        "name", "thing", "local", "namep", "definedp", "defined?",
+        "primitivep", "primitive?", "text", "fulltext", "copydef", "po",
+        "poall", "pons", "pops", "pots", ".primitives", "erase", "er", "ern",
+        "erns", "erps", "erall", "pprop", "gprop", "remprop", "plist", "array",
+        "setitem", "listtoarray", "arraytolist", "repeat", "if", "ifelse", "run",
+        "runresult", "parse", "runparse", "apply", "foreach", "map", "filter",
+        "reduce", "repcount", "test", "iftrue", "ift", "iffalse", "iff", "wait",
+        "catch", "throw", "error", "pause", "continue", "forward", "fd", "back",
+        "bk", "left", "lt", "right", "rt", "setxy", "setpos", "setheading",
+        "seth", "home", "clearscreen", "cs", "penup", "pu", "pendown", "pd",
+        "setpencolor", "setpc", "setpensize", "hideturtle", "ht", "showturtle",
+        "st", "pos", "heading", "xcor", "ycor", "output", "op", "stop",
+    ]
+}
+
 fn is_primitive_name(name: &str) -> bool {
+    primitive_names().contains(&name.to_ascii_lowercase().as_str())
+}
+
+fn is_protected_workspace_procedure(name: &str) -> bool {
     matches!(
-        name.to_ascii_lowercase().as_str(),
-        "sum"
-            | "+"
-            | "difference"
-            | "-"
-            | "product"
-            | "*"
-            | "quotient"
-            | "/"
-            | "remainder"
-            | "and"
-            | "or"
-            | "not"
-            | "equalp"
-            | "equal?"
-            | "emptyp"
-            | "empty?"
-            | "memberp"
-            | "member?"
-            | "first"
-            | "butfirst"
-            | "bf"
-            | "last"
-            | "butlast"
-            | "bl"
-            | "fput"
-            | "lput"
-            | "sentence"
-            | "se"
-            | "list"
-            | "word"
-            | "count"
-            | "item"
-            | "print"
-            | "pr"
-            | "show"
-            | "type"
-            | "readlist"
-            | "rl"
-            | "make"
-            | "name"
-            | "thing"
-            | "local"
-            | "definedp"
-            | "defined?"
-            | "primitivep"
-            | "primitive?"
-            | "pprop"
-            | "gprop"
-            | "remprop"
-            | "plist"
-            | "array"
-            | "setitem"
-            | "listtoarray"
-            | "arraytolist"
-            | "repeat"
-            | "if"
-            | "ifelse"
-            | "run"
-            | "runresult"
-            | "parse"
-            | "runparse"
-            | "apply"
-            | "foreach"
-            | "map"
-            | "filter"
-            | "reduce"
-            | "repcount"
-            | "test"
-            | "iftrue"
-            | "ift"
-            | "iffalse"
-            | "iff"
-            | "wait"
-            | "catch"
-            | "throw"
-            | "error"
-            | "pause"
-            | "continue"
-            | "forward"
-            | "fd"
-            | "back"
-            | "bk"
-            | "left"
-            | "lt"
-            | "right"
-            | "rt"
-            | "setxy"
-            | "setpos"
-            | "setheading"
-            | "seth"
-            | "home"
-            | "clearscreen"
-            | "cs"
-            | "penup"
-            | "pu"
-            | "pendown"
-            | "pd"
-            | "setpencolor"
-            | "setpc"
-            | "setpensize"
-            | "hideturtle"
-            | "ht"
-            | "showturtle"
-            | "st"
-            | "pos"
-            | "heading"
-            | "xcor"
-            | "ycor"
-            | "output"
-            | "op"
-            | "stop"
+        name,
+        "__whileloop"
+            | "while"
+            | "__untilloop"
+            | "until"
+            | "do.while"
+            | "__condrest"
+            | "cond"
+            | "__caserest"
+            | "case"
+            | "__forloop"
+            | "for"
     )
 }
 
@@ -2398,6 +2486,54 @@ mod tests {
             result.output,
             "[[to square :x] [output product :x :x]]\n[[to square :x] [output product :x :x] [end]]\n"
         );
+    }
+
+    #[test]
+    fn workspace_listing_commands_report_user_procedures_and_variables() {
+        let mut vm = Vm::new();
+        vm.eval_source("to alpha :x
+             print :x
+             end
+             to beta :y
+             output sum :y 1
+             end
+             make \"foo 7
+             make \"bar [a b]")
+            .unwrap();
+        let result = vm
+            .eval_source("pots pops pons poall po [alpha] .primitives")
+            .unwrap();
+        assert!(result.output.contains("[to alpha :x]"));
+        assert!(result.output.contains("[to beta :y]"));
+        assert!(result.output.contains("[print :x]"));
+        assert!(result.output.contains("[output sum :y 1]"));
+        assert!(result.output.contains("bar [a b]"));
+        assert!(result.output.contains("foo 7"));
+        assert!(result.output.contains("sum + difference"));
+        assert!(!result.output.contains("__whileloop"));
+    }
+
+    #[test]
+    fn workspace_erase_commands_remove_user_bindings() {
+        let mut vm = Vm::new();
+        vm.eval_source("to alpha :x
+             output :x
+             end
+             to beta :y
+             output :y
+             end
+             make \"foo 7
+             make \"bar 8")
+            .unwrap();
+        vm.eval_source("ern [foo] erase [alpha]").unwrap();
+        let result = vm.eval_source("print namep \"foo print definedp \"alpha print definedp \"beta").unwrap();
+        assert_eq!(result.output, "false\nfalse\ntrue\n");
+
+        vm.clear_output();
+        vm.eval_source("erns erps").unwrap();
+        vm.clear_output();
+        let result = vm.eval_source("print namep \"bar print definedp \"beta print definedp \"while").unwrap();
+        assert_eq!(result.output, "false\nfalse\ntrue\n");
     }
 
     #[test]

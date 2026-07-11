@@ -119,6 +119,18 @@ impl ArityTable {
             ("TEXT", 1),
             ("FULLTEXT", 1),
             ("COPYDEF", 2),
+            ("PO", 1),
+            ("POALL", 0),
+            ("PONS", 0),
+            ("POPS", 0),
+            ("POTS", 0),
+            (".PRIMITIVES", 0),
+            ("ERASE", 1),
+            ("ER", 1),
+            ("ERN", 1),
+            ("ERNS", 0),
+            ("ERPS", 0),
+            ("ERALL", 0),
             ("PPROP", 3),
             ("GPROP", 2),
             ("REMPROP", 2),
@@ -170,6 +182,10 @@ impl ArityTable {
 
     pub fn get(&self, name: &str) -> Option<Arity> {
         self.arities.get(&name.to_ascii_lowercase()).copied()
+    }
+
+    pub fn remove(&mut self, name: &str) {
+        self.arities.remove(&name.to_ascii_lowercase());
     }
 }
 

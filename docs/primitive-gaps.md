@@ -5,20 +5,22 @@ and roadmap, not yet a full audit against the UCBLogo manual.
 
 ## Workspace management still missing
 
-Partially implemented today:
+Implemented today:
 
 - `DEFINEDP` / `DEFINED?`
 - `PRIMITIVEP` / `PRIMITIVE?`
 - `TEXT`
 - `FULLTEXT`
 - `COPYDEF`
+- `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `.PRIMITIVES`
+- `ERASE` / `ER`, `ERN`, `ERNS`, `ERPS`, `ERALL`
 
 Still missing from the nearby workspace roadmap bucket:
 
-- `POALL`, `PO`, `POPS`
-- `ERASE`, `ERALL`
+- `DEFINE`
+- `NODES`, `RECYCLE`
 - `BURY`, `UNBURY`, `BURIEDP`
-- likely additional printout/listing helpers mentioned by older task names
+- editor-facing commands such as `EDIT`/`ED`, `EDNS`, `EDSH`
 
 ## File I/O is still absent
 

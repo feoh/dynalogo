@@ -106,9 +106,10 @@ The Atari manual organizes features into these areas:
 
 - `NAMEP`
 
-**Missing from Atari vocabulary**
+**Implemented now**
 
-- broader Atari variable/workspace listing and erase helpers (`PONS`, `ERN`, `ERNS`)
+- broader Atari variable/workspace listing and erase helpers now covered in part by
+  `PONS`, `ERN`, and `ERNS`
 
 ### 4. Arithmetic operations
 
@@ -190,12 +191,13 @@ The Atari manual organizes features into these areas:
 - `DEFINEDP` / `DEFINED?`
 - `PRIMITIVEP` / `PRIMITIVE?`
 - `TEXT`, `FULLTEXT`, `COPYDEF`
+- `PO`, `POALL`, `POPS`, `PONS`, `POTS`, `.PRIMITIVES`
+- `ERASE` / `ER`, `ERALL`, `ERN`, `ERNS`, `ERPS`
 
 **Present in Atari manual but missing**
 
-- `PO`, `POALL`, `POPS`, `PONS`, `POTS`, `.PRIMITIVES`
-- `ERASE` / `ER`, `ERALL`, `ERN`, `ERNS`, `ERPS`
 - `NODES`, `RECYCLE`
+- `DEFINE`
 - `BURY`, `UNBURY`, `BURIEDP` are also still missing from the roadmap bucket
 
 ### 10. Files
@@ -222,8 +224,8 @@ DynaLOGO:
 
 1. **Turtle addressing and event primitives**
    - `ASK`, `TELL`, `EACH`, `WHO`, `OVER`, `TOUCHING`, `WHEN`
-2. **Workspace listing / erase family**
-   - `PO*`, `ER*`, `POTS`, `.PRIMITIVES`, `DEFINE`
+2. **Remaining workspace management work**
+   - `DEFINE`, `NODES`, `RECYCLE`, bury/unbury behavior, and editor integration
 3. **File and device I/O**
    - `LOAD`, `SAVE`, `SETREAD`, `SETWRITE`, `RC`, `RL`
 4. **Remaining Atari type and math helpers**
