@@ -44,6 +44,8 @@ END
 
 - [`docs/getting-started.md`](docs/getting-started.md) — the best place to
   begin if you are new to DynaLOGO
+- [`docs/reference-manual.md`](docs/reference-manual.md) — user reference for
+  the currently implemented language and dynaturtle surface
 - [`docs/README.md`](docs/README.md) — documentation index
 
 ## Running DynaLOGO

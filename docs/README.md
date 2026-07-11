@@ -7,8 +7,10 @@ Start here for user-facing documentation inside the repository.
 - [`getting-started.md`](getting-started.md) — installation, REPL basics,
   first turtle programs, procedures, window frontend, and dynaturtle demos
 
-## Reference / project notes
+## Reference
 
+- [`reference-manual.md`](reference-manual.md) — the main user-facing
+  reference for currently implemented behavior
 - [`primitive-inventory.md`](primitive-inventory.md) — snapshot of implemented
   primitives
 - [`primitive-gaps.md`](primitive-gaps.md) — known gaps and partial areas
