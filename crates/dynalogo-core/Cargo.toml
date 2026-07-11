@@ -19,3 +19,7 @@ harness = false
 [[bench]]
 name = "collision_bench"
 harness = false
+
+[[bench]]
+name = "dynaturtle_tick_bench"
+harness = false
