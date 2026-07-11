@@ -77,9 +77,10 @@ Implemented today:
 - Variables and property lists: `MAKE THING LOCAL PPROP GPROP PLIST REMPROP`
 - Arrays and templates: `ARRAY SETITEM LISTTOARRAY ARRAYTOLIST MAP FILTER REDUCE FOREACH APPLY`
 - Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD SETPC SETPENSIZE HT ST POS HEADING XCOR YCOR`
+- Macros: `.MACRO .DEFMACRO MACROP MACROEXPAND`
 
-Still in progress: file/workspace primitives, macro support, full UCBLogo error
-parity, dynaturtle simulation commands, and browser/WASM support.
+Still in progress: file/workspace primitives, full UCBLogo error parity,
+dynaturtle simulation commands, and browser/WASM support.
 
 ## Example programs
 
