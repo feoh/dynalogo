@@ -60,8 +60,8 @@ The Atari manual organizes features into these areas:
 - `LEFT`/`LT`, `RIGHT`/`RT`
 - `HOME`, `POS`, `HEADING`, `XCOR`, `YCOR`
 - `PENUP`/`PU`, `PENDOWN`/`PD`
-- `SETPOS`, `SETXY`, `SETHEADING`/`SETH`
-- `HIDETURTLE`/`HT`, `SHOWTURTLE`/`ST`
+- `SETPOS`, `SETXY`, `SETX`, `SETY`, `SETHEADING`/`SETH`
+- `HIDETURTLE`/`HT`, `SHOWTURTLE`/`ST`, `SHOWNP`
 - `SETPENCOLOR`/`SETPC`, `SETPENSIZE`
 - `CLEARSCREEN`/`CS`
 
@@ -74,7 +74,6 @@ The Atari manual organizes features into these areas:
 - `SETSP`, `SPEED`
 - multi-pen state: `PEN`, `PE`, `PX`, `PN`, `SETPN`, Atari-style `SETPC pennumber colornumber`
 - background/turtle color split: `SETBG`, `SETC`
-- `SETX`, `SETY`
 - Atari screen-mode commands such as `FS`, `SS`, `TS`, `CT`
 - graphics extras like `LABEL`, `FILL`, `SETSCR`
 
@@ -103,6 +102,7 @@ The Atari manual organizes features into these areas:
 - `ABS` (now primitive-backed)
 - `COPYDEF`
 - `DEFINE`
+- `INIT.TURTLE`
 - `TEXT`
 - `WHICH`
 
@@ -110,7 +110,6 @@ The Atari manual organizes features into these areas:
 
 - `FOREVER`
 - `DOT`
-- `INIT.TURTLE`
 - `SORT`, `SUPERSORT`, `INSERT`, `BEFORE`
 - `READLINE` as used by Atari's file-backed TEXT example
 

@@ -548,6 +548,8 @@ impl Vm {
             "left" | "lt" => self.turtle_left(args),
             "right" | "rt" => self.turtle_right(args),
             "setxy" => self.turtle_setxy(args),
+            "setx" => self.turtle_setx(args),
+            "sety" => self.turtle_sety(args),
             "setpos" => self.turtle_setpos(args),
             "setheading" | "seth" => self.turtle_setheading(args),
             "home" => self.turtle_home(args),
@@ -557,7 +559,9 @@ impl Vm {
             "setpencolor" | "setpc" => self.turtle_setpencolor(args),
             "setpensize" => self.turtle_setpensize(args),
             "hideturtle" | "ht" => self.turtle_hide(args),
+            "init.turtle" => self.init_turtle(args),
             "showturtle" | "st" => self.turtle_show(args),
+            "shownp" => self.turtle_shownp(args),
             "pos" => self.turtle_pos(args),
             "heading" => self.turtle_heading(args),
             "xcor" => self.turtle_xcor(args),
@@ -1755,6 +1759,22 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn turtle_setx(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setx", &args, 1)?;
+        let x = number_input(&args[0], &self.interner)?;
+        let state = self.turtle.state();
+        self.turtle.set_xy(x, state.position.y);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_sety(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("sety", &args, 1)?;
+        let y = number_input(&args[0], &self.interner)?;
+        let state = self.turtle.state();
+        self.turtle.set_xy(state.position.x, y);
+        Ok(PrimitiveResult::NoValue)
+    }
+
     fn turtle_setpos(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setpos", &args, 1)?;
         let point = point_input(&args[0], &self.interner)?;
@@ -1817,6 +1837,20 @@ impl Vm {
         expect_arity("showturtle", &args, 0)?;
         self.turtle.show_turtle();
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn init_turtle(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("init.turtle", &args, 0)?;
+        self.turtle.clearscreen();
+        self.turtle.show_turtle();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_shownp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("shownp", &args, 0)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(self.turtle.state().visible),
+        ))
     }
 
     fn turtle_pos(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2790,5 +2824,28 @@ mod tests {
             .any(|event| matches!(event, TurtleEvent::Clear)));
         vm.turtle_mut().backend_mut().clear_events();
         assert!(vm.turtle().backend().events().is_empty());
+    }
+
+    #[test]
+    fn atari_turtle_state_primitives_setx_sety_and_shownp() {
+        let (result, vm) = run("ht print shownp setx 25 sety -10 st print shownp print pos").unwrap();
+        assert_eq!(result.output, "false\ntrue\n[25 -10]\n");
+        assert_eq!(vm.turtle().state().position, Point::new(25.0, -10.0));
+        assert!(vm.turtle().state().visible);
+    }
+
+    #[test]
+    fn init_turtle_resets_display_to_visible_default_turtle() {
+        let (_, vm) = run("ht setxy 10 20 init.turtle").unwrap();
+        let state = vm.turtle().state();
+        assert_eq!(state.position, Point::new(0.0, 0.0));
+        assert_eq!(state.heading, 0.0);
+        assert!(state.visible);
+        assert!(vm
+            .turtle()
+            .backend()
+            .events()
+            .iter()
+            .any(|event| matches!(event, TurtleEvent::Clear)));
     }
 }
