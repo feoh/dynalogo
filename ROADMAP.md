@@ -52,7 +52,7 @@
 ## v0.5 — Macros & performance
 
 - `.MACRO .DEFMACRO MACROP MACROEXPAND`
-- Full template forms; `CASCADE TRANSFER`
+- Template follow-up: `CASCADE.2 TRANSFER`
 - Performance pass: interning audit, bytecode peephole, benchmarks —
   **1,000 colliding dynaturtles at 60 Hz**
 

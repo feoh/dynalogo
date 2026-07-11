@@ -664,6 +664,7 @@ impl Vm {
             "map" => self.map(args),
             "filter" => self.filter(args),
             "reduce" => self.reduce(args),
+            "cascade" => self.cascade(args),
             "repcount" => self.repcount(args),
             "test" => self.test(args),
             "iftrue" | "ift" => self.iftrue(args),
@@ -2049,36 +2050,19 @@ impl Vm {
 
     fn apply(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("apply", &args, 2)?;
-        let arg_list = list_input(&args[1], "APPLY")?;
-        match &args[0] {
-            Value::Word(symbol) => {
-                let source = format!(
-                    "{} {}",
-                    self.interner.spelling(*symbol),
-                    list_to_source(arg_list, &self.interner, &self.arities)
-                );
-                let program = parse_source(&source, &mut self.interner, &self.arities)
-                    .map_err(|error| VmError::new(error.to_string()))?;
-                let chunk = Compiler::new()
-                    .compile_program(&program)
-                    .map_err(|error| VmError::new(error.to_string()))?;
-                result_value(self.run(&chunk)?).map(PrimitiveResult::Value)
-            }
-            Value::List(template) => self
-                .eval_template_with_values(template, list_values(arg_list))
-                .map(PrimitiveResult::Value),
-            _ => Err(VmError::new(
-                "APPLY first input must be a word or template list",
-            )),
-        }
+        let values = list_values(list_input(&args[1], "APPLY")?);
+        self.invoke_template_value(&args[0], values)
+            .map(PrimitiveResult::Value)
     }
 
     fn foreach(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("foreach", &args, 2)?;
         let values = list_values(list_input(&args[1], "FOREACH")?);
-        let template = list_input(&args[0], "FOREACH")?.clone();
         for value in values {
-            self.execute_template_for_effect(&template, vec![value])?;
+            match self.invoke_template_effect(&args[0], vec![value])? {
+                ControlFlow::None => {}
+                control => return Ok(PrimitiveResult::Control(control)),
+            }
         }
         Ok(PrimitiveResult::NoValue)
     }
@@ -2086,10 +2070,9 @@ impl Vm {
     fn map(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("map", &args, 2)?;
         let values = list_values(list_input(&args[1], "MAP")?);
-        let template = list_input(&args[0], "MAP")?.clone();
         let mut mapped = Vec::new();
         for value in values {
-            mapped.push(self.eval_template_with_values(&template, vec![value])?);
+            mapped.push(self.invoke_template_value(&args[0], vec![value])?);
         }
         Ok(PrimitiveResult::Value(Value::List(List::from_values(
             mapped,
@@ -2099,10 +2082,9 @@ impl Vm {
     fn filter(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("filter", &args, 2)?;
         let values = list_values(list_input(&args[1], "FILTER")?);
-        let template = list_input(&args[0], "FILTER")?.clone();
         let mut kept = Vec::new();
         for value in values {
-            let keep = self.eval_template_with_values(&template, vec![value.clone()])?;
+            let keep = self.invoke_template_value(&args[0], vec![value.clone()])?;
             if logo_truth(&keep, &self.interner) {
                 kept.push(value);
             }
@@ -2116,20 +2098,130 @@ impl Vm {
         let Some(mut acc) = values.next() else {
             return Err(VmError::new("REDUCE cannot reduce an empty list"));
         };
-        let template = list_input(&args[0], "REDUCE")?.clone();
         for value in values {
-            acc = self.eval_template_with_values(&template, vec![acc, value])?;
+            acc = self.invoke_template_value(&args[0], vec![acc, value])?;
         }
         Ok(PrimitiveResult::Value(acc))
     }
 
-    fn eval_template_with_values(
+    fn cascade(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        if args.len() < 3 || args.len() > 4 {
+            return Err(VmError::new(format!(
+                "cascade expected 3 or 4 input(s), got {}",
+                args.len()
+            )));
+        }
+        let endtest = args[0].clone();
+        let template = args[1].clone();
+        let mut value = args[2].clone();
+        let final_template = args.get(3).cloned();
+
+        match &endtest {
+            Value::Number(count) => {
+                let count = count.get();
+                if count < 0.0 || count.fract() != 0.0 {
+                    return Err(VmError::new("cascade count must be a nonnegative integer"));
+                }
+                for i in 1..=(count as usize) {
+                    self.env.define_local("repcount", Value::number(i as f64));
+                    value = self.invoke_template_value(&template, vec![value])?;
+                }
+            }
+            _ => loop {
+                let stop = self.invoke_template_value(&endtest, vec![value.clone()])?;
+                if logo_truth(&stop, &self.interner) {
+                    break;
+                }
+                value = self.invoke_template_value(&template, vec![value])?;
+            },
+        }
+
+        let output = match final_template {
+            Some(final_template) => self.invoke_template_value(&final_template, vec![value])?,
+            None => value,
+        };
+        Ok(PrimitiveResult::Value(output))
+    }
+
+    /// Classifies a template value into one of UCBLogo's three template
+    /// forms: a bare procedure name, an explicit-slot list whose first
+    /// member is itself a list of formal parameter names, or the implicit
+    /// `?`/`?1`/`?2`-slot form (the fallback when the first member isn't a
+    /// list).
+    fn classify_template(&self, value: &Value) -> Result<Template, VmError> {
+        match value {
+            Value::Word(symbol) => Ok(Template::Procedure(*symbol)),
+            Value::List(list) => {
+                if let Some(Value::List(formals)) = list.first() {
+                    let params =
+                        parameter_names_input(&Value::List(formals.clone()), &self.interner)?;
+                    let body = list.butfirst().cloned().unwrap_or_else(List::empty);
+                    Ok(Template::ExplicitSlot { params, body })
+                } else {
+                    Ok(Template::ImplicitSlot(list.clone()))
+                }
+            }
+            _ => Err(VmError::new("template must be a word or a list")),
+        }
+    }
+
+    fn bind_template_params(&mut self, params: &[String], values: Vec<Value>) -> Result<(), VmError> {
+        if params.len() != values.len() {
+            return Err(VmError::new(format!(
+                "template expected {} input(s), got {}",
+                params.len(),
+                values.len()
+            )));
+        }
+        self.env.push_frame();
+        for (param, value) in params.iter().zip(values) {
+            self.env.define_local(param.clone(), value);
+        }
+        Ok(())
+    }
+
+    fn invoke_template_value(&mut self, template: &Value, values: Vec<Value>) -> Result<Value, VmError> {
+        result_value(self.invoke_template_result(template, values)?)
+    }
+
+    fn invoke_template_effect(
         &mut self,
-        template: &List,
+        template: &Value,
         values: Vec<Value>,
-    ) -> Result<Value, VmError> {
-        let result = self.execute_template_result(template, values)?;
-        result_value(result)
+    ) -> Result<ControlFlow, VmError> {
+        match self.classify_template(template)? {
+            Template::Procedure(symbol) => {
+                let result = self.call(symbol, values)?;
+                Ok(primitive_to_run_result(result).control)
+            }
+            Template::ExplicitSlot { params, body } => {
+                self.bind_template_params(&params, values)?;
+                let result = self.execute_instruction_list_effect(&body);
+                self.env.pop_frame();
+                Ok(result?.control)
+            }
+            Template::ImplicitSlot(list) => self.execute_template_for_effect(&list, values),
+        }
+    }
+
+    fn invoke_template_result(
+        &mut self,
+        template: &Value,
+        values: Vec<Value>,
+    ) -> Result<RunResult, VmError> {
+        match self.classify_template(template)? {
+            Template::Procedure(symbol) => {
+                let result = self.call(symbol, values)?;
+                Ok(primitive_to_run_result(result))
+            }
+            Template::ExplicitSlot { params, body } => {
+                self.bind_template_params(&params, values)?;
+                let result = self.execute_instruction_list_result(&body);
+                self.env.pop_frame();
+                result
+            }
+            Template::ImplicitSlot(list) => self.execute_template_result(&list, values),
+        }
     }
 
     fn execute_template_for_effect(
@@ -2455,6 +2547,34 @@ enum PrimitiveResult {
     Value(Value),
     NoValue,
     Control(ControlFlow),
+}
+
+/// The three UCBLogo template forms accepted by MAP/FOREACH/FILTER/REDUCE/
+/// APPLY/CASCADE.
+enum Template {
+    Procedure(Symbol),
+    ExplicitSlot { params: Vec<String>, body: List },
+    ImplicitSlot(List),
+}
+
+fn primitive_to_run_result(result: PrimitiveResult) -> RunResult {
+    match result {
+        PrimitiveResult::Value(value) => RunResult {
+            stack: vec![value],
+            output: String::new(),
+            control: ControlFlow::None,
+        },
+        PrimitiveResult::NoValue => RunResult {
+            stack: Vec::new(),
+            output: String::new(),
+            control: ControlFlow::None,
+        },
+        PrimitiveResult::Control(control) => RunResult {
+            stack: Vec::new(),
+            output: String::new(),
+            control,
+        },
+    }
 }
 
 fn pop_args(stack: &mut Vec<Value>, argc: usize) -> Result<Vec<Value>, VmError> {
@@ -3397,6 +3517,18 @@ mod tests {
              print runresult [sum 7 8]")
         .unwrap();
         assert_eq!(result.output, "[2 3 4]\n[2 3]\n10\na\nb\n30\n15\n");
+    }
+
+    #[test]
+    fn full_template_forms_and_cascade_are_available() {
+        let (result, _) = run("print map [[x] product :x :x] [1 2 3] \
+             print apply [[a b] sum :a :b] [3 4] \
+             print reduce [[acc item] sum :acc :item] [1 2 3 4] \
+             print cascade 5 [product ? repcount] 1 \
+             print cascade [? > 100] [sum ? ?] 1 \
+             print (cascade 3 [sum ? 1] 10 [product ? 2])")
+        .unwrap();
+        assert_eq!(result.output, "[1 4 9]\n7\n10\n120\n128\n26\n");
     }
 
     #[test]

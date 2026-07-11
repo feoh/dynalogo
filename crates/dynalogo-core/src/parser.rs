@@ -48,6 +48,7 @@ impl ArityTable {
             ("MAP", 2),
             ("FILTER", 2),
             ("REDUCE", 2),
+            ("CASCADE", 3),
             ("REPCOUNT", 0),
             ("TEST", 1),
             ("IFTRUE", 1),
