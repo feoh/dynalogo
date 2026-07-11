@@ -34,8 +34,8 @@ END
 
 ## Workspace layout
 
-- `crates/dynalogo-core` — lexer, parser, bytecode compiler, VM, values, and
-  the dynaturtle sim engine
+- `crates/dynalogo-core` — lexer, parser, bytecode compiler, VM, values, the
+  dynaturtle sim engine, and both native/cooperative runtime utilities
 - `crates/dynalogo` — native frontend: window, turtle rendering, and REPL
 
 `dynalogo-core` is headless and has no graphics dependencies.
@@ -69,6 +69,19 @@ cargo run -p dynalogo --bin dynalogo-window
 
 The window frontend keeps a small command log at the bottom and renders turtle
 lines on a centered Cartesian canvas.
+
+### WASM/core status
+
+The browser frontend is still a follow-up task, but `dynalogo-core` now builds
+for `wasm32-unknown-unknown` and exposes a cooperative runtime designed to be
+advanced from a browser render loop such as `requestAnimationFrame`.
+
+You can validate the core build with:
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo check -p dynalogo-core --target wasm32-unknown-unknown
+```
 
 ## Current feature snapshot
 

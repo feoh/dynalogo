@@ -53,6 +53,10 @@ impl FixedTimestep {
         self.tick_index
     }
 
+    pub fn config(&self) -> SimConfig {
+        self.config
+    }
+
     pub fn interpolation_alpha(&self) -> f64 {
         self.accumulator.as_secs_f64() / self.config.tick.as_secs_f64()
     }

@@ -2690,12 +2690,16 @@ fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> Str
             Value::List(inner) => format!("[{}]", list_to_source(inner, interner, arities)),
             Value::Word(symbol) => {
                 let spelling = interner.spelling(*symbol);
-                if is_placeholder_word(spelling) {
-                    format!(":{spelling}")
-                } else if spelling.starts_with(':') {
-                    spelling.to_string()
-                } else if arities.get(spelling).is_some() || is_operator_word(spelling) {
-                    spelling.to_string()
+                if is_placeholder_word(spelling)
+                    || spelling.starts_with(':')
+                    || arities.get(spelling).is_some()
+                    || is_operator_word(spelling)
+                {
+                    if is_placeholder_word(spelling) {
+                        format!(":{spelling}")
+                    } else {
+                        spelling.to_string()
+                    }
                 } else {
                     format!("\"{spelling}")
                 }
