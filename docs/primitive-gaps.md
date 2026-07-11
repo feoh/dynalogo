@@ -53,13 +53,11 @@ The roadmap still calls out these missing macro features:
 ## Template/control follow-up remains
 
 Current template and library-control support now includes full template forms
-(bare procedure names, explicit named-slot templates, and implicit `?` forms)
-and `CASCADE`.
+(bare procedure names, explicit named-slot templates, and implicit `?` forms),
+`CASCADE`, `CASCADE.2`, and `TRANSFER`.
 
 Still remaining in this area:
 
-- `CASCADE.2`
-- `TRANSFER`
 - any additional UCBLogo-specific template edge cases found during audit
 
 ## Graphics/library gaps remain

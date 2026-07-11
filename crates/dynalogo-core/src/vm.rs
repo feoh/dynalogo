@@ -665,6 +665,8 @@ impl Vm {
             "filter" => self.filter(args),
             "reduce" => self.reduce(args),
             "cascade" => self.cascade(args),
+            "cascade.2" => self.cascade2(args),
+            "transfer" => self.transfer(args),
             "repcount" => self.repcount(args),
             "test" => self.test(args),
             "iftrue" | "ift" => self.iftrue(args),
@@ -2104,43 +2106,129 @@ impl Vm {
         Ok(PrimitiveResult::Value(acc))
     }
 
+    fn cascade2(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("cascade.2", &args, 5)?;
+        self.cascade(args)
+    }
+
+    fn transfer(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("transfer", &args, 3)?;
+        let endtest = args[0].clone();
+        let template = args[1].clone();
+        let inbasket = list_input(&args[2], "TRANSFER")?;
+        let mut outbasket = Value::List(List::empty());
+        let no_endtest = matches!(&endtest, Value::List(list) if list.is_empty());
+
+        for item in inbasket.iter() {
+            let transfer_bindings = [("?in", item.clone()), ("?out", outbasket.clone())];
+            if !no_endtest {
+                let stop = self.invoke_template_value_with_bindings(
+                    &endtest,
+                    vec![item.clone(), outbasket.clone()],
+                    &transfer_bindings,
+                )?;
+                if logo_truth(&stop, &self.interner) {
+                    break;
+                }
+            }
+            outbasket = self.invoke_template_value_with_bindings(
+                &template,
+                vec![item.clone(), outbasket.clone()],
+                &transfer_bindings,
+            )?;
+        }
+
+        Ok(PrimitiveResult::Value(outbasket))
+    }
+
     fn cascade(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
-        if args.len() < 3 || args.len() > 4 {
+        if args.len() < 3 {
             return Err(VmError::new(format!(
-                "cascade expected 3 or 4 input(s), got {}",
+                "cascade expected at least 3 input(s), got {}",
                 args.len()
             )));
         }
-        let endtest = args[0].clone();
-        let template = args[1].clone();
-        let mut value = args[2].clone();
-        let final_template = args.get(3).cloned();
 
+        let endtest = args[0].clone();
+        let (template_args, final_template) = if args.len().is_multiple_of(2) {
+            (&args[1..args.len() - 1], Some(args[args.len() - 1].clone()))
+        } else {
+            (&args[1..], None)
+        };
+        if template_args.len() % 2 != 0 {
+            return Err(VmError::new(
+                "CASCADE expects template/startvalue pairs, with an optional final template",
+            ));
+        }
+
+        let mut templates = Vec::new();
+        let mut values = Vec::new();
+        for pair in template_args.chunks_exact(2) {
+            templates.push(pair[0].clone());
+            values.push(pair[1].clone());
+        }
+
+        let mut rounds = 0usize;
         match &endtest {
             Value::Number(count) => {
                 let count = count.get();
                 if count < 0.0 || count.fract() != 0.0 {
                     return Err(VmError::new("cascade count must be a nonnegative integer"));
                 }
-                for i in 1..=(count as usize) {
-                    self.env.define_local("repcount", Value::number(i as f64));
-                    value = self.invoke_template_value(&template, vec![value])?;
+                for round in 1..=(count as usize) {
+                    values = self.cascade_round(&templates, values, round)?;
+                    rounds = round;
                 }
             }
             _ => loop {
-                let stop = self.invoke_template_value(&endtest, vec![value.clone()])?;
+                let cascade_bindings = cascade_iteration_bindings(rounds + 1);
+                let stop = self.invoke_template_value_with_bindings(
+                    &endtest,
+                    values.clone(),
+                    &cascade_bindings,
+                )?;
                 if logo_truth(&stop, &self.interner) {
                     break;
                 }
-                value = self.invoke_template_value(&template, vec![value])?;
+                rounds += 1;
+                values = self.cascade_round(&templates, values, rounds)?;
             },
         }
 
         let output = match final_template {
-            Some(final_template) => self.invoke_template_value(&final_template, vec![value])?,
-            None => value,
+            Some(final_template) => {
+                let cascade_bindings = cascade_iteration_bindings(rounds);
+                self.invoke_template_value_with_bindings(
+                    &final_template,
+                    values.clone(),
+                    &cascade_bindings,
+                )?
+            }
+            None => values
+                .into_iter()
+                .next()
+                .expect("cascade always has at least one start value"),
         };
         Ok(PrimitiveResult::Value(output))
+    }
+
+    fn cascade_round(
+        &mut self,
+        templates: &[Value],
+        values: Vec<Value>,
+        round: usize,
+    ) -> Result<Vec<Value>, VmError> {
+        let cascade_bindings = cascade_iteration_bindings(round);
+        templates
+            .iter()
+            .map(|template| {
+                self.invoke_template_value_with_bindings(
+                    template,
+                    values.clone(),
+                    &cascade_bindings,
+                )
+            })
+            .collect()
     }
 
     /// Classifies a template value into one of UCBLogo's three template
@@ -2165,7 +2253,12 @@ impl Vm {
         }
     }
 
-    fn bind_template_params(&mut self, params: &[String], values: Vec<Value>) -> Result<(), VmError> {
+    fn bind_template_params(
+        &mut self,
+        params: &[String],
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<(), VmError> {
         if params.len() != values.len() {
             return Err(VmError::new(format!(
                 "template expected {} input(s), got {}",
@@ -2177,11 +2270,43 @@ impl Vm {
         for (param, value) in params.iter().zip(values) {
             self.env.define_local(param.clone(), value);
         }
+        self.bind_extra_template_bindings(extra_bindings);
         Ok(())
     }
 
-    fn invoke_template_value(&mut self, template: &Value, values: Vec<Value>) -> Result<Value, VmError> {
-        result_value(self.invoke_template_result(template, values)?)
+    fn bind_extra_template_bindings(&mut self, extra_bindings: &[(&str, Value)]) {
+        for (name, value) in extra_bindings {
+            self.env.define_local(*name, value.clone());
+        }
+    }
+
+    fn bind_implicit_template_slots(&mut self, values: &[Value], extra_bindings: &[(&str, Value)]) {
+        self.env.push_frame();
+        for (index, value) in values.iter().cloned().enumerate() {
+            let numbered = format!("?{}", index + 1);
+            self.env.define_local(numbered, value.clone());
+            if index == 0 {
+                self.env.define_local("?", value);
+            }
+        }
+        self.bind_extra_template_bindings(extra_bindings);
+    }
+
+    fn invoke_template_value(
+        &mut self,
+        template: &Value,
+        values: Vec<Value>,
+    ) -> Result<Value, VmError> {
+        self.invoke_template_value_with_bindings(template, values, &[])
+    }
+
+    fn invoke_template_value_with_bindings(
+        &mut self,
+        template: &Value,
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<Value, VmError> {
+        result_value(self.invoke_template_result_with_bindings(template, values, extra_bindings)?)
     }
 
     fn invoke_template_effect(
@@ -2189,80 +2314,101 @@ impl Vm {
         template: &Value,
         values: Vec<Value>,
     ) -> Result<ControlFlow, VmError> {
+        self.invoke_template_effect_with_bindings(template, values, &[])
+    }
+
+    fn invoke_template_effect_with_bindings(
+        &mut self,
+        template: &Value,
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<ControlFlow, VmError> {
         match self.classify_template(template)? {
             Template::Procedure(symbol) => {
-                let result = self.call(symbol, values)?;
+                let result = if extra_bindings.is_empty() {
+                    self.call(symbol, values)
+                } else {
+                    self.env.push_frame();
+                    self.bind_extra_template_bindings(extra_bindings);
+                    let result = self.call(symbol, values);
+                    self.env.pop_frame();
+                    result
+                }?;
                 Ok(primitive_to_run_result(result).control)
             }
             Template::ExplicitSlot { params, body } => {
-                self.bind_template_params(&params, values)?;
+                self.bind_template_params(&params, values, extra_bindings)?;
                 let result = self.execute_instruction_list_effect(&body);
                 self.env.pop_frame();
                 Ok(result?.control)
             }
-            Template::ImplicitSlot(list) => self.execute_template_for_effect(&list, values),
+            Template::ImplicitSlot(list) => {
+                self.execute_template_for_effect_with_bindings(&list, values, extra_bindings)
+            }
         }
     }
 
-    fn invoke_template_result(
+    fn invoke_template_result_with_bindings(
         &mut self,
         template: &Value,
         values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
     ) -> Result<RunResult, VmError> {
         match self.classify_template(template)? {
             Template::Procedure(symbol) => {
-                let result = self.call(symbol, values)?;
+                let result = if extra_bindings.is_empty() {
+                    self.call(symbol, values)
+                } else {
+                    self.env.push_frame();
+                    self.bind_extra_template_bindings(extra_bindings);
+                    let result = self.call(symbol, values);
+                    self.env.pop_frame();
+                    result
+                }?;
                 Ok(primitive_to_run_result(result))
             }
             Template::ExplicitSlot { params, body } => {
-                self.bind_template_params(&params, values)?;
+                self.bind_template_params(&params, values, extra_bindings)?;
                 let result = self.execute_instruction_list_result(&body);
                 self.env.pop_frame();
                 result
             }
-            Template::ImplicitSlot(list) => self.execute_template_result(&list, values),
-        }
-    }
-
-    fn execute_template_for_effect(
-        &mut self,
-        template: &List,
-        values: Vec<Value>,
-    ) -> Result<ControlFlow, VmError> {
-        Ok(self.execute_template_effect(template, values)?.control)
-    }
-
-    fn execute_template_effect(
-        &mut self,
-        template: &List,
-        values: Vec<Value>,
-    ) -> Result<RunResult, VmError> {
-        self.env.push_frame();
-        for (index, value) in values.iter().cloned().enumerate() {
-            let numbered = format!("?{}", index + 1);
-            self.env.define_local(numbered, value.clone());
-            if index == 0 {
-                self.env.define_local("?", value);
+            Template::ImplicitSlot(list) => {
+                self.execute_template_result_with_bindings(&list, values, extra_bindings)
             }
         }
+    }
+
+    fn execute_template_for_effect_with_bindings(
+        &mut self,
+        template: &List,
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<ControlFlow, VmError> {
+        Ok(self
+            .execute_template_effect_with_bindings(template, values, extra_bindings)?
+            .control)
+    }
+
+    fn execute_template_effect_with_bindings(
+        &mut self,
+        template: &List,
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<RunResult, VmError> {
+        self.bind_implicit_template_slots(&values, extra_bindings);
         let result = self.execute_instruction_list_effect(template);
         self.env.pop_frame();
         result
     }
 
-    fn execute_template_result(
+    fn execute_template_result_with_bindings(
         &mut self,
         template: &List,
         values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
     ) -> Result<RunResult, VmError> {
-        self.env.push_frame();
-        for (index, value) in values.iter().cloned().enumerate() {
-            let numbered = format!("?{}", index + 1);
-            self.env.define_local(numbered, value.clone());
-            if index == 0 {
-                self.env.define_local("?", value);
-            }
-        }
+        self.bind_implicit_template_slots(&values, extra_bindings);
         let result = self.execute_instruction_list_result(template);
         self.env.pop_frame();
         result
@@ -2575,6 +2721,11 @@ fn primitive_to_run_result(result: PrimitiveResult) -> RunResult {
             control,
         },
     }
+}
+
+fn cascade_iteration_bindings(round: usize) -> [(&'static str, Value); 2] {
+    let round = Value::number(round as f64);
+    [("#", round.clone()), ("repcount", round)]
 }
 
 fn pop_args(stack: &mut Vec<Value>, argc: usize) -> Result<Vec<Value>, VmError> {
@@ -3046,6 +3197,9 @@ fn primitive_names() -> &'static [&'static str] {
         "map",
         "filter",
         "reduce",
+        "cascade",
+        "cascade.2",
+        "transfer",
         "repcount",
         "test",
         "iftrue",
@@ -3162,11 +3316,12 @@ fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> Str
             Value::List(inner) => format!("[{}]", list_to_source(inner, interner, arities)),
             Value::Word(symbol) => {
                 let spelling = interner.spelling(*symbol);
-                if is_placeholder_word(spelling) {
-                    format!(":{spelling}")
-                } else if spelling.starts_with(':') {
-                    spelling.to_string()
-                } else if arities.get(spelling).is_some() || is_operator_word(spelling) {
+                if let Some(binding) = template_binding_name(spelling) {
+                    format!(":{binding}")
+                } else if spelling.starts_with(':')
+                    || arities.get(spelling).is_some()
+                    || is_operator_word(spelling)
+                {
                     spelling.to_string()
                 } else {
                     format!("\"{spelling}")
@@ -3271,11 +3426,22 @@ fn is_operator_word(text: &str) -> bool {
     )
 }
 
-fn is_placeholder_word(text: &str) -> bool {
-    text == "?"
-        || text
-            .strip_prefix('?')
-            .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
+fn template_binding_name(text: &str) -> Option<String> {
+    if text == "?" || text == "#" {
+        return Some(text.to_string());
+    }
+
+    let rest = text.strip_prefix('?')?;
+    if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
+        return Some(text.to_string());
+    }
+    if rest.eq_ignore_ascii_case("in") {
+        return Some("?in".to_string());
+    }
+    if rest.eq_ignore_ascii_case("out") {
+        return Some("?out".to_string());
+    }
+    None
 }
 
 #[cfg(test)]
@@ -3283,7 +3449,7 @@ mod tests {
     use super::*;
     use crate::turtle::{Point, TurtleEvent};
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn run(source: &str) -> Result<(RunResult, Vm), VmError> {
@@ -3303,7 +3469,7 @@ mod tests {
         ))
     }
 
-    fn set_path_var(vm: &mut Vm, name: &str, path: &PathBuf) {
+    fn set_path_var(vm: &mut Vm, name: &str, path: &Path) {
         let value = Value::word(vm.interner_mut(), path.to_string_lossy());
         vm.env_mut().set_global(name, value);
     }
@@ -3529,6 +3695,16 @@ mod tests {
              print (cascade 3 [sum ? 1] 10 [product ? 2])")
         .unwrap();
         assert_eq!(result.output, "[1 4 9]\n7\n10\n120\n128\n26\n");
+    }
+
+    #[test]
+    fn cascade2_and_transfer_follow_ucblogo_semantics() {
+        let (result, _) = run("print cascade 5 [lput # ?] [] \
+             print cascade.2 5 [sum ?1 ?2] 1 [?1] 0 \
+             print transfer [] [lput ?in ?out] [a b c] \
+             print transfer [equalp ?in \"halt] [lput ?in ?out] [a b halt c]")
+        .unwrap();
+        assert_eq!(result.output, "[1 2 3 4 5]\n8\n[a b c]\n[a b]\n");
     }
 
     #[test]

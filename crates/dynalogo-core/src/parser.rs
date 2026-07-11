@@ -49,6 +49,8 @@ impl ArityTable {
             ("FILTER", 2),
             ("REDUCE", 2),
             ("CASCADE", 3),
+            ("CASCADE.2", 5),
+            ("TRANSFER", 3),
             ("REPCOUNT", 0),
             ("TEST", 1),
             ("IFTRUE", 1),
