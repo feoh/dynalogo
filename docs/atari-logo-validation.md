@@ -103,6 +103,7 @@ The Atari manual organizes features into these areas:
 - `BEFORE`, `INSERT`, `SORT`, `SUPERSORT`
 - `COPYDEF`
 - `DEFINE`
+- `DOT`
 - `FOREVER`
 - `INIT.TURTLE`
 - `TEXT`
@@ -110,7 +111,6 @@ The Atari manual organizes features into these areas:
 
 **Still missing from the appendix examples/tools**
 
-- `DOT`
 - `READLINE` as used by Atari's file-backed TEXT example
 
 ### 3. Variables

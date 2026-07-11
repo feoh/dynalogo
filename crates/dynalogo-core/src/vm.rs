@@ -483,6 +483,7 @@ impl Vm {
             "count" => self.count(args),
             "item" => self.item(args),
             "which" => self.which(args),
+            "dot" => self.dot(args),
             "before" => self.before(args),
             "insert" => self.insert(args),
             "sort" => self.sort(args),
@@ -982,6 +983,31 @@ impl Vm {
             .map(|index| index as f64 + 1.0)
             .unwrap_or(0.0);
         Ok(PrimitiveResult::Value(Value::number(position)))
+    }
+
+    fn dot(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("dot", &args, 1)?;
+        let target = point_input(&args[0], &self.interner)?;
+        let state = self.turtle.state();
+
+        self.turtle.pen_up();
+        self.turtle.set_pos(target);
+        self.turtle.pen_down();
+        self.turtle.forward(0.0);
+        self.turtle.pen_up();
+        self.turtle.set_pos(state.position);
+        self.turtle.set_heading(state.heading);
+        self.turtle.set_pen_color(state.pen_color);
+        self.turtle.set_pen_size(state.pen_size);
+        if state.pen_down {
+            self.turtle.pen_down();
+        }
+        if state.visible {
+            self.turtle.show_turtle();
+        } else {
+            self.turtle.hide_turtle();
+        }
+        Ok(PrimitiveResult::NoValue)
     }
 
     fn before(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2590,6 +2616,22 @@ mod tests {
              print memberp \"x [a b c]")
         .unwrap();
         assert_eq!(result.output, "3\nb\n2\n0\ntrue\n[a c d e f t z]\ntrue\ntrue\ntrue\nfalse\n");
+    }
+
+    #[test]
+    fn dot_draws_at_target_without_moving_the_turtle() {
+        let (_, vm) = run("setxy 10 20 dot [30 40] print pos").unwrap();
+        assert_eq!(vm.turtle().state().position, Point::new(10.0, 20.0));
+        let line = vm
+            .turtle()
+            .backend()
+            .events()
+            .iter()
+            .find_map(|event| match event {
+                TurtleEvent::Line { from, to, .. } if *from == Point::new(30.0, 40.0) && *to == Point::new(30.0, 40.0) => Some((*from, *to)),
+                _ => None,
+            });
+        assert!(line.is_some());
     }
 
     #[test]

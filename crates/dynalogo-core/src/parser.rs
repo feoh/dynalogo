@@ -75,6 +75,7 @@ impl ArityTable {
             ("COUNT", 1),
             ("ITEM", 2),
             ("WHICH", 2),
+            ("DOT", 1),
             ("BEFORE", 2),
             ("INSERT", 2),
             ("SORT", 2),
