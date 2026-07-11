@@ -522,6 +522,7 @@ impl Vm {
             "listtoarray" => self.listtoarray(args),
             "arraytolist" => self.arraytolist(args),
             "repeat" => self.repeat(args),
+            "forever" => self.forever(args),
             "if" => self.r#if(args),
             "ifelse" => self.ifelse(args),
             "run" => self.run_list(args),
@@ -1400,6 +1401,18 @@ impl Vm {
             }
         }
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn forever(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("forever", &args, 1)?;
+        let list = list_input(&args[0], "FOREVER")?;
+        loop {
+            match self.execute_instruction_list(list)? {
+                ControlFlow::None => {}
+                ControlFlow::Stop => return Ok(PrimitiveResult::NoValue),
+                control => return Ok(PrimitiveResult::Control(control)),
+            }
+        }
     }
 
     fn r#if(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2521,6 +2534,12 @@ mod tests {
              print :z")
         .unwrap();
         assert_eq!(result.output, "3\n2\n2\n");
+    }
+
+    #[test]
+    fn forever_repeats_until_body_stops() {
+        let (result, _) = run("make \"x 0 forever [make \"x sum :x 1 if :x = 3 [stop]] print :x").unwrap();
+        assert_eq!(result.output, "3\n");
     }
 
     #[test]

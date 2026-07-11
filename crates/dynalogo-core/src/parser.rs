@@ -36,6 +36,7 @@ impl ArityTable {
             ("OP", 1),
             ("STOP", 0),
             ("REPEAT", 2),
+            ("FOREVER", 1),
             ("IF", 2),
             ("IFELSE", 3),
             ("RUN", 1),

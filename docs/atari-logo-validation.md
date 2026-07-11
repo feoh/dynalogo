@@ -102,13 +102,13 @@ The Atari manual organizes features into these areas:
 - `ABS` (now primitive-backed)
 - `COPYDEF`
 - `DEFINE`
+- `FOREVER`
 - `INIT.TURTLE`
 - `TEXT`
 - `WHICH`
 
 **Still missing from the appendix examples/tools**
 
-- `FOREVER`
 - `DOT`
 - `SORT`, `SUPERSORT`, `INSERT`, `BEFORE`
 - `READLINE` as used by Atari's file-backed TEXT example
