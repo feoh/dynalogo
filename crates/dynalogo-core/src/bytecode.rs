@@ -12,6 +12,12 @@ use crate::lexer::InfixOp;
 use crate::parser::{Expr, Program};
 use crate::value::{List, Symbol, Value};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OutputTarget {
+    Procedure(Symbol),
+    Infix(InfixOp),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     Push(Value),
@@ -20,6 +26,7 @@ pub enum Instruction {
         callee: Symbol,
         argc: usize,
         expects_value: bool,
+        output_to: Option<OutputTarget>,
     },
     Infix(InfixOp),
     CheckNoValue,
@@ -87,7 +94,7 @@ impl Compiler {
     ) -> Result<Chunk, CompileError> {
         let mut instructions = Vec::new();
         for expression in program.expressions() {
-            self.compile_expr(expression, &mut instructions, false)?;
+            self.compile_expr(expression, &mut instructions, None)?;
             if mode == CompileMode::Effect {
                 instructions.push(Instruction::CheckNoValue);
             }
@@ -100,24 +107,25 @@ impl Compiler {
         &self,
         expression: &Expr,
         instructions: &mut Vec<Instruction>,
-        expects_value: bool,
+        output_to: Option<OutputTarget>,
     ) -> Result<(), CompileError> {
         match expression {
             Expr::Literal(value) => instructions.push(Instruction::Push(value.clone())),
             Expr::Thing(symbol) => instructions.push(Instruction::LoadThing(*symbol)),
             Expr::Call { callee, args, .. } => {
                 for arg in args {
-                    self.compile_expr(arg, instructions, true)?;
+                    self.compile_expr(arg, instructions, Some(OutputTarget::Procedure(*callee)))?;
                 }
                 instructions.push(Instruction::Call {
                     callee: *callee,
                     argc: args.len(),
-                    expects_value,
+                    expects_value: output_to.is_some(),
+                    output_to,
                 });
             }
             Expr::Infix { op, left, right } => {
-                self.compile_expr(left, instructions, true)?;
-                self.compile_expr(right, instructions, true)?;
+                self.compile_expr(left, instructions, Some(OutputTarget::Infix(*op)))?;
+                self.compile_expr(right, instructions, Some(OutputTarget::Infix(*op)))?;
                 instructions.push(Instruction::Infix(*op));
             }
         }
@@ -266,7 +274,8 @@ mod tests {
             Instruction::Call {
                 callee: sum,
                 argc: 2,
-                expects_value: true
+                expects_value: true,
+                output_to: Some(OutputTarget::Procedure(print)),
             }
         );
         assert_eq!(
@@ -274,7 +283,8 @@ mod tests {
             Instruction::Call {
                 callee: print,
                 argc: 1,
-                expects_value: false
+                expects_value: false,
+                output_to: None,
             }
         );
         assert_eq!(instructions[4], Instruction::CheckNoValue);
@@ -294,6 +304,7 @@ mod tests {
                     callee: sum,
                     argc: 2,
                     expects_value: false,
+                    output_to: None,
                 },
                 Instruction::CheckNoValue,
                 Instruction::Halt,

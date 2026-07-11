@@ -1,1 +1,4 @@
-print catch "error [print]
+catch "error [print]
+make "err error
+print item 1 :err
+print item 2 :err

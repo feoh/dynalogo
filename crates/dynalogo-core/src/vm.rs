@@ -11,12 +11,14 @@ use std::fmt;
 use std::thread;
 use std::time::Duration;
 
-use crate::bytecode::{Chunk, ChunkCache, ChunkKey, CompileMode, Compiler, Instruction};
+use crate::bytecode::{
+    Chunk, ChunkCache, ChunkKey, CompileMode, Compiler, Instruction, OutputTarget,
+};
 use crate::collision::{self, detect_collisions, CollisionConfig};
 use crate::demon::{DemonCondition, DemonEvent, DemonScheduler};
 use crate::dynaturtle::{TurtleId, TurtleStore};
 use crate::lexer::{lex, InfixOp, TokenKind};
-use crate::parser::{parse_source, Arity, ArityTable};
+use crate::parser::{parse_source, Arity, ArityTable, ParseError};
 use crate::turtle::Point;
 use crate::value::{Interner, List, LogoArray, LogoNumber, Symbol, Value};
 
@@ -36,14 +38,51 @@ pub struct RunResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct ErrorInfo {
+    code: i32,
+    message: String,
+    procedure: String,
+    instruction_line: String,
+}
+
+impl ErrorInfo {
+    fn new(code: i32, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            procedure: String::new(),
+            instruction_line: String::new(),
+        }
+    }
+
+    fn to_value(&self, interner: &mut Interner) -> Value {
+        Value::list([
+            Value::number(f64::from(self.code)),
+            Value::word(interner, &self.message),
+            Value::word(interner, &self.procedure),
+            Value::word(interner, &self.instruction_line),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VmError {
     pub message: String,
+    info: Option<ErrorInfo>,
 }
 
 impl VmError {
     fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
+            info: None,
+        }
+    }
+
+    fn with_info(message: impl Into<String>, info: ErrorInfo) -> Self {
+        Self {
+            message: message.into(),
+            info: Some(info),
         }
     }
 }
@@ -196,7 +235,8 @@ pub struct Vm {
     collision_config: CollisionConfig,
     demon_fuel: usize,
     test_result: Option<bool>,
-    last_error: Option<String>,
+    caught_error: Option<ErrorInfo>,
+    call_stack: Vec<String>,
     random_seed: u64,
     last_toot: Option<[u8; 4]>,
     chunk_cache: ChunkCache,
@@ -243,7 +283,8 @@ impl Default for Vm {
             collision_config: CollisionConfig::default(),
             demon_fuel: 256,
             test_result: None,
-            last_error: None,
+            caught_error: None,
+            call_stack: Vec::new(),
             random_seed: 0x4d595df4d0f33173,
             last_toot: None,
             chunk_cache: ChunkCache::new(),
@@ -289,8 +330,54 @@ impl Vm {
     }
 
     fn remember_error(&mut self, error: VmError) -> VmError {
-        self.last_error = Some(error.message.clone());
         error
+    }
+
+    fn current_error_context(&self) -> Option<&str> {
+        self.call_stack
+            .iter()
+            .rev()
+            .find(|name| name.as_str() != "catch")
+            .map(String::as_str)
+    }
+
+    fn contextualize_error(&self, mut error: VmError) -> VmError {
+        let mut info = error
+            .info
+            .take()
+            .or_else(|| infer_error_info(&error.message));
+        if let Some(ref mut info) = info {
+            if info.procedure.is_empty() {
+                if let Some(name) = self.current_error_context() {
+                    info.procedure = name.to_string();
+                }
+            }
+        }
+        error.info = info;
+        error
+    }
+
+    fn error_with_code(&self, code: i32, message: impl Into<String>) -> VmError {
+        let mut info = ErrorInfo::new(code, message.into());
+        if let Some(name) = self.current_error_context() {
+            info.procedure = name.to_string();
+        }
+        VmError::with_info(info.message.clone(), info)
+    }
+
+    fn record_caught_error(&mut self, error: &VmError) {
+        self.caught_error = error
+            .info
+            .clone()
+            .or_else(|| infer_error_info(&error.message))
+            .map(|mut info| {
+                if info.procedure.is_empty() {
+                    if let Some(name) = self.current_error_context() {
+                        info.procedure = name.to_string();
+                    }
+                }
+                info
+            });
     }
 
     pub fn procedures(&self) -> &HashMap<String, Procedure> {
@@ -359,7 +446,7 @@ impl Vm {
                 });
             }
             let program = parse_source(&runnable, &mut self.interner, &self.arities)
-                .map_err(|error| VmError::new(error.to_string()))?;
+                .map_err(vm_error_from_parse)?;
             let chunk = Compiler::new()
                 .compile_effect_program(&program)
                 .map_err(|error| VmError::new(error.to_string()))?;
@@ -381,8 +468,8 @@ impl Vm {
             .map(|param| self.interner.intern(param))
             .collect();
         self.arities.insert(name, Arity::Exact(param_symbols.len()));
-        let program = parse_source(body, &mut self.interner, &self.arities)
-            .map_err(|error| VmError::new(error.to_string()))?;
+        let program =
+            parse_source(body, &mut self.interner, &self.arities).map_err(vm_error_from_parse)?;
         let chunk = Compiler::new()
             .compile_effect_program(&program)
             .map_err(|error| VmError::new(error.to_string()))?;
@@ -418,16 +505,25 @@ impl Vm {
                     callee,
                     argc,
                     expects_value,
+                    output_to,
                 } => {
                     let args = pop_args(&mut stack, *argc)?;
                     match self.call(*callee, args)? {
                         PrimitiveResult::Value(value) => stack.push(value),
                         PrimitiveResult::NoValue => {
                             if *expects_value {
-                                return Err(VmError::new(format!(
-                                    "{} didn't output a value",
-                                    self.interner.spelling(*callee)
-                                )));
+                                let consumer = output_to
+                                    .as_ref()
+                                    .map(|target| output_target_name(target, &self.interner))
+                                    .unwrap_or_else(|| "a value".to_string());
+                                return Err(self.error_with_code(
+                                    5,
+                                    format!(
+                                        "{} didn't output to {}",
+                                        self.interner.spelling(*callee),
+                                        consumer
+                                    ),
+                                ));
                             }
                         }
                         PrimitiveResult::Control(control) => break control,
@@ -444,10 +540,13 @@ impl Vm {
                 }
                 Instruction::CheckNoValue => {
                     if let Some(value) = stack.pop() {
-                        return Err(VmError::new(format!(
-                            "You don't say what to do with {}",
-                            value.show(&self.interner)
-                        )));
+                        return Err(self.error_with_code(
+                            9,
+                            format!(
+                                "You don't say what to do with {}",
+                                value.show(&self.interner)
+                            ),
+                        ));
                     }
                 }
                 Instruction::Halt => break ControlFlow::None,
@@ -466,7 +565,7 @@ impl Vm {
         self.env
             .get(name)
             .cloned()
-            .ok_or_else(|| VmError::new(format!("{name} has no value")))
+            .ok_or_else(|| self.error_with_code(11, format!("{name} has no value")))
     }
 
     fn define_procedures_in_source(&mut self, source: &str) -> Result<String, VmError> {
@@ -504,7 +603,8 @@ impl Vm {
 
     fn call(&mut self, callee: Symbol, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         let name = self.interner.canonical_spelling(callee).to_string();
-        match name.as_str() {
+        self.call_stack.push(name.clone());
+        let result = match name.as_str() {
             "sum" | "+" => self.number_binop(args, |a, b| a + b),
             "difference" | "-" => self.number_binop(args, |a, b| a - b),
             "product" | "*" => self.number_binop(args, |a, b| a * b),
@@ -646,7 +746,10 @@ impl Vm {
                 expect_arity(&name, &args, 0).map(|()| PrimitiveResult::Control(ControlFlow::Stop))
             }
             _ => self.call_user_procedure(&name, args),
-        }
+        };
+        let result = result.map_err(|error| self.contextualize_error(error));
+        self.call_stack.pop();
+        result
     }
 
     fn call_user_procedure(
@@ -1205,9 +1308,9 @@ impl Vm {
         let Some(number) = args[0].as_number(&self.interner) else {
             return Ok(PrimitiveResult::Value(self.logo_bool(false)));
         };
-        Ok(PrimitiveResult::Value(self.logo_bool(
-            number.is_finite() && number.fract() != 0.0,
-        )))
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(number.is_finite() && number.fract() != 0.0),
+        ))
     }
 
     fn definedp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1356,7 +1459,9 @@ impl Vm {
     fn erns(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("erns", &args, 0)?;
         self.env.globals.clear();
-        self.buried_names.retain(|name| !self.procedures.contains_key(name) && !self.property_lists.contains_key(name));
+        self.buried_names.retain(|name| {
+            !self.procedures.contains_key(name) && !self.property_lists.contains_key(name)
+        });
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -1414,9 +1519,9 @@ impl Vm {
     fn buriedp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("buriedp", &args, 1)?;
         let name = variable_name_input(&args[0], &self.interner)?;
-        Ok(PrimitiveResult::Value(
-            self.logo_bool(self.buried_names.contains(&name.to_ascii_lowercase())),
-        ))
+        Ok(PrimitiveResult::Value(self.logo_bool(
+            self.buried_names.contains(&name.to_ascii_lowercase()),
+        )))
     }
 
     fn workspace_procedure(&self, value: &Value) -> Result<&Procedure, VmError> {
@@ -1502,7 +1607,10 @@ impl Vm {
         let lines = if include_body {
             procedure_text(procedure, &mut self.interner, include_end)?
         } else {
-            List::from_values([Value::List(procedure_header_line(procedure, &mut self.interner))])
+            List::from_values([Value::List(procedure_header_line(
+                procedure,
+                &mut self.interner,
+            ))])
         };
         for line in lines.iter() {
             self.output.push_str(&line.show(&self.interner));
@@ -1881,7 +1989,7 @@ impl Vm {
                 }
             }
             Some(false) => Ok(PrimitiveResult::NoValue),
-            None => Err(VmError::new("TEST has not been run")),
+            None => Err(self.error_with_code(25, "IFTRUE/IFFALSE without TEST")),
         }
     }
 
@@ -1896,7 +2004,7 @@ impl Vm {
                 }
             }
             Some(true) => Ok(PrimitiveResult::NoValue),
-            None => Err(VmError::new("TEST has not been run")),
+            None => Err(self.error_with_code(25, "IFTRUE/IFFALSE without TEST")),
         }
     }
 
@@ -1917,16 +2025,28 @@ impl Vm {
                 ControlFlow::Throw {
                     tag: thrown_tag,
                     value,
-                } if thrown_tag.equalp(&tag, &self.interner) => Ok(PrimitiveResult::Value(value)),
+                } if thrown_tag.equalp(&tag, &self.interner) => {
+                    if is_error_catch_tag(&tag, &self.interner) {
+                        let mut info = ErrorInfo::new(35, value.show(&self.interner));
+                        if let Some(name) = self.current_error_context() {
+                            info.procedure = name.to_string();
+                        }
+                        self.caught_error = Some(info);
+                        Ok(PrimitiveResult::NoValue)
+                    } else {
+                        Ok(PrimitiveResult::Value(value))
+                    }
+                }
                 ControlFlow::None | ControlFlow::Stop => Ok(PrimitiveResult::NoValue),
                 ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
                 ControlFlow::Throw { tag, value } => {
                     Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
                 }
             },
-            Err(error) if is_error_catch_tag(&tag, &self.interner) => Ok(PrimitiveResult::Value(
-                Value::word(&mut self.interner, error.message),
-            )),
+            Err(error) if is_error_catch_tag(&tag, &self.interner) => {
+                self.record_caught_error(&error);
+                Ok(PrimitiveResult::NoValue)
+            }
             Err(error) => Err(error),
         }
     }
@@ -1941,11 +2061,12 @@ impl Vm {
 
     fn error(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("error", &args, 0)?;
-        let message = self.last_error.clone().unwrap_or_default();
-        Ok(PrimitiveResult::Value(Value::word(
-            &mut self.interner,
-            message,
-        )))
+        let value = self
+            .caught_error
+            .take()
+            .map(|info| info.to_value(&mut self.interner))
+            .unwrap_or_else(|| Value::List(List::empty()));
+        Ok(PrimitiveResult::Value(value))
     }
 
     fn pause(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2340,9 +2461,9 @@ impl Vm {
                 Ok(DemonCondition::Touching(a, b))
             }
             "edge" if values.len() == 1 => Ok(DemonCondition::Edge(None)),
-            "edge" if values.len() == 2 => {
-                Ok(DemonCondition::Edge(Some(self.turtle_id_from_value(&values[1])?)))
-            }
+            "edge" if values.len() == 2 => Ok(DemonCondition::Edge(Some(
+                self.turtle_id_from_value(&values[1])?,
+            ))),
             "overcolor" if values.len() == 2 => {
                 let color = number_input(&values[1], &self.interner)? as u32;
                 Ok(DemonCondition::OverColor(color))
@@ -2381,10 +2502,47 @@ fn expect_arity(name: &str, args: &[Value], expected: usize) -> Result<(), VmErr
     if args.len() == expected {
         Ok(())
     } else {
-        Err(VmError::new(format!(
-            "{name} expected {expected} input(s), got {}",
-            args.len()
-        )))
+        Err(VmError::new(format!("not enough inputs to {name}",)))
+    }
+}
+
+fn output_target_name(target: &OutputTarget, interner: &Interner) -> String {
+    match target {
+        OutputTarget::Procedure(symbol) => interner.spelling(*symbol).to_string(),
+        OutputTarget::Infix(op) => op.to_string(),
+    }
+}
+
+fn infer_error_info(message: &str) -> Option<ErrorInfo> {
+    if message.contains(" didn't output to ") || message.contains(" didn't output a value") {
+        return Some(ErrorInfo::new(5, message));
+    }
+    if let Some(name) = message.strip_prefix("not enough inputs to ") {
+        return Some(ErrorInfo::new(6, format!("not enough inputs to {name}")));
+    }
+    if message.starts_with("You don't say what to do with ") {
+        return Some(ErrorInfo::new(9, message));
+    }
+    if message.ends_with(" has no value") {
+        return Some(ErrorInfo::new(11, message));
+    }
+    if message.starts_with("I don't know how to ") {
+        return Some(ErrorInfo::new(13, message));
+    }
+    if message == "IFTRUE/IFFALSE without TEST" || message == "TEST has not been run" {
+        return Some(ErrorInfo::new(25, "IFTRUE/IFFALSE without TEST"));
+    }
+    None
+}
+
+fn vm_error_from_parse(error: ParseError) -> VmError {
+    let info = infer_error_info(&error.message).map(|mut info| {
+        info.message = error.message.clone();
+        info
+    });
+    VmError {
+        message: error.to_string(),
+        info,
     }
 }
 
@@ -2674,27 +2832,162 @@ fn parse_source_line(line: &str, interner: &mut Interner) -> Result<List, VmErro
 
 fn primitive_names() -> &'static [&'static str] {
     &[
-        "sum", "+", "difference", "-", "product", "*", "quotient", "/",
-        "remainder", "abs", "int", "round", "sqrt", "sin", "cos", "tan",
-        "random", "rerandom", "and", "or", "not", "equalp", "equal?",
-        "emptyp", "empty?", "memberp", "member?", "first", "butfirst", "bf",
-        "last", "butlast", "bl", "fput", "lput", "sentence", "se", "list",
-        "word", "count", "item", "wordp", "listp", "numberp", "intp",
-        "decimalp", "print", "pr", "show", "type", "readlist", "rl", "make",
-        "name", "thing", "local", "namep", "definedp", "defined?",
-        "primitivep", "primitive?", "text", "fulltext", "copydef", "po",
-        "poall", "pons", "pops", "pots", "popls", ".primitives", "erase", "er", "ern",
-        "erns", "erps", "erpl", "erall", "bury", "unbury", "buriedp", "pprop", "gprop", "remprop", "plist", "array",
-        "setitem", "listtoarray", "arraytolist", "repeat", "if", "ifelse", "run",
-        "runresult", "parse", "runparse", "apply", "foreach", "map", "filter",
-        "reduce", "repcount", "test", "iftrue", "ift", "iffalse", "iff", "wait",
-        "catch", "throw", "error", "pause", "continue", "forward", "fd", "back",
-        "bk", "left", "lt", "right", "rt", "setxy", "setpos", "setheading",
-        "seth", "home", "clearscreen", "cs", "penup", "pu", "pendown", "pd",
-        "setpencolor", "setpc", "setpensize", "hideturtle", "ht", "showturtle",
-        "st", "pos", "heading", "xcor", "ycor", "output", "op", "stop",
-        "tell", "ask", "each", "who", "setvelocity", "setspeed", "setshape",
-        "touching", "when", "toot",
+        "sum",
+        "+",
+        "difference",
+        "-",
+        "product",
+        "*",
+        "quotient",
+        "/",
+        "remainder",
+        "abs",
+        "int",
+        "round",
+        "sqrt",
+        "sin",
+        "cos",
+        "tan",
+        "random",
+        "rerandom",
+        "and",
+        "or",
+        "not",
+        "equalp",
+        "equal?",
+        "emptyp",
+        "empty?",
+        "memberp",
+        "member?",
+        "first",
+        "butfirst",
+        "bf",
+        "last",
+        "butlast",
+        "bl",
+        "fput",
+        "lput",
+        "sentence",
+        "se",
+        "list",
+        "word",
+        "count",
+        "item",
+        "wordp",
+        "listp",
+        "numberp",
+        "intp",
+        "decimalp",
+        "print",
+        "pr",
+        "show",
+        "type",
+        "readlist",
+        "rl",
+        "make",
+        "name",
+        "thing",
+        "local",
+        "namep",
+        "definedp",
+        "defined?",
+        "primitivep",
+        "primitive?",
+        "text",
+        "fulltext",
+        "copydef",
+        "po",
+        "poall",
+        "pons",
+        "pops",
+        "pots",
+        "popls",
+        ".primitives",
+        "erase",
+        "er",
+        "ern",
+        "erns",
+        "erps",
+        "erpl",
+        "erall",
+        "bury",
+        "unbury",
+        "buriedp",
+        "pprop",
+        "gprop",
+        "remprop",
+        "plist",
+        "array",
+        "setitem",
+        "listtoarray",
+        "arraytolist",
+        "repeat",
+        "if",
+        "ifelse",
+        "run",
+        "runresult",
+        "parse",
+        "runparse",
+        "apply",
+        "foreach",
+        "map",
+        "filter",
+        "reduce",
+        "repcount",
+        "test",
+        "iftrue",
+        "ift",
+        "iffalse",
+        "iff",
+        "wait",
+        "catch",
+        "throw",
+        "error",
+        "pause",
+        "continue",
+        "forward",
+        "fd",
+        "back",
+        "bk",
+        "left",
+        "lt",
+        "right",
+        "rt",
+        "setxy",
+        "setpos",
+        "setheading",
+        "seth",
+        "home",
+        "clearscreen",
+        "cs",
+        "penup",
+        "pu",
+        "pendown",
+        "pd",
+        "setpencolor",
+        "setpc",
+        "setpensize",
+        "hideturtle",
+        "ht",
+        "showturtle",
+        "st",
+        "pos",
+        "heading",
+        "xcor",
+        "ycor",
+        "output",
+        "op",
+        "stop",
+        "tell",
+        "ask",
+        "each",
+        "who",
+        "setvelocity",
+        "setspeed",
+        "setshape",
+        "touching",
+        "when",
+        "toot",
     ]
 }
 
@@ -2767,8 +3060,7 @@ fn compile_list_source(
     arities: &ArityTable,
 ) -> Result<Chunk, VmError> {
     let source = list_to_source(list, interner, arities);
-    let program = parse_source(&source, interner, arities)
-        .map_err(|error| VmError::new(error.to_string()))?;
+    let program = parse_source(&source, interner, arities).map_err(vm_error_from_parse)?;
     let compiler = Compiler::new();
     match mode {
         CompileMode::Effect => compiler.compile_effect_program(&program),
@@ -3035,7 +3327,10 @@ mod tests {
              print memberp \"b [a b c] \
              print memberp \"x [a b c]")
         .unwrap();
-        assert_eq!(result.output, "3\nb\n2\n0\ntrue\n[a c d e f t z]\ntrue\ntrue\ntrue\nfalse\n");
+        assert_eq!(
+            result.output,
+            "3\nb\n2\n0\ntrue\n[a c d e f t z]\ntrue\ntrue\ntrue\nfalse\n"
+        );
     }
 
     #[test]
@@ -3085,11 +3380,9 @@ mod tests {
 
     #[test]
     fn run_and_runresult_on_same_list_use_distinct_cached_bytecode() {
-        let (result, _) = run(
-            "make \"body [sum 2 3] \
-             make \"ignored catch \"error [run :body] \
-             print runresult :body",
-        )
+        let (result, _) = run("make \"body [sum 2 3] \
+             catch \"error [run :body] \
+             print runresult :body")
         .unwrap();
         assert_eq!(result.output, "5\n");
     }
@@ -3158,7 +3451,8 @@ mod tests {
 
     #[test]
     fn forever_repeats_until_body_stops() {
-        let (result, _) = run("make \"x 0 forever [make \"x sum :x 1 if :x = 3 [stop]] print :x").unwrap();
+        let (result, _) =
+            run("make \"x 0 forever [make \"x sum :x 1 if :x = 3 [stop]] print :x").unwrap();
         assert_eq!(result.output, "3\n");
     }
 
@@ -3262,7 +3556,8 @@ mod tests {
     #[test]
     fn workspace_listing_commands_report_user_procedures_and_variables() {
         let mut vm = Vm::new();
-        vm.eval_source("to alpha :x
+        vm.eval_source(
+            "to alpha :x
              print :x
              end
              to beta :y
@@ -3270,8 +3565,9 @@ mod tests {
              end
              make \"foo 7
              make \"bar [a b]
-             pprop \"animal \"legs 4")
-            .unwrap();
+             pprop \"animal \"legs 4",
+        )
+        .unwrap();
         let result = vm
             .eval_source("pots pops pons popls poall po [alpha] .primitives")
             .unwrap();
@@ -3289,13 +3585,15 @@ mod tests {
     #[test]
     fn bury_and_unbury_hide_workspace_entries_from_listings() {
         let mut vm = Vm::new();
-        vm.eval_source("to alpha :x
+        vm.eval_source(
+            "to alpha :x
              output :x
              end
              make \"foo 7
              pprop \"animal \"legs 4
-             bury [alpha foo animal]")
-            .unwrap();
+             bury [alpha foo animal]",
+        )
+        .unwrap();
 
         let result = vm.eval_source("pops pons popls poall").unwrap();
         assert!(!result.output.contains("alpha"));
@@ -3319,21 +3617,26 @@ mod tests {
     #[test]
     fn workspace_erase_commands_remove_user_bindings() {
         let mut vm = Vm::new();
-        vm.eval_source("to alpha :x
+        vm.eval_source(
+            "to alpha :x
              output :x
              end
              to beta :y
              output :y
              end
              make \"foo 7
-             make \"bar 8")
-            .unwrap();
+             make \"bar 8",
+        )
+        .unwrap();
         vm.eval_source("ern [foo] erase [alpha]").unwrap();
-        let result = vm.eval_source("print namep \"foo print definedp \"alpha print definedp \"beta").unwrap();
+        let result = vm
+            .eval_source("print namep \"foo print definedp \"alpha print definedp \"beta")
+            .unwrap();
         assert_eq!(result.output, "false\nfalse\ntrue\n");
 
         vm.clear_output();
-        vm.eval_source("pprop \"animal \"legs 4 erpl [animal]").unwrap();
+        vm.eval_source("pprop \"animal \"legs 4 erpl [animal]")
+            .unwrap();
         vm.clear_output();
         let result = vm.eval_source("print plist \"animal").unwrap();
         assert_eq!(result.output, "[]\n");
@@ -3341,7 +3644,9 @@ mod tests {
         vm.clear_output();
         vm.eval_source("erns erps").unwrap();
         vm.clear_output();
-        let result = vm.eval_source("print namep \"bar print definedp \"beta print definedp \"while").unwrap();
+        let result = vm
+            .eval_source("print namep \"bar print definedp \"beta print definedp \"while")
+            .unwrap();
         assert_eq!(result.output, "false\nfalse\ntrue\n");
     }
 
@@ -3365,8 +3670,13 @@ mod tests {
         let mut vm = Vm::new();
         vm.eval_source("define \"square [size] [[output product :size :size]]")
             .unwrap();
-        let result = vm.eval_source("print square 5 print text \"square").unwrap();
-        assert_eq!(result.output, "25\n[[to square :size] [output product :size :size]]\n");
+        let result = vm
+            .eval_source("print square 5 print text \"square")
+            .unwrap();
+        assert_eq!(
+            result.output,
+            "25\n[[to square :size] [output product :size :size]]\n"
+        );
     }
 
     #[test]
@@ -3401,9 +3711,9 @@ mod tests {
     }
 
     #[test]
-    fn wait_zero_is_noop_and_error_outputs_last_error_word() {
+    fn wait_zero_is_noop_and_error_without_caught_failure_is_empty_list() {
         let (result, _) = run("wait 0 print error").unwrap();
-        assert_eq!(result.output, "\n");
+        assert_eq!(result.output, "[]\n");
     }
 
     #[test]
@@ -3423,19 +3733,54 @@ mod tests {
     }
 
     #[test]
-    fn error_primitive_reports_last_failure_message() {
+    fn error_primitive_reports_empty_list_after_uncaught_failure() {
         let mut vm = Vm::new();
         let error = vm.eval_source("print").unwrap_err();
         assert!(error.message.starts_with("not enough inputs to print"));
-        let result = vm.eval_source("print error").unwrap();
-        assert!(result.output.starts_with("not enough inputs to print"));
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert!(list.is_empty());
     }
 
     #[test]
-    fn catch_error_returns_last_failure_message() {
+    fn catch_error_populates_structured_error_list_and_consumes_it() {
         let mut vm = Vm::new();
-        let result = vm.eval_source("print catch \"error [print]").unwrap();
-        assert!(result.output.starts_with("not enough inputs to print"));
+        let result = vm.eval_source("catch \"error [print]").unwrap();
+        assert_eq!(result.output, "");
+
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "6");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "not enough inputs to print"
+        );
+        assert_eq!(list.item(3).unwrap().show(vm.interner()), "");
+
+        let PrimitiveResult::Value(Value::List(empty)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn catch_error_records_unknown_procedure_code_and_context() {
+        let mut vm = Vm::new();
+        let symbol = vm.interner_mut().intern("mystery");
+        let error = vm.call(symbol, vec![]).unwrap_err();
+        vm.record_caught_error(&error);
+
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "13");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "I don't know how to mystery"
+        );
+        assert_eq!(list.item(3).unwrap().show(vm.interner()), "mystery");
     }
 
     #[test]
@@ -3449,7 +3794,7 @@ mod tests {
              print noop 5",
             )
             .unwrap_err();
-        assert!(error.message.starts_with("noop didn't output a value"));
+        assert_eq!(error.message, "noop didn't output to print");
     }
 
     #[test]
@@ -3504,7 +3849,8 @@ mod tests {
 
     #[test]
     fn atari_turtle_state_primitives_setx_sety_and_shownp() {
-        let (result, vm) = run("ht print shownp setx 25 sety -10 st print shownp print pos").unwrap();
+        let (result, vm) =
+            run("ht print shownp setx 25 sety -10 st print shownp print pos").unwrap();
         assert_eq!(result.output, "false\ntrue\n[25 -10]\n");
         let state = vm.turtles().state(TurtleId::new(0)).unwrap();
         assert_eq!(state.position, Point::new(25.0, -10.0));
