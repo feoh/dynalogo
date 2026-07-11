@@ -1,0 +1,19 @@
+to burn :heading :speed
+  tell 0
+  setheading :heading
+  setspeed :speed
+  fd 6
+end
+
+tell 0
+setshape "ship 12
+setxy 120 120
+setheading 0
+setvelocity 0 0
+
+burn 0 20
+burn 20 30
+burn 35 40
+burn 45 55
+
+print "Launch-complete!

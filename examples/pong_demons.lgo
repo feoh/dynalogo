@@ -1,0 +1,25 @@
+make "returns 0
+
+to bounce.left
+  make "returns sum :returns 1
+  ask 0 [setvelocity 75 0]
+  toot 0 60 8 10
+  print :returns
+end
+
+to bounce.right
+  make "returns sum :returns 1
+  ask 0 [setvelocity -75 0]
+  toot 0 90 8 10
+  print :returns
+end
+
+ask 1 [setshape "dog 20 setxy 40 120]
+ask 2 [setshape "dog 20 setxy 280 120]
+
+ask 0 [setshape "ship 10 setxy 160 120 setvelocity 75 0]
+
+when [touching 0 1] [bounce.left]
+when [touching 0 2] [bounce.right]
+
+print "Pong-demo-ready!

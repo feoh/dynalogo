@@ -1,0 +1,22 @@
+to bounce.left
+  ask 0 [setvelocity 70 0]
+  toot 0 75 8 12
+end
+
+to bounce.right
+  ask 0 [setvelocity -70 0]
+  toot 0 95 8 12
+end
+
+tell 0
+setshape "turtle 8
+setxy 160 120
+setvelocity 70 0
+
+ask 1 [setshape "dog 18 setxy 40 120]
+ask 2 [setshape "dog 18 setxy 280 120]
+
+when [touching 0 1] [bounce.left]
+when [touching 0 2] [bounce.right]
+
+print "Ball-in-play!

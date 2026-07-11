@@ -1,0 +1,15 @@
+tell 0
+setshape "turtle 16
+setxy 160 120
+
+ask 1 [setshape "ship 8 setxy 220 120]
+ask 2 [setshape "ship 10 setxy 260 120]
+ask 3 [setshape "ship 12 setxy 320 120]
+
+repeat 120 [
+  ask 1 [rt 5 fd 3]
+  ask 2 [rt 3 fd 5]
+  ask 3 [rt 2 fd 7]
+]
+
+print "Orbit-trails-complete!

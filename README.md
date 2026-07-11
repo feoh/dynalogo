@@ -133,6 +133,10 @@ Dynaturtle examples:
 
 - `shape_parade.lgo` — animated turtle / dog / ship shapes
 - `dogs_in_the_park.lgo` — collision-driven barking with `WHEN` and `TOOT`
+- `spaceship_thrust.lgo` — ship-thrust / inertia sketch
+- `bouncing_ball.lgo` — collision-based bouncing demo
+- `orbit_simulation.lgo` — orbit-style multi-body trails
+- `pong_demons.lgo` — a small collision-demon pong sketch
 
 ## Status
 
