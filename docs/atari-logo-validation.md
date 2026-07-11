@@ -189,12 +189,14 @@ The Atari manual organizes features into these areas:
 
 **Implemented now**
 
-- `READLIST`/`RL` exists, but is not connected to a real stream yet
+- `LOAD`, `SAVE`
+- `SETREAD`, `SETWRITE`
+- `READLIST`/`RL` via the active read stream
+- `READCHAR`/`RC` via the active read stream
 - `WAIT`
 
 **Present in Atari manual but missing**
 
-- `RC` / read-char behavior
 - `KEYP`
 - joystick/paddle input: `JOY`, `JOYB`, `PADDLE`, `PADDLEB`
 - sound: `TOOT`, `SETENV`, `TIMEOUT`
@@ -218,11 +220,14 @@ The Atari manual organizes features into these areas:
 
 ### 10. Files
 
-**Present in Atari manual but missing**
+**Implemented now**
 
 - `LOAD`, `SAVE`
 - `SETREAD`, `SETWRITE`
 - file/device oriented `RC`, `RL`
+
+**Present in Atari manual but missing**
+
 - `ERF`, `CATALOG`, printer/file device handling
 
 ### 11. Special primitives
@@ -242,8 +247,8 @@ DynaLOGO:
    - `ASK`, `TELL`, `EACH`, `WHO`, `OVER`, `TOUCHING`, `WHEN`
 2. **Remaining workspace management work**
    - `NODES`, `RECYCLE`, bury/unbury behavior, and editor integration
-3. **File and device I/O**
-   - `LOAD`, `SAVE`, `SETREAD`, `SETWRITE`, `RC`, `RL`
+3. **File/device follow-up**
+   - `ERF`, `CATALOG`, printer/file handling, and the broader outside-world device surface
 4. **Remaining Atari type and math helpers**
    - `REALWORDP`, `RANK`, `RANPICK`, `EVENP`, `DIVISORP`, `FACTORIAL`, and adjacent helper surface
 5. **Graphics/screen extras**

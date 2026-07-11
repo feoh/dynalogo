@@ -8,6 +8,8 @@
 use std::collections::HashMap;
 use std::f64::consts::PI;
 use std::fmt;
+use std::fs;
+use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
@@ -180,6 +182,50 @@ impl Environment {
 }
 
 #[derive(Debug, Clone)]
+struct InputStream {
+    path: PathBuf,
+    content: String,
+    cursor: usize,
+}
+
+impl InputStream {
+    fn open(path: PathBuf) -> Result<Self, VmError> {
+        let content = fs::read_to_string(&path)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        Ok(Self {
+            path,
+            content,
+            cursor: 0,
+        })
+    }
+
+    fn read_char(&mut self) -> Option<String> {
+        let tail = self.content.get(self.cursor..)?;
+        let ch = tail.chars().next()?;
+        self.cursor += ch.len_utf8();
+        Some(ch.to_string())
+    }
+
+    fn read_line(&mut self) -> Option<String> {
+        let tail = self.content.get(self.cursor..)?;
+        if tail.is_empty() {
+            return None;
+        }
+        if let Some(newline) = tail.find('\n') {
+            let mut line = &tail[..newline];
+            self.cursor += newline + 1;
+            if let Some(stripped) = line.strip_suffix('\r') {
+                line = stripped;
+            }
+            Some(line.to_string())
+        } else {
+            self.cursor = self.content.len();
+            Some(tail.strip_suffix('\r').unwrap_or(tail).to_string())
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Vm {
     interner: Interner,
     env: Environment,
@@ -188,6 +234,8 @@ pub struct Vm {
     procedures: HashMap<String, Procedure>,
     property_lists: HashMap<String, HashMap<String, Value>>,
     turtle: TurtleWorld<HeadlessTurtleBackend>,
+    read_stream: Option<InputStream>,
+    write_stream: Option<PathBuf>,
     test_result: Option<bool>,
     last_error: Option<String>,
     random_seed: u64,
@@ -229,6 +277,8 @@ impl Default for Vm {
             procedures: HashMap::new(),
             property_lists: HashMap::new(),
             turtle: TurtleWorld::new(HeadlessTurtleBackend::new()),
+            read_stream: None,
+            write_stream: None,
             test_result: None,
             last_error: None,
             random_seed: 0x4d595df4d0f33173,
@@ -271,6 +321,23 @@ impl Vm {
 
     pub fn clear_output(&mut self) {
         self.output.clear();
+    }
+
+    fn write_output_fragment(&mut self, text: &str) -> Result<(), VmError> {
+        if let Some(path) = &self.write_stream {
+            let mut current = fs::read_to_string(path).unwrap_or_default();
+            current.push_str(text);
+            fs::write(path, current)
+                .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        } else {
+            self.output.push_str(text);
+        }
+        Ok(())
+    }
+
+    fn write_output_line(&mut self, text: &str) -> Result<(), VmError> {
+        self.write_output_fragment(text)?;
+        self.write_output_fragment("\n")
     }
 
     fn remember_error(&mut self, error: VmError) -> VmError {
@@ -491,6 +558,11 @@ impl Vm {
             "print" | "pr" => self.print(args),
             "show" => self.show(args),
             "type" => self.r#type(args),
+            "load" => self.load(args),
+            "save" => self.save(args),
+            "setread" => self.setread(args),
+            "setwrite" => self.setwrite(args),
+            "readchar" | "rc" => self.readchar(args),
             "readlist" | "rl" => self.readlist(args),
             "make" | "name" => self.make(args),
             "thing" => self.thing(args),
@@ -1055,29 +1127,119 @@ impl Vm {
 
     fn print(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("print", &args, 1)?;
-        self.output.push_str(&args[0].show(&self.interner));
-        self.output.push('\n');
+        self.write_output_line(&args[0].show(&self.interner))?;
         Ok(PrimitiveResult::NoValue)
     }
 
     fn show(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("show", &args, 1)?;
-        self.output.push_str(&args[0].show(&self.interner));
-        self.output.push('\n');
+        self.write_output_line(&args[0].show(&self.interner))?;
         Ok(PrimitiveResult::NoValue)
     }
 
     fn r#type(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("type", &args, 1)?;
-        self.output.push_str(&args[0].show(&self.interner));
+        self.write_output_fragment(&args[0].show(&self.interner))?;
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn load(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("load", &args, 1)?;
+        let path = PathBuf::from(source_text_input(&args[0], &self.interner));
+        let source = fs::read_to_string(&path)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        let result = self.eval_source(&source)?;
+        match result.control {
+            ControlFlow::None => Ok(PrimitiveResult::NoValue),
+            control => Ok(PrimitiveResult::Control(control)),
+        }
+    }
+
+    fn save(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("save", &args, 1)?;
+        let path = PathBuf::from(source_text_input(&args[0], &self.interner));
+        let procedures = self.visible_workspace_procedures();
+        let mut source = String::new();
+        for (index, procedure) in procedures.iter().enumerate() {
+            source.push_str("to ");
+            source.push_str(self.interner.spelling(procedure.name()));
+            for param in procedure.params() {
+                source.push(' ');
+                source.push(':');
+                source.push_str(self.interner.spelling(*param));
+            }
+            source.push('\n');
+            if !procedure.body_source().is_empty() {
+                source.push_str(procedure.body_source());
+                if !procedure.body_source().ends_with('\n') {
+                    source.push('\n');
+                }
+            }
+            source.push_str("end\n");
+            if index + 1 < procedures.len() {
+                source.push('\n');
+            }
+        }
+        fs::write(&path, source)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn setread(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setread", &args, 1)?;
+        if args[0].is_empty_list() {
+            self.read_stream = None;
+        } else {
+            let path = PathBuf::from(source_text_input(&args[0], &self.interner));
+            self.read_stream = Some(InputStream::open(path)?);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn setwrite(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setwrite", &args, 1)?;
+        if args[0].is_empty_list() {
+            self.write_stream = None;
+        } else {
+            let path = PathBuf::from(source_text_input(&args[0], &self.interner));
+            fs::write(&path, "")
+                .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+            self.write_stream = Some(path);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn readchar(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("readchar", &args, 0)?;
+        let stream = self
+            .read_stream
+            .as_mut()
+            .ok_or_else(|| VmError::new("READCHAR is not connected to an input stream yet"))?;
+        let ch = stream.read_char().ok_or_else(|| {
+            VmError::new(format!(
+                "READCHAR reached end of input stream {}",
+                stream.path.display()
+            ))
+        })?;
+        Ok(PrimitiveResult::Value(Value::word(&mut self.interner, ch)))
     }
 
     fn readlist(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("readlist", &args, 0)?;
-        Err(VmError::new(
-            "READLIST is not connected to an input stream yet",
-        ))
+        let stream = self
+            .read_stream
+            .as_mut()
+            .ok_or_else(|| VmError::new("READLIST is not connected to an input stream yet"))?;
+        let line = stream.read_line().ok_or_else(|| {
+            VmError::new(format!(
+                "READLIST reached end of input stream {}",
+                stream.path.display()
+            ))
+        })?;
+        Ok(PrimitiveResult::Value(Value::List(parse_source_line(
+            &line,
+            &mut self.interner,
+        )?)))
     }
 
     fn make(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1152,9 +1314,9 @@ impl Vm {
         let Some(number) = args[0].as_number(&self.interner) else {
             return Ok(PrimitiveResult::Value(self.logo_bool(false)));
         };
-        Ok(PrimitiveResult::Value(self.logo_bool(
-            number.is_finite() && number.fract() != 0.0,
-        )))
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(number.is_finite() && number.fract() != 0.0),
+        ))
     }
 
     fn definedp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1363,7 +1525,10 @@ impl Vm {
         let lines = if include_body {
             procedure_text(procedure, &mut self.interner, include_end)?
         } else {
-            List::from_values([Value::List(procedure_header_line(procedure, &mut self.interner))])
+            List::from_values([Value::List(procedure_header_line(
+                procedure,
+                &mut self.interner,
+            ))])
         };
         for line in lines.iter() {
             self.output.push_str(&line.show(&self.interner));
@@ -2277,25 +2442,153 @@ fn parse_source_line(line: &str, interner: &mut Interner) -> Result<List, VmErro
 
 fn primitive_names() -> &'static [&'static str] {
     &[
-        "sum", "+", "difference", "-", "product", "*", "quotient", "/",
-        "remainder", "abs", "int", "round", "sqrt", "sin", "cos", "tan",
-        "random", "rerandom", "and", "or", "not", "equalp", "equal?",
-        "emptyp", "empty?", "memberp", "member?", "first", "butfirst", "bf",
-        "last", "butlast", "bl", "fput", "lput", "sentence", "se", "list",
-        "word", "count", "item", "wordp", "listp", "numberp", "intp",
-        "decimalp", "print", "pr", "show", "type", "readlist", "rl", "make",
-        "name", "thing", "local", "namep", "definedp", "defined?",
-        "primitivep", "primitive?", "text", "fulltext", "copydef", "po",
-        "poall", "pons", "pops", "pots", ".primitives", "erase", "er", "ern",
-        "erns", "erps", "erall", "pprop", "gprop", "remprop", "plist", "array",
-        "setitem", "listtoarray", "arraytolist", "repeat", "if", "ifelse", "run",
-        "runresult", "parse", "runparse", "apply", "foreach", "map", "filter",
-        "reduce", "repcount", "test", "iftrue", "ift", "iffalse", "iff", "wait",
-        "catch", "throw", "error", "pause", "continue", "forward", "fd", "back",
-        "bk", "left", "lt", "right", "rt", "setxy", "setpos", "setheading",
-        "seth", "home", "clearscreen", "cs", "penup", "pu", "pendown", "pd",
-        "setpencolor", "setpc", "setpensize", "hideturtle", "ht", "showturtle",
-        "st", "pos", "heading", "xcor", "ycor", "output", "op", "stop",
+        "sum",
+        "+",
+        "difference",
+        "-",
+        "product",
+        "*",
+        "quotient",
+        "/",
+        "remainder",
+        "abs",
+        "int",
+        "round",
+        "sqrt",
+        "sin",
+        "cos",
+        "tan",
+        "random",
+        "rerandom",
+        "and",
+        "or",
+        "not",
+        "equalp",
+        "equal?",
+        "emptyp",
+        "empty?",
+        "memberp",
+        "member?",
+        "first",
+        "butfirst",
+        "bf",
+        "last",
+        "butlast",
+        "bl",
+        "fput",
+        "lput",
+        "sentence",
+        "se",
+        "list",
+        "word",
+        "count",
+        "item",
+        "wordp",
+        "listp",
+        "numberp",
+        "intp",
+        "decimalp",
+        "print",
+        "pr",
+        "show",
+        "type",
+        "load",
+        "save",
+        "setread",
+        "setwrite",
+        "readchar",
+        "rc",
+        "readlist",
+        "rl",
+        "make",
+        "name",
+        "thing",
+        "local",
+        "namep",
+        "definedp",
+        "defined?",
+        "primitivep",
+        "primitive?",
+        "text",
+        "fulltext",
+        "copydef",
+        "po",
+        "poall",
+        "pons",
+        "pops",
+        "pots",
+        ".primitives",
+        "erase",
+        "er",
+        "ern",
+        "erns",
+        "erps",
+        "erall",
+        "pprop",
+        "gprop",
+        "remprop",
+        "plist",
+        "array",
+        "setitem",
+        "listtoarray",
+        "arraytolist",
+        "repeat",
+        "if",
+        "ifelse",
+        "run",
+        "runresult",
+        "parse",
+        "runparse",
+        "apply",
+        "foreach",
+        "map",
+        "filter",
+        "reduce",
+        "repcount",
+        "test",
+        "iftrue",
+        "ift",
+        "iffalse",
+        "iff",
+        "wait",
+        "catch",
+        "throw",
+        "error",
+        "pause",
+        "continue",
+        "forward",
+        "fd",
+        "back",
+        "bk",
+        "left",
+        "lt",
+        "right",
+        "rt",
+        "setxy",
+        "setpos",
+        "setheading",
+        "seth",
+        "home",
+        "clearscreen",
+        "cs",
+        "penup",
+        "pu",
+        "pendown",
+        "pd",
+        "setpencolor",
+        "setpc",
+        "setpensize",
+        "hideturtle",
+        "ht",
+        "showturtle",
+        "st",
+        "pos",
+        "heading",
+        "xcor",
+        "ycor",
+        "output",
+        "op",
+        "stop",
     ]
 }
 
@@ -2487,11 +2780,30 @@ fn is_placeholder_word(text: &str) -> bool {
 mod tests {
     use super::*;
     use crate::turtle::{Point, TurtleEvent};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn run(source: &str) -> Result<(RunResult, Vm), VmError> {
         let mut vm = Vm::new();
         let result = vm.eval_source(source)?;
         Ok((result, vm))
+    }
+
+    fn temp_test_path(stem: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "dynalogo-{stem}-{}-{unique}.logo",
+            std::process::id()
+        ))
+    }
+
+    fn set_path_var(vm: &mut Vm, name: &str, path: &PathBuf) {
+        let value = Value::word(vm.interner_mut(), path.to_string_lossy());
+        vm.env_mut().set_global(name, value);
     }
 
     #[test]
@@ -2615,7 +2927,10 @@ mod tests {
              print memberp \"b [a b c] \
              print memberp \"x [a b c]")
         .unwrap();
-        assert_eq!(result.output, "3\nb\n2\n0\ntrue\n[a c d e f t z]\ntrue\ntrue\ntrue\nfalse\n");
+        assert_eq!(
+            result.output,
+            "3\nb\n2\n0\ntrue\n[a c d e f t z]\ntrue\ntrue\ntrue\nfalse\n"
+        );
     }
 
     #[test]
@@ -2628,7 +2943,11 @@ mod tests {
             .events()
             .iter()
             .find_map(|event| match event {
-                TurtleEvent::Line { from, to, .. } if *from == Point::new(30.0, 40.0) && *to == Point::new(30.0, 40.0) => Some((*from, *to)),
+                TurtleEvent::Line { from, to, .. }
+                    if *from == Point::new(30.0, 40.0) && *to == Point::new(30.0, 40.0) =>
+                {
+                    Some((*from, *to))
+                }
                 _ => None,
             });
         assert!(line.is_some());
@@ -2715,7 +3034,8 @@ mod tests {
 
     #[test]
     fn forever_repeats_until_body_stops() {
-        let (result, _) = run("make \"x 0 forever [make \"x sum :x 1 if :x = 3 [stop]] print :x").unwrap();
+        let (result, _) =
+            run("make \"x 0 forever [make \"x sum :x 1 if :x = 3 [stop]] print :x").unwrap();
         assert_eq!(result.output, "3\n");
     }
 
@@ -2819,15 +3139,17 @@ mod tests {
     #[test]
     fn workspace_listing_commands_report_user_procedures_and_variables() {
         let mut vm = Vm::new();
-        vm.eval_source("to alpha :x
+        vm.eval_source(
+            "to alpha :x
              print :x
              end
              to beta :y
              output sum :y 1
              end
              make \"foo 7
-             make \"bar [a b]")
-            .unwrap();
+             make \"bar [a b]",
+        )
+        .unwrap();
         let result = vm
             .eval_source("pots pops pons poall po [alpha] .primitives")
             .unwrap();
@@ -2844,23 +3166,29 @@ mod tests {
     #[test]
     fn workspace_erase_commands_remove_user_bindings() {
         let mut vm = Vm::new();
-        vm.eval_source("to alpha :x
+        vm.eval_source(
+            "to alpha :x
              output :x
              end
              to beta :y
              output :y
              end
              make \"foo 7
-             make \"bar 8")
-            .unwrap();
+             make \"bar 8",
+        )
+        .unwrap();
         vm.eval_source("ern [foo] erase [alpha]").unwrap();
-        let result = vm.eval_source("print namep \"foo print definedp \"alpha print definedp \"beta").unwrap();
+        let result = vm
+            .eval_source("print namep \"foo print definedp \"alpha print definedp \"beta")
+            .unwrap();
         assert_eq!(result.output, "false\nfalse\ntrue\n");
 
         vm.clear_output();
         vm.eval_source("erns erps").unwrap();
         vm.clear_output();
-        let result = vm.eval_source("print namep \"bar print definedp \"beta print definedp \"while").unwrap();
+        let result = vm
+            .eval_source("print namep \"bar print definedp \"beta print definedp \"while")
+            .unwrap();
         assert_eq!(result.output, "false\nfalse\ntrue\n");
     }
 
@@ -2884,8 +3212,13 @@ mod tests {
         let mut vm = Vm::new();
         vm.eval_source("define \"square [size] [[output product :size :size]]")
             .unwrap();
-        let result = vm.eval_source("print square 5 print text \"square").unwrap();
-        assert_eq!(result.output, "25\n[[to square :size] [output product :size :size]]\n");
+        let result = vm
+            .eval_source("print square 5 print text \"square")
+            .unwrap();
+        assert_eq!(
+            result.output,
+            "25\n[[to square :size] [output product :size :size]]\n"
+        );
     }
 
     #[test]
@@ -2917,6 +3250,76 @@ mod tests {
         assert_eq!(tag.show(vm.interner()), "outer");
         assert_eq!(value, Value::number(17.0));
         assert_eq!(result.output, "");
+    }
+
+    #[test]
+    fn file_stream_primitives_load_and_save_workspace() {
+        let load_path = temp_test_path("load-source");
+        let save_path = temp_test_path("save-workspace");
+        fs::write(
+            &load_path,
+            "to triple :x\noutput product :x 3\nend\nmake \"fromfile 17\n",
+        )
+        .unwrap();
+
+        let mut vm = Vm::new();
+        set_path_var(&mut vm, "loadpath", &load_path);
+        set_path_var(&mut vm, "savepath", &save_path);
+
+        vm.eval_source("load :loadpath").unwrap();
+        let loaded = vm.eval_source("print triple 4 print :fromfile").unwrap();
+        assert_eq!(loaded.output, "12\n17\n");
+
+        vm.clear_output();
+        vm.eval_source(
+            "to square :x
+             output product :x :x
+             end
+             save :savepath",
+        )
+        .unwrap();
+        let saved = fs::read_to_string(&save_path).unwrap();
+        assert!(saved.contains("to square :x"));
+        assert!(saved.contains("output product :x :x"));
+        assert!(saved.contains("to triple :x"));
+        assert!(saved.contains("output product :x 3"));
+        assert!(!saved.contains("__whileloop"));
+        assert!(!saved.contains("fromfile"));
+
+        let _ = fs::remove_file(load_path);
+        let _ = fs::remove_file(save_path);
+    }
+
+    #[test]
+    fn file_stream_primitives_setread_readchar_and_readlist() {
+        let read_path = temp_test_path("read-stream");
+        fs::write(&read_path, "hello\nsum 1 2\n").unwrap();
+
+        let mut vm = Vm::new();
+        set_path_var(&mut vm, "readpath", &read_path);
+        let result = vm
+            .eval_source("setread :readpath print rc print rc setread :readpath print rl print rl")
+            .unwrap();
+        assert_eq!(result.output, "h\ne\n[hello]\n[sum 1 2]\n");
+
+        let _ = fs::remove_file(read_path);
+    }
+
+    #[test]
+    fn file_stream_primitives_setwrite_redirects_output() {
+        let write_path = temp_test_path("write-stream");
+
+        let mut vm = Vm::new();
+        set_path_var(&mut vm, "writepath", &write_path);
+        let result = vm
+            .eval_source(
+                "setwrite :writepath type \"hi print [a b] show 42 setwrite [] print \"done",
+            )
+            .unwrap();
+        assert_eq!(result.output, "done\n");
+        assert_eq!(fs::read_to_string(&write_path).unwrap(), "hi[a b]\n42\n");
+
+        let _ = fs::remove_file(write_path);
     }
 
     #[test]
@@ -3024,7 +3427,8 @@ mod tests {
 
     #[test]
     fn atari_turtle_state_primitives_setx_sety_and_shownp() {
-        let (result, vm) = run("ht print shownp setx 25 sety -10 st print shownp print pos").unwrap();
+        let (result, vm) =
+            run("ht print shownp setx 25 sety -10 st print shownp print pos").unwrap();
         assert_eq!(result.output, "false\ntrue\n[25 -10]\n");
         assert_eq!(vm.turtle().state().position, Point::new(25.0, -10.0));
         assert!(vm.turtle().state().visible);

@@ -21,14 +21,20 @@ Still missing from the nearby workspace roadmap bucket:
 - `BURY`, `UNBURY`, `BURIEDP`
 - editor-facing commands such as `EDIT`/`ED`, `EDNS`, `EDSH`
 
-## File I/O is still absent
+## File I/O still has follow-up gaps
 
-No user-facing file or stream primitives are implemented yet:
+Core file/stream support is now implemented:
 
 - `LOAD`, `SAVE`
+- `SETREAD`, `SETWRITE`
+- `READCHAR`/`RC`
+- `READLIST`/`RL` via the active read stream
+
+Still missing from the wider file/device roadmap bucket:
+
 - `OPENREAD`, `OPENWRITE`
-- `READWORD`, `READCHAR`
-- stream plumbing and `DRIBBLE`
+- `READWORD`
+- `DRIBBLE`
 - `EDIT` integration with `$EDITOR`
 
 ## Macro system is still absent

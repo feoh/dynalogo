@@ -59,11 +59,14 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - Infix operators: `+`, `-`, `*`, `/`, `<`, `>`, `=`, `<=`, `>=`, `<>`
 - `AND`, `OR`, `NOT`
 
-## Console I/O
+## Console and file I/O
 
 - `PRINT`/`PR`
 - `SHOW`
 - `TYPE`
+- `LOAD`, `SAVE`
+- `SETREAD`, `SETWRITE`
+- `READCHAR`/`RC`
 - `READLIST`/`RL`
 
 ## Turtle graphics
@@ -80,8 +83,8 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Notes
 
 Not yet implemented from nearby roadmap/workspace tasks include remaining
-workspace-management pieces such as bury/unbury behavior, file I/O (`LOAD`,
-`SAVE`, streams), macros, richer graphics primitives like `LABEL`/`FILL`, and
-the dynaturtle-specific runtime commands such as `TELL`, `ASK`, velocity, and
-collision/event APIs. See also [primitive-gaps.md](primitive-gaps.md) for the
-current first-pass gap list.
+workspace-management pieces such as bury/unbury behavior, additional file/device
+I/O (`OPENREAD`, `OPENWRITE`, `READWORD`, `DRIBBLE`), macros, richer graphics
+primitives like `LABEL`/`FILL`, and the dynaturtle-specific runtime commands
+such as `TELL`, `ASK`, velocity, and collision/event APIs. See also
+[primitive-gaps.md](primitive-gaps.md) for the current first-pass gap list.
