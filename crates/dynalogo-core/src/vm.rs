@@ -6,6 +6,7 @@
 //! control signals.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::f64::consts::PI;
 use std::fmt;
 use std::fs;
@@ -235,7 +236,11 @@ pub struct Vm {
     property_lists: HashMap<String, HashMap<String, Value>>,
     turtle: TurtleWorld<HeadlessTurtleBackend>,
     read_stream: Option<InputStream>,
-    write_stream: Option<PathBuf>,
+    current_read_managed: bool,
+    read_streams: HashMap<String, InputStream>,
+    current_write: Option<String>,
+    write_streams: HashSet<String>,
+    dribble: Option<PathBuf>,
     test_result: Option<bool>,
     last_error: Option<String>,
     random_seed: u64,
@@ -278,7 +283,11 @@ impl Default for Vm {
             property_lists: HashMap::new(),
             turtle: TurtleWorld::new(HeadlessTurtleBackend::new()),
             read_stream: None,
-            write_stream: None,
+            current_read_managed: false,
+            read_streams: HashMap::new(),
+            current_write: None,
+            write_streams: HashSet::new(),
+            dribble: None,
             test_result: None,
             last_error: None,
             random_seed: 0x4d595df4d0f33173,
@@ -324,13 +333,20 @@ impl Vm {
     }
 
     fn write_output_fragment(&mut self, text: &str) -> Result<(), VmError> {
-        if let Some(path) = &self.write_stream {
-            let mut current = fs::read_to_string(path).unwrap_or_default();
+        if let Some(name) = self.current_write.clone() {
+            let path = PathBuf::from(&name);
+            let mut current = fs::read_to_string(&path).unwrap_or_default();
             current.push_str(text);
-            fs::write(path, current)
+            fs::write(&path, current)
                 .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
         } else {
             self.output.push_str(text);
+            if let Some(path) = self.dribble.clone() {
+                let mut current = fs::read_to_string(&path).unwrap_or_default();
+                current.push_str(text);
+                fs::write(&path, current)
+                    .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+            }
         }
         Ok(())
     }
@@ -564,6 +580,15 @@ impl Vm {
             "setwrite" => self.setwrite(args),
             "readchar" | "rc" => self.readchar(args),
             "readlist" | "rl" => self.readlist(args),
+            "readword" | "rw" => self.readword(args),
+            "openread" => self.openread(args),
+            "openwrite" => self.openwrite(args),
+            "openappend" => self.openappend(args),
+            "close" => self.close(args),
+            "reader" => self.reader(args),
+            "writer" => self.writer(args),
+            "dribble" => self.dribble_command(args),
+            "nodribble" => self.nodribble(args),
             "make" | "name" => self.make(args),
             "thing" => self.thing(args),
             "local" => self.local(args),
@@ -1185,13 +1210,32 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn park_current_read(&mut self) {
+        if self.current_read_managed {
+            if let Some(stream) = self.read_stream.take() {
+                let key = stream.path.to_string_lossy().to_string();
+                self.read_streams.insert(key, stream);
+            }
+        } else {
+            self.read_stream = None;
+        }
+        self.current_read_managed = false;
+    }
+
     fn setread(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setread", &args, 1)?;
         if args[0].is_empty_list() {
-            self.read_stream = None;
+            self.park_current_read();
         } else {
-            let path = PathBuf::from(source_text_input(&args[0], &self.interner));
-            self.read_stream = Some(InputStream::open(path)?);
+            let key = source_text_input(&args[0], &self.interner);
+            self.park_current_read();
+            if let Some(stream) = self.read_streams.remove(&key) {
+                self.read_stream = Some(stream);
+                self.current_read_managed = true;
+            } else {
+                self.read_stream = Some(InputStream::open(PathBuf::from(&key))?);
+                self.current_read_managed = false;
+            }
         }
         Ok(PrimitiveResult::NoValue)
     }
@@ -1199,13 +1243,112 @@ impl Vm {
     fn setwrite(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setwrite", &args, 1)?;
         if args[0].is_empty_list() {
-            self.write_stream = None;
+            self.current_write = None;
         } else {
-            let path = PathBuf::from(source_text_input(&args[0], &self.interner));
+            let key = source_text_input(&args[0], &self.interner);
+            if !self.write_streams.contains(&key) {
+                let path = PathBuf::from(&key);
+                fs::write(&path, "")
+                    .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+            }
+            self.current_write = Some(key);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn openread(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("openread", &args, 1)?;
+        let key = source_text_input(&args[0], &self.interner);
+        let stream = InputStream::open(PathBuf::from(&key))?;
+        self.read_streams.insert(key, stream);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn openwrite(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("openwrite", &args, 1)?;
+        let key = source_text_input(&args[0], &self.interner);
+        let path = PathBuf::from(&key);
+        fs::write(&path, "")
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        self.write_streams.insert(key);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn openappend(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("openappend", &args, 1)?;
+        let key = source_text_input(&args[0], &self.interner);
+        let path = PathBuf::from(&key);
+        if !path.exists() {
             fs::write(&path, "")
                 .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
-            self.write_stream = Some(path);
         }
+        self.write_streams.insert(key);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn close(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("close", &args, 1)?;
+        let key = source_text_input(&args[0], &self.interner);
+        let mut closed = false;
+
+        let active_read_matches = self
+            .read_stream
+            .as_ref()
+            .map(|stream| stream.path.to_string_lossy() == key)
+            .unwrap_or(false);
+        if active_read_matches {
+            self.read_stream = None;
+            self.current_read_managed = false;
+            closed = true;
+        } else if self.read_streams.remove(&key).is_some() {
+            closed = true;
+        }
+
+        if self.current_write.as_deref() == Some(key.as_str()) {
+            self.current_write = None;
+            closed = true;
+        }
+        if self.write_streams.remove(&key) {
+            closed = true;
+        }
+
+        if closed {
+            Ok(PrimitiveResult::NoValue)
+        } else {
+            Err(VmError::new(format!("CLOSE: {key} is not open")))
+        }
+    }
+
+    fn reader(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("reader", &args, 0)?;
+        let value = match &self.read_stream {
+            Some(stream) => Value::word(&mut self.interner, stream.path.to_string_lossy()),
+            None => Value::List(List::empty()),
+        };
+        Ok(PrimitiveResult::Value(value))
+    }
+
+    fn writer(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("writer", &args, 0)?;
+        let value = match self.current_write.clone() {
+            Some(name) => Value::word(&mut self.interner, name),
+            None => Value::List(List::empty()),
+        };
+        Ok(PrimitiveResult::Value(value))
+    }
+
+    fn dribble_command(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("dribble", &args, 1)?;
+        let path = PathBuf::from(source_text_input(&args[0], &self.interner));
+        fs::write(&path, "")
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        self.dribble = Some(path);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn nodribble(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("nodribble", &args, 0)?;
+        self.dribble = None;
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -1240,6 +1383,21 @@ impl Vm {
             &line,
             &mut self.interner,
         )?)))
+    }
+
+    fn readword(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("readword", &args, 0)?;
+        let stream = self
+            .read_stream
+            .as_mut()
+            .ok_or_else(|| VmError::new("READWORD is not connected to an input stream yet"))?;
+        let line = stream.read_line().ok_or_else(|| {
+            VmError::new(format!(
+                "READWORD reached end of input stream {}",
+                stream.path.display()
+            ))
+        })?;
+        Ok(PrimitiveResult::Value(Value::word(&mut self.interner, line)))
     }
 
     fn make(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2500,6 +2658,16 @@ fn primitive_names() -> &'static [&'static str] {
         "rc",
         "readlist",
         "rl",
+        "readword",
+        "rw",
+        "openread",
+        "openwrite",
+        "openappend",
+        "close",
+        "reader",
+        "writer",
+        "dribble",
+        "nodribble",
         "make",
         "name",
         "thing",
@@ -3319,6 +3487,153 @@ mod tests {
         assert_eq!(result.output, "done\n");
         assert_eq!(fs::read_to_string(&write_path).unwrap(), "hi[a b]\n42\n");
 
+        let _ = fs::remove_file(write_path);
+    }
+
+    #[test]
+    fn readword_reads_raw_line_as_single_word() {
+        let read_path = temp_test_path("readword-stream");
+        fs::write(&read_path, "hello there\nsecond line\n").unwrap();
+
+        let mut vm = Vm::new();
+        set_path_var(&mut vm, "readpath", &read_path);
+        let result = vm
+            .eval_source("setread :readpath print readword print readword")
+            .unwrap();
+        assert_eq!(result.output, "hello there\nsecond line\n");
+
+        let _ = fs::remove_file(read_path);
+    }
+
+    #[test]
+    fn openread_setread_switching_preserves_position_and_close_resets_reader() {
+        let path_a = temp_test_path("stream-a");
+        let path_b = temp_test_path("stream-b");
+        fs::write(&path_a, "aa\nbb\n").unwrap();
+        fs::write(&path_b, "cc\ndd\n").unwrap();
+
+        let mut vm = Vm::new();
+        set_path_var(&mut vm, "a", &path_a);
+        set_path_var(&mut vm, "b", &path_b);
+
+        let result = vm
+            .eval_source(
+                "openread :a openread :b \
+                 setread :a print rc \
+                 setread :b print rc \
+                 setread :a print rc \
+                 close :a print reader \
+                 close :b",
+            )
+            .unwrap();
+        assert_eq!(result.output, "a\nc\na\n[]\n");
+
+        let _ = fs::remove_file(path_a);
+        let _ = fs::remove_file(path_b);
+    }
+
+    #[test]
+    fn setread_without_openread_always_reopens_from_the_start() {
+        let read_path = temp_test_path("bare-setread-stream");
+        fs::write(&read_path, "hello\nsum 1 2\n").unwrap();
+
+        let mut vm = Vm::new();
+        set_path_var(&mut vm, "readpath", &read_path);
+        let result = vm
+            .eval_source("setread :readpath print rc print rc setread :readpath print rl print rl")
+            .unwrap();
+        assert_eq!(result.output, "h\ne\n[hello]\n[sum 1 2]\n");
+
+        let _ = fs::remove_file(read_path);
+    }
+
+    #[test]
+    fn close_errors_for_unopened_stream() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("close \"nope").unwrap_err();
+        assert!(error.message.contains("is not open"));
+    }
+
+    #[test]
+    fn openwrite_truncates_and_openappend_preserves_existing_content() {
+        let write_path = temp_test_path("openwrite-stream");
+        fs::write(&write_path, "existing\n").unwrap();
+
+        let mut vm = Vm::new();
+        set_path_var(&mut vm, "writepath", &write_path);
+
+        vm.eval_source("openappend :writepath setwrite :writepath type \"more setwrite []")
+            .unwrap();
+        assert_eq!(fs::read_to_string(&write_path).unwrap(), "existing\nmore");
+
+        vm.eval_source("openwrite :writepath setwrite :writepath type \"fresh setwrite []")
+            .unwrap();
+        assert_eq!(fs::read_to_string(&write_path).unwrap(), "fresh");
+
+        let _ = fs::remove_file(write_path);
+    }
+
+    #[test]
+    fn reader_and_writer_report_current_stream_names() {
+        let read_path = temp_test_path("reader-stream");
+        let write_path = temp_test_path("writer-stream");
+        fs::write(&read_path, "x\n").unwrap();
+
+        let mut vm = Vm::new();
+        set_path_var(&mut vm, "readpath", &read_path);
+        set_path_var(&mut vm, "writepath", &write_path);
+
+        let before = vm.eval_source("print reader print writer").unwrap();
+        assert_eq!(before.output, "[]\n[]\n");
+
+        vm.clear_output();
+        let during_read = vm.eval_source("setread :readpath print reader").unwrap();
+        assert_eq!(
+            during_read.output,
+            format!("{}\n", read_path.to_string_lossy())
+        );
+
+        vm.eval_source("setwrite :writepath print writer setwrite []")
+            .unwrap();
+        assert_eq!(
+            fs::read_to_string(&write_path).unwrap(),
+            format!("{}\n", write_path.to_string_lossy())
+        );
+
+        vm.clear_output();
+        let after = vm
+            .eval_source("setread [] print reader print writer")
+            .unwrap();
+        assert_eq!(after.output, "[]\n[]\n");
+
+        let _ = fs::remove_file(read_path);
+        let _ = fs::remove_file(write_path);
+    }
+
+    #[test]
+    fn dribble_records_screen_output_but_not_redirected_writes() {
+        let dribble_path = temp_test_path("dribble-log");
+        let write_path = temp_test_path("dribble-write-target");
+
+        let mut vm = Vm::new();
+        set_path_var(&mut vm, "dribblepath", &dribble_path);
+        set_path_var(&mut vm, "writepath", &write_path);
+
+        let result = vm
+            .eval_source(
+                "dribble :dribblepath print \"visible \
+                 setwrite :writepath print \"hidden setwrite [] \
+                 print \"back nodribble print \"after",
+            )
+            .unwrap();
+        assert_eq!(result.output, "visible\nback\nafter\n");
+        assert_eq!(
+            fs::read_to_string(&dribble_path).unwrap(),
+            "visible\nback\n"
+        );
+        assert_eq!(fs::read_to_string(&write_path).unwrap(), "hidden\n");
+
+        let _ = fs::remove_file(dribble_path);
         let _ = fs::remove_file(write_path);
     }
 
