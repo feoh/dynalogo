@@ -885,7 +885,9 @@ impl Vm {
     fn emptyp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("emptyp", &args, 1)?;
         let empty = match &args[0] {
-            Value::Word(symbol) => self.interner.spelling(*symbol).is_empty(),
+            Value::Word(symbol) | Value::BareWord(symbol) => {
+                self.interner.spelling(*symbol).is_empty()
+            }
             Value::Number(_) => false,
             Value::List(list) => list.is_empty(),
             Value::Array(array) => array.is_empty(),
@@ -899,7 +901,7 @@ impl Vm {
             Value::List(list) => list
                 .iter()
                 .any(|value| args[0].equalp(value, &self.interner)),
-            Value::Word(symbol) => self
+            Value::Word(symbol) | Value::BareWord(symbol) => self
                 .interner
                 .spelling(*symbol)
                 .contains(&args[0].show(&self.interner)),
@@ -915,7 +917,7 @@ impl Vm {
     fn first(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("first", &args, 1)?;
         let value = match &args[0] {
-            Value::Word(symbol) => {
+            Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
                 first_char_value(&mut self.interner, &text)?
             }
@@ -937,7 +939,7 @@ impl Vm {
     fn butfirst(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("butfirst", &args, 1)?;
         let value = match &args[0] {
-            Value::Word(symbol) => {
+            Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = drop_first_char(self.interner.spelling(*symbol));
                 Value::word(&mut self.interner, text)
             }
@@ -960,7 +962,7 @@ impl Vm {
     fn last(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("last", &args, 1)?;
         let value = match &args[0] {
-            Value::Word(symbol) => {
+            Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
                 last_char_value(&mut self.interner, &text)?
             }
@@ -986,7 +988,7 @@ impl Vm {
     fn butlast(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("butlast", &args, 1)?;
         let value = match &args[0] {
-            Value::Word(symbol) => {
+            Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = drop_last_char(self.interner.spelling(*symbol));
                 Value::word(&mut self.interner, text)
             }
@@ -1062,7 +1064,9 @@ impl Vm {
     fn count(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("count", &args, 1)?;
         let count = match &args[0] {
-            Value::Word(symbol) => self.interner.spelling(*symbol).chars().count(),
+            Value::Word(symbol) | Value::BareWord(symbol) => {
+                self.interner.spelling(*symbol).chars().count()
+            }
             Value::Number(number) => Value::Number(*number).show(&self.interner).chars().count(),
             Value::List(list) => list.len(),
             Value::Array(array) => array.len(),
@@ -1074,7 +1078,7 @@ impl Vm {
         expect_arity("item", &args, 2)?;
         let index = number_input(&args[0], &self.interner)? as usize;
         let value = match &args[1] {
-            Value::Word(symbol) => {
+            Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
                 nth_char_value(&mut self.interner, &text, index)?
             }
@@ -1473,7 +1477,7 @@ impl Vm {
         expect_arity("wordp", &args, 1)?;
         Ok(PrimitiveResult::Value(self.logo_bool(matches!(
             args[0],
-            Value::Word(_) | Value::Number(_)
+            Value::Word(_) | Value::BareWord(_) | Value::Number(_)
         ))))
     }
 
@@ -2238,7 +2242,7 @@ impl Vm {
     /// list).
     fn classify_template(&self, value: &Value) -> Result<Template, VmError> {
         match value {
-            Value::Word(symbol) => Ok(Template::Procedure(*symbol)),
+            Value::Word(symbol) | Value::BareWord(symbol) => Ok(Template::Procedure(*symbol)),
             Value::List(list) => {
                 if let Some(Value::List(formals)) = list.first() {
                     let params =
@@ -2755,7 +2759,9 @@ fn number_input(value: &Value, interner: &Interner) -> Result<f64, VmError> {
 
 fn variable_name_input(value: &Value, interner: &Interner) -> Result<String, VmError> {
     match value {
-        Value::Word(symbol) => Ok(interner.spelling(*symbol).to_string()),
+        Value::Word(symbol) | Value::BareWord(symbol) => {
+            Ok(interner.spelling(*symbol).to_string())
+        }
         _ => Err(VmError::new(format!(
             "{} is not a variable name",
             value.show(interner)
@@ -2765,7 +2771,9 @@ fn variable_name_input(value: &Value, interner: &Interner) -> Result<String, VmE
 
 fn property_key_input(value: &Value, interner: &Interner) -> Result<String, VmError> {
     match value {
-        Value::Word(symbol) => Ok(interner.canonical_spelling(*symbol).to_string()),
+        Value::Word(symbol) | Value::BareWord(symbol) => {
+            Ok(interner.canonical_spelling(*symbol).to_string())
+        }
         Value::Number(_) => Ok(value.show(interner)),
         Value::List(_) | Value::Array(_) => Err(VmError::new(format!(
             "{} is not a property-list key",
@@ -2776,30 +2784,32 @@ fn property_key_input(value: &Value, interner: &Interner) -> Result<String, VmEr
 
 fn source_text_input(value: &Value, interner: &Interner) -> String {
     match value {
-        Value::Word(symbol) => interner.spelling(*symbol).to_string(),
+        Value::Word(symbol) | Value::BareWord(symbol) => {
+            interner.spelling(*symbol).to_string()
+        }
         _ => value.show(interner),
     }
 }
 
 fn token_to_data_value(kind: TokenKind, interner: &mut Interner) -> Option<Value> {
     match kind {
-        TokenKind::Word(word) => Some(number_or_word_value(interner, word)),
+        TokenKind::Word(word) => Some(number_or_bare_word_value(interner, word)),
         TokenKind::QuotedWord(word) => Some(Value::word(interner, word)),
-        TokenKind::ColonWord(word) => Some(Value::word(interner, format!(":{word}"))),
-        TokenKind::Infix(op) => Some(Value::word(interner, op.to_string())),
-        TokenKind::LBracket => Some(Value::word(interner, "[")),
-        TokenKind::RBracket => Some(Value::word(interner, "]")),
-        TokenKind::LParen => Some(Value::word(interner, "(")),
-        TokenKind::RParen => Some(Value::word(interner, ")")),
-        TokenKind::LBrace => Some(Value::word(interner, "{")),
-        TokenKind::RBrace => Some(Value::word(interner, "}")),
+        TokenKind::ColonWord(word) => Some(Value::bare_word(interner, format!(":{word}"))),
+        TokenKind::Infix(op) => Some(Value::bare_word(interner, op.to_string())),
+        TokenKind::LBracket => Some(Value::bare_word(interner, "[")),
+        TokenKind::RBracket => Some(Value::bare_word(interner, "]")),
+        TokenKind::LParen => Some(Value::bare_word(interner, "(")),
+        TokenKind::RParen => Some(Value::bare_word(interner, ")")),
+        TokenKind::LBrace => Some(Value::bare_word(interner, "{")),
+        TokenKind::RBrace => Some(Value::bare_word(interner, "}")),
     }
 }
 
-fn number_or_word_value(interner: &mut Interner, word: String) -> Value {
+fn number_or_bare_word_value(interner: &mut Interner, word: String) -> Value {
     match word.parse::<f64>() {
         Ok(number) if number.is_finite() => Value::number(number),
-        _ => Value::word(interner, word),
+        _ => Value::bare_word(interner, word),
     }
 }
 
@@ -2882,7 +2892,9 @@ fn sentence_part(value: &Value, values: &mut Vec<Value>) {
 
 fn local_names(value: &Value, interner: &Interner) -> Result<Vec<String>, VmError> {
     match value {
-        Value::Word(symbol) => Ok(vec![interner.spelling(*symbol).to_string()]),
+        Value::Word(symbol) | Value::BareWord(symbol) => {
+            Ok(vec![interner.spelling(*symbol).to_string()])
+        }
         Value::List(list) => list
             .iter()
             .map(|value| variable_name_input(value, interner))
@@ -2901,11 +2913,15 @@ fn local_names(value: &Value, interner: &Interner) -> Result<Vec<String>, VmErro
 
 fn parameter_names_input(value: &Value, interner: &Interner) -> Result<Vec<String>, VmError> {
     match value {
-        Value::Word(symbol) => Ok(vec![normalize_parameter_name(interner.spelling(*symbol))?]),
+        Value::Word(symbol) | Value::BareWord(symbol) => {
+            Ok(vec![normalize_parameter_name(interner.spelling(*symbol))?])
+        }
         Value::List(list) => list
             .iter()
             .map(|value| match value {
-                Value::Word(symbol) => normalize_parameter_name(interner.spelling(*symbol)),
+                Value::Word(symbol) | Value::BareWord(symbol) => {
+                    normalize_parameter_name(interner.spelling(*symbol))
+                }
                 _ => Err(VmError::new(format!(
                     "{} is not a procedure input name",
                     value.show(interner)
@@ -2916,7 +2932,9 @@ fn parameter_names_input(value: &Value, interner: &Interner) -> Result<Vec<Strin
             .to_list()
             .iter()
             .map(|value| match value {
-                Value::Word(symbol) => normalize_parameter_name(interner.spelling(*symbol)),
+                Value::Word(symbol) | Value::BareWord(symbol) => {
+                    normalize_parameter_name(interner.spelling(*symbol))
+                }
                 _ => Err(VmError::new(format!(
                     "{} is not a procedure input name",
                     value.show(interner)
@@ -2966,7 +2984,9 @@ fn define_body_input(
 
 fn logo_truth(value: &Value, interner: &Interner) -> bool {
     match value {
-        Value::Word(symbol) => !interner.canonical_spelling(*symbol).eq("false"),
+        Value::Word(symbol) | Value::BareWord(symbol) => {
+            !interner.canonical_spelling(*symbol).eq("false")
+        }
         Value::Number(number) => number.get() != 0.0,
         Value::List(list) => !list.is_empty(),
         Value::Array(array) => !array.is_empty(),
@@ -2976,7 +2996,8 @@ fn logo_truth(value: &Value, interner: &Interner) -> bool {
 fn is_error_catch_tag(value: &Value, interner: &Interner) -> bool {
     matches!(
         value,
-        Value::Word(symbol) if interner.canonical_spelling(*symbol).eq("error")
+        Value::Word(symbol) | Value::BareWord(symbol)
+            if interner.canonical_spelling(*symbol).eq("error")
     )
 }
 
@@ -3003,6 +3024,7 @@ fn procedure_definition_text(procedure: &Procedure, interner: &Interner) -> Stri
 fn value_source_literal(value: &Value, interner: &Interner) -> String {
     match value {
         Value::Word(symbol) => format!("\"{}", interner.spelling(*symbol)),
+        Value::BareWord(symbol) => interner.spelling(*symbol).to_string(),
         _ => value.show(interner),
     }
 }
@@ -3062,7 +3084,10 @@ fn procedure_text(
 }
 
 fn procedure_header_line(procedure: &Procedure, interner: &mut Interner) -> List {
-    let mut values = vec![Value::word(interner, "to"), Value::Word(procedure.name())];
+    let mut values = vec![
+        Value::bare_word(interner, "to"),
+        Value::BareWord(procedure.name()),
+    ];
     values.extend(
         procedure
             .params()
@@ -3311,26 +3336,57 @@ fn drop_last_char(text: &str) -> String {
 }
 
 fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> String {
-    list.iter()
-        .map(|value| match value {
-            Value::List(inner) => format!("[{}]", list_to_source(inner, interner, arities)),
-            Value::Word(symbol) => {
-                let spelling = interner.spelling(*symbol);
-                if let Some(binding) = template_binding_name(spelling) {
-                    format!(":{binding}")
-                } else if spelling.starts_with(':')
-                    || arities.get(spelling).is_some()
-                    || is_operator_word(spelling)
-                {
-                    spelling.to_string()
-                } else {
-                    format!("\"{spelling}")
-                }
+    let values = list.iter().collect::<Vec<_>>();
+    let mut rendered = Vec::new();
+    let mut index = 0;
+    while index < values.len() {
+        let (fragment, consumed) = value_expr_to_source(&values[index..], interner, arities);
+        rendered.push(fragment);
+        index += consumed.max(1);
+    }
+    rendered.join(" ")
+}
+
+fn value_expr_to_source(
+    values: &[&Value],
+    interner: &Interner,
+    arities: &ArityTable,
+) -> (String, usize) {
+    let Some(first) = values.first() else {
+        return (String::new(), 0);
+    };
+
+    match first {
+        Value::List(inner) => (format!("[{}]", list_to_source(inner, interner, arities)), 1),
+        Value::Word(symbol) => (format!("\"{}", interner.spelling(*symbol)), 1),
+        Value::BareWord(symbol) => {
+            let spelling = interner.spelling(*symbol);
+            if let Some(binding) = template_binding_name(spelling) {
+                return (format!(":{binding}"), 1);
             }
-            _ => value.show(interner),
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+            if matches!(spelling, "(" | ")" | "[" | "]" | "{" | "}")
+                || spelling.starts_with(':')
+                || is_operator_word(spelling)
+            {
+                return (spelling.to_string(), 1);
+            }
+            if let Some(Arity::Exact(argc)) = arities.get(spelling) {
+                let mut consumed = 1;
+                let mut parts = vec![spelling.to_string()];
+                for _ in 0..argc {
+                    if consumed >= values.len() {
+                        break;
+                    }
+                    let (arg, arg_consumed) = value_expr_to_source(&values[consumed..], interner, arities);
+                    parts.push(arg);
+                    consumed += arg_consumed.max(1);
+                }
+                return (parts.join(" "), consumed);
+            }
+            (format!("\"{spelling}"), 1)
+        }
+        Value::Number(_) | Value::Array(_) => (first.show(interner), 1),
+    }
 }
 
 fn before_text(a: &str, b: &str) -> bool {
@@ -3705,6 +3761,12 @@ mod tests {
              print transfer [equalp ?in \"halt] [lput ?in ?out] [a b halt c]")
         .unwrap();
         assert_eq!(result.output, "[1 2 3 4 5]\n8\n[a b c]\n[a b]\n");
+    }
+
+    #[test]
+    fn instruction_list_reserialization_preserves_literal_words_that_shadow_primitives() {
+        let (result, _) = run("make \"?in \"go print runresult [equalp ?in \"stop]").unwrap();
+        assert_eq!(result.output, "false\n");
     }
 
     #[test]

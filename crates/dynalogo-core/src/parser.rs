@@ -478,15 +478,15 @@ impl<'a> Parser<'a> {
             None => return Err(self.error_at_end("expected list item")),
         };
         match token.kind {
-            TokenKind::Word(word) => Ok(number_or_word(self.interner, word)),
+            TokenKind::Word(word) => Ok(number_or_bare_word(self.interner, word)),
             TokenKind::QuotedWord(word) => Ok(Value::word(self.interner, word)),
-            TokenKind::ColonWord(word) => Ok(Value::word(self.interner, format!(":{word}"))),
-            TokenKind::Infix(op) => Ok(Value::word(self.interner, op.to_string())),
+            TokenKind::ColonWord(word) => Ok(Value::bare_word(self.interner, format!(":{word}"))),
+            TokenKind::Infix(op) => Ok(Value::bare_word(self.interner, op.to_string())),
             TokenKind::LBracket => self.list_literal(token.line, token.col),
-            TokenKind::LParen => Ok(Value::word(self.interner, "(")),
-            TokenKind::RParen => Ok(Value::word(self.interner, ")")),
-            TokenKind::LBrace => Ok(Value::word(self.interner, "{")),
-            TokenKind::RBrace => Ok(Value::word(self.interner, "}")),
+            TokenKind::LParen => Ok(Value::bare_word(self.interner, "(")),
+            TokenKind::RParen => Ok(Value::bare_word(self.interner, ")")),
+            TokenKind::LBrace => Ok(Value::bare_word(self.interner, "{")),
+            TokenKind::RBrace => Ok(Value::bare_word(self.interner, "}")),
             TokenKind::RBracket => Err(self.error_at(&token, "unexpected `]`")),
         }
     }
@@ -553,10 +553,10 @@ impl<'a> Parser<'a> {
     }
 }
 
-fn number_or_word(interner: &mut Interner, word: String) -> Value {
+fn number_or_bare_word(interner: &mut Interner, word: String) -> Value {
     match parse_logo_number(&word) {
         Some(number) => Value::number(number),
-        None => Value::word(interner, word),
+        None => Value::bare_word(interner, word),
     }
 }
 
@@ -674,10 +674,10 @@ mod tests {
         };
         assert_eq!(sym_name(&interner, *callee), "make");
         assert_eq!(args.len(), 2);
-        let Expr::Literal(Value::Word(name)) = args[0] else {
+        let Expr::Literal(value) = &args[0] else {
             panic!("expected quoted word");
         };
-        assert_eq!(sym_name(&interner, name), "x");
+        assert_eq!(value.show(&interner), "x");
         let Expr::Thing(thing) = args[1] else {
             panic!("expected :y");
         };
