@@ -5,7 +5,7 @@
 //! stack, primitive dispatch, bytecode stack execution, and `OUTPUT`/`STOP`
 //! control signals.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::f64::consts::PI;
 use std::fmt;
 use std::thread;
@@ -190,6 +190,7 @@ pub struct Vm {
     arities: ArityTable,
     procedures: HashMap<String, Procedure>,
     property_lists: HashMap<String, HashMap<String, Value>>,
+    buried_names: HashSet<String>,
     turtles: TurtleStore,
     demons: DemonScheduler,
     collision_config: CollisionConfig,
@@ -236,6 +237,7 @@ impl Default for Vm {
             arities: ArityTable::default(),
             procedures: HashMap::new(),
             property_lists: HashMap::new(),
+            buried_names: HashSet::new(),
             turtles: TurtleStore::new(),
             demons: DemonScheduler::new(),
             collision_config: CollisionConfig::default(),
@@ -564,12 +566,17 @@ impl Vm {
             "pons" => self.pons(args),
             "pops" => self.pops(args),
             "pots" => self.pots(args),
+            "popls" => self.popls(args),
             ".primitives" => self.primitives_command(args),
             "erase" | "er" => self.erase(args),
             "ern" => self.ern(args),
             "erns" => self.erns(args),
             "erps" => self.erps(args),
+            "erpl" => self.erpl(args),
             "erall" => self.erall(args),
+            "bury" => self.bury(args),
+            "unbury" => self.unbury(args),
+            "buriedp" => self.buriedp(args),
             "pprop" => self.pprop(args),
             "gprop" => self.gprop(args),
             "remprop" => self.remprop(args),
@@ -1283,6 +1290,7 @@ impl Vm {
             self.write_procedure_listing(&procedure, true, true)?;
         }
         self.write_variable_listing();
+        self.write_property_list_listing();
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -1308,6 +1316,12 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn popls(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("popls", &args, 0)?;
+        self.write_property_list_listing();
+        Ok(PrimitiveResult::NoValue)
+    }
+
     fn primitives_command(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity(".primitives", &args, 0)?;
         self.output.push_str(&primitive_names().join(" "));
@@ -1324,6 +1338,7 @@ impl Vm {
             }
             self.procedures.remove(&key);
             self.arities.remove(&key);
+            self.buried_names.remove(&key);
         }
         Ok(PrimitiveResult::NoValue)
     }
@@ -1331,7 +1346,9 @@ impl Vm {
     fn ern(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("ern", &args, 1)?;
         for name in local_names(&args[0], &self.interner)? {
-            self.env.globals.remove(&name.to_ascii_lowercase());
+            let key = name.to_ascii_lowercase();
+            self.env.globals.remove(&key);
+            self.buried_names.remove(&key);
         }
         Ok(PrimitiveResult::NoValue)
     }
@@ -1339,6 +1356,7 @@ impl Vm {
     fn erns(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("erns", &args, 0)?;
         self.env.globals.clear();
+        self.buried_names.retain(|name| !self.procedures.contains_key(name) && !self.property_lists.contains_key(name));
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -1353,6 +1371,17 @@ impl Vm {
         for name in removable {
             self.procedures.remove(&name);
             self.arities.remove(&name);
+            self.buried_names.remove(&name);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn erpl(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("erpl", &args, 1)?;
+        for name in local_names(&args[0], &self.interner)? {
+            let key = name.to_ascii_lowercase();
+            self.property_lists.remove(&key);
+            self.buried_names.remove(&key);
         }
         Ok(PrimitiveResult::NoValue)
     }
@@ -1362,7 +1391,32 @@ impl Vm {
         self.erns(vec![])?;
         self.erps(vec![])?;
         self.property_lists.clear();
+        self.buried_names.clear();
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn bury(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("bury", &args, 1)?;
+        for name in local_names(&args[0], &self.interner)? {
+            self.buried_names.insert(name.to_ascii_lowercase());
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn unbury(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("unbury", &args, 1)?;
+        for name in local_names(&args[0], &self.interner)? {
+            self.buried_names.remove(&name.to_ascii_lowercase());
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn buriedp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("buriedp", &args, 1)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(self.buried_names.contains(&name.to_ascii_lowercase())),
+        ))
     }
 
     fn workspace_procedure(&self, value: &Value) -> Result<&Procedure, VmError> {
@@ -1376,7 +1430,9 @@ impl Vm {
         let mut procedures = self
             .procedures
             .iter()
-            .filter(|(name, _)| !is_protected_workspace_procedure(name))
+            .filter(|(name, _)| {
+                !is_protected_workspace_procedure(name) && !self.buried_names.contains(*name)
+            })
             .map(|(_, procedure)| procedure.clone())
             .collect::<Vec<_>>();
         procedures.sort_by_key(|procedure| {
@@ -1388,7 +1444,13 @@ impl Vm {
     }
 
     fn write_variable_listing(&mut self) {
-        let mut names = self.env.globals.keys().cloned().collect::<Vec<_>>();
+        let mut names = self
+            .env
+            .globals
+            .keys()
+            .filter(|name| !self.buried_names.contains(*name))
+            .cloned()
+            .collect::<Vec<_>>();
         names.sort();
         for name in names {
             if let Some(value) = self.env.globals.get(&name) {
@@ -1397,6 +1459,37 @@ impl Vm {
                 self.output.push_str(&value.show(&self.interner));
                 self.output.push('\n');
             }
+        }
+    }
+
+    fn write_property_list_listing(&mut self) {
+        let mut names = self
+            .property_lists
+            .keys()
+            .filter(|name| !self.buried_names.contains(*name))
+            .cloned()
+            .collect::<Vec<_>>();
+        names.sort();
+        for name in names {
+            self.output.push_str(&name);
+            self.output.push(' ');
+            let value = self
+                .property_lists
+                .get(&name)
+                .cloned()
+                .map(|plist| {
+                    let mut entries: Vec<_> = plist.into_iter().collect();
+                    entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+                    let mut values = Vec::new();
+                    for (entry_name, entry_value) in entries {
+                        values.push(Value::word(&mut self.interner, entry_name));
+                        values.push(entry_value);
+                    }
+                    Value::List(List::from_values(values))
+                })
+                .unwrap_or_else(|| Value::List(List::empty()));
+            self.output.push_str(&value.show(&self.interner));
+            self.output.push('\n');
         }
     }
 
@@ -2590,8 +2683,8 @@ fn primitive_names() -> &'static [&'static str] {
         "decimalp", "print", "pr", "show", "type", "readlist", "rl", "make",
         "name", "thing", "local", "namep", "definedp", "defined?",
         "primitivep", "primitive?", "text", "fulltext", "copydef", "po",
-        "poall", "pons", "pops", "pots", ".primitives", "erase", "er", "ern",
-        "erns", "erps", "erall", "pprop", "gprop", "remprop", "plist", "array",
+        "poall", "pons", "pops", "pots", "popls", ".primitives", "erase", "er", "ern",
+        "erns", "erps", "erpl", "erall", "bury", "unbury", "buriedp", "pprop", "gprop", "remprop", "plist", "array",
         "setitem", "listtoarray", "arraytolist", "repeat", "if", "ifelse", "run",
         "runresult", "parse", "runparse", "apply", "foreach", "map", "filter",
         "reduce", "repcount", "test", "iftrue", "ift", "iffalse", "iff", "wait",
@@ -3176,19 +3269,51 @@ mod tests {
              output sum :y 1
              end
              make \"foo 7
-             make \"bar [a b]")
+             make \"bar [a b]
+             pprop \"animal \"legs 4")
             .unwrap();
         let result = vm
-            .eval_source("pots pops pons poall po [alpha] .primitives")
+            .eval_source("pots pops pons popls poall po [alpha] .primitives")
             .unwrap();
         assert!(result.output.contains("[to alpha :x]"));
         assert!(result.output.contains("[to beta :y]"));
         assert!(result.output.contains("[print :x]"));
         assert!(result.output.contains("[output sum :y 1]"));
+        assert!(result.output.contains("animal [legs 4]"));
         assert!(result.output.contains("bar [a b]"));
         assert!(result.output.contains("foo 7"));
         assert!(result.output.contains("sum + difference"));
         assert!(!result.output.contains("__whileloop"));
+    }
+
+    #[test]
+    fn bury_and_unbury_hide_workspace_entries_from_listings() {
+        let mut vm = Vm::new();
+        vm.eval_source("to alpha :x
+             output :x
+             end
+             make \"foo 7
+             pprop \"animal \"legs 4
+             bury [alpha foo animal]")
+            .unwrap();
+
+        let result = vm.eval_source("pops pons popls poall").unwrap();
+        assert!(!result.output.contains("alpha"));
+        assert!(!result.output.contains("foo 7"));
+        assert!(!result.output.contains("animal [legs 4]"));
+
+        vm.clear_output();
+        let result = vm
+            .eval_source("print buriedp \"alpha print buriedp \"foo print buriedp \"animal")
+            .unwrap();
+        assert_eq!(result.output, "true\ntrue\ntrue\n");
+
+        vm.clear_output();
+        vm.eval_source("unbury [alpha foo animal]").unwrap();
+        let result = vm.eval_source("pops pons popls").unwrap();
+        assert!(result.output.contains("alpha"));
+        assert!(result.output.contains("foo 7"));
+        assert!(result.output.contains("animal [legs 4]"));
     }
 
     #[test]
@@ -3206,6 +3331,12 @@ mod tests {
         vm.eval_source("ern [foo] erase [alpha]").unwrap();
         let result = vm.eval_source("print namep \"foo print definedp \"alpha print definedp \"beta").unwrap();
         assert_eq!(result.output, "false\nfalse\ntrue\n");
+
+        vm.clear_output();
+        vm.eval_source("pprop \"animal \"legs 4 erpl [animal]").unwrap();
+        vm.clear_output();
+        let result = vm.eval_source("print plist \"animal").unwrap();
+        assert_eq!(result.output, "[]\n");
 
         vm.clear_output();
         vm.eval_source("erns erps").unwrap();

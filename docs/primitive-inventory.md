@@ -49,8 +49,9 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `DEFINEDP`/`DEFINED?`
 - `PRIMITIVEP`/`PRIMITIVE?`
 - `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`
-- `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `.PRIMITIVES`
-- `ERASE`/`ER`, `ERN`, `ERNS`, `ERPS`, `ERALL`
+- `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `POPLS`, `.PRIMITIVES`
+- `ERASE`/`ER`, `ERN`, `ERNS`, `ERPS`, `ERPL`, `ERALL`
+- `BURY`, `UNBURY`, `BURIEDP`
 
 ## Arithmetic, comparison, and logic
 
@@ -80,7 +81,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Notes
 
 Not yet implemented from nearby roadmap/workspace tasks include remaining
-workspace-management pieces such as bury/unbury behavior, file I/O (`LOAD`,
+workspace-management pieces such as `NODES`/`RECYCLE`, file I/O (`LOAD`,
 `SAVE`, streams), macros, richer graphics primitives like `LABEL`/`FILL`, and
 the dynaturtle-specific runtime commands such as `TELL`, `ASK`, velocity, and
 collision/event APIs. See also [primitive-gaps.md](primitive-gaps.md) for the

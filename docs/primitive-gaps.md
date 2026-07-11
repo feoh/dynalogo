@@ -12,13 +12,13 @@ Implemented today:
 - `TEXT`
 - `FULLTEXT`
 - `COPYDEF`
-- `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `.PRIMITIVES`
-- `ERASE` / `ER`, `ERN`, `ERNS`, `ERPS`, `ERALL`
+- `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `POPLS`, `.PRIMITIVES`
+- `ERASE` / `ER`, `ERN`, `ERNS`, `ERPS`, `ERPL`, `ERALL`
+- `BURY`, `UNBURY`, `BURIEDP`
 
 Still missing from the nearby workspace roadmap bucket:
 
 - `NODES`, `RECYCLE`
-- `BURY`, `UNBURY`, `BURIEDP`
 - editor-facing commands such as `EDIT`/`ED`, `EDNS`, `EDSH`
 
 ## File I/O is still absent
