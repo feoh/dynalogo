@@ -100,6 +100,7 @@ The Atari manual organizes features into these areas:
 **Implemented now**
 
 - `ABS` (now primitive-backed)
+- `BEFORE`, `INSERT`, `SORT`, `SUPERSORT`
 - `COPYDEF`
 - `DEFINE`
 - `FOREVER`
@@ -110,7 +111,6 @@ The Atari manual organizes features into these areas:
 **Still missing from the appendix examples/tools**
 
 - `DOT`
-- `SORT`, `SUPERSORT`, `INSERT`, `BEFORE`
 - `READLINE` as used by Atari's file-backed TEXT example
 
 ### 3. Variables

@@ -483,6 +483,10 @@ impl Vm {
             "count" => self.count(args),
             "item" => self.item(args),
             "which" => self.which(args),
+            "before" => self.before(args),
+            "insert" => self.insert(args),
+            "sort" => self.sort(args),
+            "supersort" => self.supersort(args),
             "print" | "pr" => self.print(args),
             "show" => self.show(args),
             "type" => self.r#type(args),
@@ -978,6 +982,49 @@ impl Vm {
             .map(|index| index as f64 + 1.0)
             .unwrap_or(0.0);
         Ok(PrimitiveResult::Value(Value::number(position)))
+    }
+
+    fn before(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("before", &args, 2)?;
+        let a = source_text_input(&args[0], &self.interner);
+        let b = source_text_input(&args[1], &self.interner);
+        Ok(PrimitiveResult::Value(self.logo_bool(before_text(&a, &b))))
+    }
+
+    fn insert(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("insert", &args, 2)?;
+        let tree = match &args[1] {
+            Value::List(list) => list.clone(),
+            _ => {
+                return Err(VmError::new(format!(
+                    "{} is not a sort tree",
+                    args[1].show(&self.interner)
+                )))
+            }
+        };
+        Ok(PrimitiveResult::Value(Value::List(insert_sorted_tree(
+            args[0].clone(),
+            &tree,
+            &self.interner,
+        )?)))
+    }
+
+    fn sort(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("sort", &args, 2)?;
+        let values = list_values(list_input(&args[0], "SORT")?);
+        let mut tree = list_input(&args[1], "SORT")?.clone();
+        for value in values {
+            tree = insert_sorted_tree(value, &tree, &self.interner)?;
+        }
+        Ok(PrimitiveResult::Value(Value::List(tree)))
+    }
+
+    fn supersort(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("supersort", &args, 1)?;
+        let tree = list_input(&args[0], "SUPERSORT")?.clone();
+        Ok(PrimitiveResult::Value(Value::List(flatten_sorted_tree(
+            &tree,
+        )?)))
     }
 
     fn print(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2310,6 +2357,92 @@ fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> Str
         .join(" ")
 }
 
+fn before_text(a: &str, b: &str) -> bool {
+    if a.is_empty() || b.is_empty() {
+        return a.is_empty();
+    }
+
+    let mut left = a.chars();
+    let mut right = b.chars();
+    loop {
+        match (left.next(), right.next()) {
+            (None, None) => return false,
+            (None, Some(_)) => return true,
+            (Some(_), None) => return false,
+            (Some(l), Some(r)) if l != r => return l < r,
+            (Some(_), Some(_)) => {}
+        }
+    }
+}
+
+fn insert_sorted_tree(value: Value, tree: &List, interner: &Interner) -> Result<List, VmError> {
+    if tree.is_empty() {
+        return Ok(List::from_values([
+            Value::List(List::empty()),
+            value,
+            Value::List(List::empty()),
+        ]));
+    }
+    if tree.len() != 3 {
+        return Err(VmError::new("sort tree must have three elements"));
+    }
+
+    let left = match tree.item(1) {
+        Some(Value::List(list)) => list.clone(),
+        _ => return Err(VmError::new("sort tree left branch must be a list")),
+    };
+    let current = tree
+        .item(2)
+        .cloned()
+        .ok_or_else(|| VmError::new("sort tree is missing a value"))?;
+    let right = match tree.item(3) {
+        Some(Value::List(list)) => list.clone(),
+        _ => return Err(VmError::new("sort tree right branch must be a list")),
+    };
+
+    if before_text(&value.show(interner), &current.show(interner)) {
+        Ok(List::from_values([
+            Value::List(insert_sorted_tree(value, &left, interner)?),
+            current,
+            Value::List(right),
+        ]))
+    } else {
+        Ok(List::from_values([
+            Value::List(left),
+            current,
+            Value::List(insert_sorted_tree(value, &right, interner)?),
+        ]))
+    }
+}
+
+fn flatten_sorted_tree(tree: &List) -> Result<List, VmError> {
+    if tree.is_empty() {
+        return Ok(List::empty());
+    }
+    if tree.len() != 3 {
+        return Err(VmError::new("sort tree must have three elements"));
+    }
+    let left = match tree.item(1) {
+        Some(Value::List(list)) => flatten_sorted_tree(list)?,
+        _ => return Err(VmError::new("sort tree left branch must be a list")),
+    };
+    let current = tree
+        .item(2)
+        .cloned()
+        .ok_or_else(|| VmError::new("sort tree is missing a value"))?;
+    let right = match tree.item(3) {
+        Some(Value::List(list)) => flatten_sorted_tree(list)?,
+        _ => return Err(VmError::new("sort tree right branch must be a list")),
+    };
+
+    Ok(List::from_values(
+        left.iter()
+            .cloned()
+            .chain(std::iter::once(current))
+            .chain(right.iter().cloned()),
+    ))
+}
+
 fn is_operator_word(text: &str) -> bool {
     matches!(
         text,
@@ -2449,12 +2582,14 @@ mod tests {
              print item 2 [a b c] \
              print which \"b [a b c] \
              print which \"z [a b c] \
+             print before \"bar \"baz \
+             print supersort sort [a d e f t c z] [] \
              print emptyp [] \
              print emptyp \" \
              print memberp \"b [a b c] \
              print memberp \"x [a b c]")
         .unwrap();
-        assert_eq!(result.output, "3\nb\n2\n0\ntrue\ntrue\ntrue\nfalse\n");
+        assert_eq!(result.output, "3\nb\n2\n0\ntrue\n[a c d e f t z]\ntrue\ntrue\ntrue\nfalse\n");
     }
 
     #[test]
