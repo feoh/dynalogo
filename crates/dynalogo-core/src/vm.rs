@@ -500,6 +500,7 @@ impl Vm {
             "text" => self.text(args),
             "fulltext" => self.fulltext(args),
             "copydef" => self.copydef(args),
+            "define" => self.define_from_data(args),
             "po" => self.po(args),
             "poall" => self.poall(args),
             "pons" => self.pons(args),
@@ -1104,6 +1105,15 @@ impl Vm {
             .collect::<Vec<_>>();
         let body_source = procedure.body_source().to_string();
         self.define_procedure(new_name, params, &body_source)?;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn define_from_data(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("define", &args, 3)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        let params = parameter_names_input(&args[1], &self.interner)?;
+        let body_lines = define_body_input(&args[2], &self.interner, &self.arities)?;
+        self.define_procedure(name, params, &body_lines.join("\n"))?;
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -2008,6 +2018,71 @@ fn local_names(value: &Value, interner: &Interner) -> Result<Vec<String>, VmErro
     }
 }
 
+fn parameter_names_input(value: &Value, interner: &Interner) -> Result<Vec<String>, VmError> {
+    match value {
+        Value::Word(symbol) => Ok(vec![normalize_parameter_name(interner.spelling(*symbol))?]),
+        Value::List(list) => list
+            .iter()
+            .map(|value| match value {
+                Value::Word(symbol) => normalize_parameter_name(interner.spelling(*symbol)),
+                _ => Err(VmError::new(format!(
+                    "{} is not a procedure input name",
+                    value.show(interner)
+                ))),
+            })
+            .collect(),
+        Value::Array(array) => array
+            .to_list()
+            .iter()
+            .map(|value| match value {
+                Value::Word(symbol) => normalize_parameter_name(interner.spelling(*symbol)),
+                _ => Err(VmError::new(format!(
+                    "{} is not a procedure input name",
+                    value.show(interner)
+                ))),
+            })
+            .collect(),
+        _ => Err(VmError::new(format!(
+            "{} is not a procedure input list",
+            value.show(interner)
+        ))),
+    }
+}
+
+fn normalize_parameter_name(name: &str) -> Result<String, VmError> {
+    let trimmed = name.trim_start_matches(':');
+    if trimmed.is_empty() {
+        Err(VmError::new("procedure input names cannot be empty"))
+    } else {
+        Ok(trimmed.to_string())
+    }
+}
+
+fn define_body_input(
+    value: &Value,
+    interner: &Interner,
+    arities: &ArityTable,
+) -> Result<Vec<String>, VmError> {
+    let list = match value {
+        Value::List(list) => list,
+        _ => {
+            return Err(VmError::new(format!(
+                "{} is not a procedure body line list",
+                value.show(interner)
+            )))
+        }
+    };
+    list.iter()
+        .map(|line| match line {
+            Value::List(line_list) => Ok(list_to_source(line_list, interner, arities)),
+            _ => Err(VmError::new(format!(
+                "{} is not a procedure body line",
+                line.show(interner)
+            ))),
+        })
+        .collect()
+}
+
 fn logo_truth(value: &Value, interner: &Interner) -> bool {
     match value {
         Value::Word(symbol) => !interner.canonical_spelling(*symbol).eq("false"),
@@ -2549,6 +2624,15 @@ mod tests {
         let result = vm.eval_source("print quad 6 print text \"quad").unwrap();
         assert_eq!(result.output, "36\n[[to quad :x] [output product :x :x]]\n");
         assert!(vm.procedures().contains_key("quad"));
+    }
+
+    #[test]
+    fn define_builds_a_workspace_procedure_from_logo_data() {
+        let mut vm = Vm::new();
+        vm.eval_source("define \"square [size] [[output product :size :size]]")
+            .unwrap();
+        let result = vm.eval_source("print square 5 print text \"square").unwrap();
+        assert_eq!(result.output, "25\n[[to square :size] [output product :size :size]]\n");
     }
 
     #[test]

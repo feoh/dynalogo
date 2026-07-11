@@ -134,14 +134,13 @@ The Atari manual organizes features into these areas:
 
 - `TO ... END`
 - recursion and dynamic scope
-- `TEXT`, `FULLTEXT`, `COPYDEF`
+- `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`
+- `POTS`
 
 **Missing from Atari vocabulary**
 
 - `EDIT`/`ED`
 - `EDNS`, `EDSH`
-- `POTS`
-- `DEFINE`
 - Atari editor/screen behavior itself
 
 ### 6. Flow of control and conditionals
@@ -225,7 +224,7 @@ DynaLOGO:
 1. **Turtle addressing and event primitives**
    - `ASK`, `TELL`, `EACH`, `WHO`, `OVER`, `TOUCHING`, `WHEN`
 2. **Remaining workspace management work**
-   - `DEFINE`, `NODES`, `RECYCLE`, bury/unbury behavior, and editor integration
+   - `NODES`, `RECYCLE`, bury/unbury behavior, and editor integration
 3. **File and device I/O**
    - `LOAD`, `SAVE`, `SETREAD`, `SETWRITE`, `RC`, `RL`
 4. **Remaining Atari type and math helpers**

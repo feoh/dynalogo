@@ -119,6 +119,7 @@ impl ArityTable {
             ("TEXT", 1),
             ("FULLTEXT", 1),
             ("COPYDEF", 2),
+            ("DEFINE", 3),
             ("PO", 1),
             ("POALL", 0),
             ("PONS", 0),

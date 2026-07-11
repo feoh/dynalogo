@@ -17,7 +17,6 @@ Implemented today:
 
 Still missing from the nearby workspace roadmap bucket:
 
-- `DEFINE`
 - `NODES`, `RECYCLE`
 - `BURY`, `UNBURY`, `BURIEDP`
 - editor-facing commands such as `EDIT`/`ED`, `EDNS`, `EDSH`
