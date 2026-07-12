@@ -3,14 +3,14 @@ resolver = "2"
 members = ["crates/dynalogo-core", "crates/dynalogo"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/feoh/dynalogo"
 authors = ["Christopher Patti <feoh@feoh.org>"]
 
 [workspace.dependencies]
-dynalogo-core = { path = "crates/dynalogo-core", version = "0.1.0" }
+dynalogo-core = { path = "crates/dynalogo-core", version = "0.1.1" }
 
 [profile.release]
 lto = "thin"

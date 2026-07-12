@@ -11,6 +11,13 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 
 No changes yet.
 
+## [0.1.1] - 2026-07-12
+
+### Fixed
+
+- Prevented combined graphics/text prompt history lines from overlapping the
+  live input prompt in the native window.
+
 ## [0.1.0] - 2026-07-12
 
 Initial public release of the workspace. This release packages the current
@@ -37,5 +44,6 @@ Logo interpreter, native frontends, browser demo, and compatibility surface.
 - Browser/WASM demo published via GitHub Pages.
 - CI workflow running `cargo fmt`, `cargo clippy`, and `cargo test`.
 
-[Unreleased]: https://github.com/feoh/dynalogo/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/feoh/dynalogo/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/feoh/dynalogo/releases/tag/v0.1.1
 [0.1.0]: https://github.com/feoh/dynalogo/releases/tag/v0.1.0
