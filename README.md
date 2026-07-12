@@ -115,12 +115,13 @@ Implemented today:
 - Arithmetic, infix operators, comparisons, and boolean logic
 - Variables and property lists: `MAKE THING LOCAL PPROP GPROP PLIST REMPROP`
 - Arrays and templates: `ARRAY SETITEM LISTTOARRAY ARRAYTOLIST MAP FILTER`
-  `REDUCE FOREACH APPLY`
+  `REDUCE FOREACH APPLY CASCADE CASCADE.2 TRANSFER`
+- Macros: `.MACRO .DEFMACRO MACROP MACRO? MACROEXPAND`
 - Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD`
   `SETPC SETPENSIZE HT ST POS HEADING XCOR YCOR`
 
-Still in progress: file/workspace primitives, macro support, full UCBLogo error
-parity, dynaturtle simulation commands, and browser/WASM support.
+Still in progress: remaining workspace/file parity polish, full UCBLogo error
+parity, additional dynaturtle compatibility surface, and browser/WASM polish.
 
 ## Example programs
 

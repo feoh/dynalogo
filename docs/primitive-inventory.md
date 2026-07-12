@@ -57,7 +57,8 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `NAMEP`
 - `DEFINEDP`/`DEFINED?`
 - `PRIMITIVEP`/`PRIMITIVE?`
-- `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`
+- `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`, `.DEFMACRO`
+- `MACROP`/`MACRO?`, `MACROEXPAND`
 - `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `POPLS`, `.PRIMITIVES`
 - `ERASE`/`ER`, `ERN`, `ERNS`, `ERPS`, `ERPL`, `ERALL`
 - `BURY`, `UNBURY`, `BURIEDP`
@@ -98,7 +99,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Notes
 
 Not yet implemented from nearby roadmap/workspace tasks include remaining
-workspace-management pieces such as `NODES`/`RECYCLE`, macros, richer graphics
+workspace-management pieces such as `NODES`/`RECYCLE`, richer graphics
 primitives like `LABEL`/`FILL`, and dynaturtle follow-ups such as edge/window
 modes and additional compatibility polish. See also
 [primitive-gaps.md](primitive-gaps.md) for the current gap list.

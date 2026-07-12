@@ -81,7 +81,7 @@ fn repl() -> Result<(), String> {
             continue;
         }
 
-        if starts_with_logo_word(trimmed, "to") {
+        if starts_with_logo_word(trimmed, "to") || starts_with_logo_word(trimmed, ".macro") {
             definition_buffer = Some(line);
             continue;
         }

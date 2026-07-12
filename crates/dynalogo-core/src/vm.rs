@@ -321,6 +321,7 @@ pub struct Procedure {
     params: Vec<Symbol>,
     chunk: Chunk,
     body_source: String,
+    is_macro: bool,
 }
 
 impl Procedure {
@@ -338,6 +339,10 @@ impl Procedure {
 
     pub fn body_source(&self) -> &str {
         &self.body_source
+    }
+
+    pub fn is_macro(&self) -> bool {
+        self.is_macro
     }
 }
 
@@ -577,6 +582,25 @@ impl Vm {
         params: Vec<String>,
         body: &str,
     ) -> Result<(), VmError> {
+        self.define_procedure_impl(name, params, body, false)
+    }
+
+    pub fn define_macro(
+        &mut self,
+        name: impl AsRef<str>,
+        params: Vec<String>,
+        body: &str,
+    ) -> Result<(), VmError> {
+        self.define_procedure_impl(name, params, body, true)
+    }
+
+    fn define_procedure_impl(
+        &mut self,
+        name: impl AsRef<str>,
+        params: Vec<String>,
+        body: &str,
+        is_macro: bool,
+    ) -> Result<(), VmError> {
         let name = name.as_ref();
         let name_symbol = self.interner.intern(name);
         let param_symbols: Vec<Symbol> = params
@@ -596,6 +620,7 @@ impl Vm {
                 params: param_symbols,
                 chunk,
                 body_source: body.to_string(),
+                is_macro,
             },
         );
         Ok(())
@@ -624,7 +649,7 @@ impl Vm {
                     output_to,
                 } => {
                     let args = pop_args(&mut stack, *argc)?;
-                    match self.call(*callee, args)? {
+                    match self.call(*callee, args, *expects_value)? {
                         PrimitiveResult::Value(value) => stack.push(value),
                         PrimitiveResult::NoValue => {
                             if *expects_value {
@@ -693,12 +718,12 @@ impl Vm {
             if trimmed.is_empty() {
                 continue;
             }
-            if !starts_with_logo_word(trimmed, "to") {
+            if !starts_with_logo_word(trimmed, "to") && !starts_with_logo_word(trimmed, ".macro") {
                 runnable.push(line.to_string());
                 continue;
             }
 
-            let (name, params) = parse_to_header(trimmed)?;
+            let (name, params, is_macro) = parse_to_header(trimmed)?;
             let mut body = Vec::new();
             let mut saw_end = false;
             for body_line in lines.by_ref() {
@@ -711,13 +736,22 @@ impl Vm {
             if !saw_end {
                 return Err(VmError::new(format!("procedure {name} is missing END")));
             }
-            self.define_procedure(name, params, &body.join("\n"))?;
+            if is_macro {
+                self.define_macro(name, params, &body.join("\n"))?;
+            } else {
+                self.define_procedure(name, params, &body.join("\n"))?;
+            }
         }
 
         Ok(runnable.join("\n"))
     }
 
-    fn call(&mut self, callee: Symbol, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+    fn call(
+        &mut self,
+        callee: Symbol,
+        args: Vec<Value>,
+        expects_value: bool,
+    ) -> Result<PrimitiveResult, VmError> {
         let name = self.interner.canonical_spelling(callee).to_string();
         self.call_stack.push(name.clone());
         let result = match name.as_str() {
@@ -801,6 +835,9 @@ impl Vm {
             "fulltext" => self.fulltext(args),
             "copydef" => self.copydef(args),
             "define" => self.define_from_data(args),
+            ".defmacro" => self.defmacro(args),
+            "macrop" | "macro?" => self.macrop(args),
+            "macroexpand" => self.macroexpand(args),
             "po" => self.po(args),
             "poall" => self.poall(args),
             "pons" => self.pons(args),
@@ -889,7 +926,7 @@ impl Vm {
             "stop" => {
                 expect_arity(&name, &args, 0).map(|()| PrimitiveResult::Control(ControlFlow::Stop))
             }
-            _ => self.call_user_procedure(&name, args),
+            _ => self.call_user_procedure(&name, args, expects_value),
         };
         let result = result.map_err(|error| self.contextualize_error(error));
         self.call_stack.pop();
@@ -900,6 +937,7 @@ impl Vm {
         &mut self,
         name: &str,
         args: Vec<Value>,
+        expects_value: bool,
     ) -> Result<PrimitiveResult, VmError> {
         let procedure = self
             .procedures
@@ -908,20 +946,90 @@ impl Vm {
             .ok_or_else(|| VmError::new(format!("I don't know how to {name}")))?;
         expect_arity(name, &args, procedure.params.len())?;
 
-        self.env.push_frame();
-        for (param, value) in procedure.params.iter().zip(args) {
-            let name = self.interner.spelling(*param).to_string();
-            self.env.define_local(name, value);
-        }
-        let result = self.run(&procedure.chunk);
-        self.env.pop_frame();
+        let control = self.run_procedure_body(&procedure, args)?;
 
-        match result?.control {
+        if procedure.is_macro() {
+            return self.expand_and_run_macro(name, control, expects_value);
+        }
+
+        match control {
             ControlFlow::None | ControlFlow::Stop => Ok(PrimitiveResult::NoValue),
             ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
             ControlFlow::Continue => Ok(PrimitiveResult::Control(ControlFlow::Continue)),
             ControlFlow::Throw { tag, value } => {
                 Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
+            }
+        }
+    }
+
+    fn run_procedure_body(
+        &mut self,
+        procedure: &Procedure,
+        args: Vec<Value>,
+    ) -> Result<ControlFlow, VmError> {
+        self.env.push_frame();
+        for (param, value) in procedure.params().iter().zip(args) {
+            let name = self.interner.spelling(*param).to_string();
+            self.env.define_local(name, value);
+        }
+        let result = self.run(procedure.chunk());
+        self.env.pop_frame();
+        Ok(result?.control)
+    }
+
+    fn expand_and_run_macro(
+        &mut self,
+        name: &str,
+        control: ControlFlow,
+        expects_value: bool,
+    ) -> Result<PrimitiveResult, VmError> {
+        let expansion = match control {
+            ControlFlow::Output(value) => value,
+            ControlFlow::Throw { tag, value } => {
+                return Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
+            }
+            ControlFlow::Continue => {
+                return Ok(PrimitiveResult::Control(ControlFlow::Continue));
+            }
+            ControlFlow::None | ControlFlow::Stop => {
+                return Err(VmError::new(format!(
+                    "{name} is a macro and must output an instruction list"
+                )))
+            }
+        };
+        let list = list_input(&expansion, &name.to_ascii_uppercase())?;
+        let source = macro_list_to_source(list, &self.interner, &self.arities);
+        let program = parse_source(&source, &mut self.interner, &self.arities)
+            .map_err(vm_error_from_parse)?;
+        let compiler = Compiler::new();
+        if expects_value {
+            let chunk = compiler
+                .compile_program(&program)
+                .map_err(|error| VmError::new(error.to_string()))?;
+            let result = self.run(&chunk)?;
+            match result.control {
+                ControlFlow::Throw { tag, value } => {
+                    Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
+                }
+                ControlFlow::Continue => Ok(PrimitiveResult::Control(ControlFlow::Continue)),
+                ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
+                ControlFlow::Stop => {
+                    Err(VmError::new(format!("{name} expansion stopped without output")))
+                }
+                ControlFlow::None => result
+                    .stack
+                    .last()
+                    .cloned()
+                    .map(PrimitiveResult::Value)
+                    .ok_or_else(|| VmError::new(format!("{name} expansion did not output a value"))),
+            }
+        } else {
+            let chunk = compiler
+                .compile_effect_program(&program)
+                .map_err(|error| VmError::new(error.to_string()))?;
+            match self.run(&chunk)?.control {
+                ControlFlow::None => Ok(PrimitiveResult::NoValue),
+                control => Ok(PrimitiveResult::Control(control)),
             }
         }
     }
@@ -1899,7 +2007,7 @@ impl Vm {
             .map(|param| self.interner.spelling(*param).to_string())
             .collect::<Vec<_>>();
         let body_source = procedure.body_source().to_string();
-        self.define_procedure(new_name, params, &body_source)?;
+        self.define_procedure_impl(new_name, params, &body_source, procedure.is_macro())?;
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -1910,6 +2018,57 @@ impl Vm {
         let body_lines = define_body_input(&args[2], &self.interner, &self.arities)?;
         self.define_procedure(name, params, &body_lines.join("\n"))?;
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn defmacro(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity(".defmacro", &args, 3)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        let params = parameter_names_input(&args[1], &self.interner)?;
+        let body_lines = define_body_input(&args[2], &self.interner, &self.arities)?;
+        self.define_macro(name, params, &body_lines.join("\n"))?;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn macrop(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("macrop", &args, 1)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        let is_macro = self
+            .procedures
+            .get(&name.to_ascii_lowercase())
+            .map(|procedure| procedure.is_macro())
+            .unwrap_or(false);
+        Ok(PrimitiveResult::Value(self.logo_bool(is_macro)))
+    }
+
+    fn macroexpand(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("macroexpand", &args, 1)?;
+        let list = list_input(&args[0], "MACROEXPAND")?;
+        let mut items = list.iter().cloned();
+        let head = items
+            .next()
+            .ok_or_else(|| VmError::new("MACROEXPAND requires a non-empty instruction list"))?;
+        let name = variable_name_input(&head, &self.interner)?;
+        let procedure = self
+            .procedures
+            .get(&name.to_ascii_lowercase())
+            .cloned()
+            .ok_or_else(|| VmError::new(format!("I don't know how to {name}")))?;
+        if !procedure.is_macro() {
+            return Err(VmError::new(format!("{name} is not a macro")));
+        }
+        let call_args: Vec<Value> = items.collect();
+        expect_arity(&name, &call_args, procedure.params().len())?;
+
+        match self.run_procedure_body(&procedure, call_args)? {
+            ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
+            ControlFlow::Continue => Ok(PrimitiveResult::Control(ControlFlow::Continue)),
+            ControlFlow::Throw { tag, value } => {
+                Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
+            }
+            ControlFlow::None | ControlFlow::Stop => Err(VmError::new(format!(
+                "{name} is a macro and must output an instruction list"
+            ))),
+        }
     }
 
     fn po(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2761,11 +2920,11 @@ impl Vm {
         match self.classify_template(template)? {
             Template::Procedure(symbol) => {
                 let result = if extra_bindings.is_empty() {
-                    self.call(symbol, values)
+                    self.call(symbol, values, false)
                 } else {
                     self.env.push_frame();
                     self.bind_extra_template_bindings(extra_bindings);
-                    let result = self.call(symbol, values);
+                    let result = self.call(symbol, values, false);
                     self.env.pop_frame();
                     result
                 }?;
@@ -2792,11 +2951,11 @@ impl Vm {
         match self.classify_template(template)? {
             Template::Procedure(symbol) => {
                 let result = if extra_bindings.is_empty() {
-                    self.call(symbol, values)
+                    self.call(symbol, values, true)
                 } else {
                     self.env.push_frame();
                     self.bind_extra_template_bindings(extra_bindings);
-                    let result = self.call(symbol, values);
+                    let result = self.call(symbol, values, true);
                     self.env.pop_frame();
                     result
                 }?;
@@ -3615,13 +3774,14 @@ fn starts_with_logo_word(line: &str, word: &str) -> bool {
     matches!(parts.next(), Some(first) if first.eq_ignore_ascii_case(word))
 }
 
-fn parse_to_header(line: &str) -> Result<(String, Vec<String>), VmError> {
+fn parse_to_header(line: &str) -> Result<(String, Vec<String>, bool), VmError> {
     let tokens = lex(line).map_err(|error| VmError::new(error.to_string()))?;
     let mut iter = tokens.into_iter();
-    match iter.next().map(|token| token.kind) {
-        Some(TokenKind::Word(word)) if word.eq_ignore_ascii_case("to") => {}
-        _ => return Err(VmError::new("expected TO header")),
-    }
+    let is_macro = match iter.next().map(|token| token.kind) {
+        Some(TokenKind::Word(word)) if word.eq_ignore_ascii_case("to") => false,
+        Some(TokenKind::Word(word)) if word.eq_ignore_ascii_case(".macro") => true,
+        _ => return Err(VmError::new("expected TO or .MACRO header")),
+    };
 
     let name = match iter.next().map(|token| token.kind) {
         Some(TokenKind::Word(name)) => name,
@@ -3635,7 +3795,7 @@ fn parse_to_header(line: &str) -> Result<(String, Vec<String>), VmError> {
             _ => return Err(VmError::new("TO parameters must be written as :name")),
         }
     }
-    Ok((name, params))
+    Ok((name, params, is_macro))
 }
 
 fn list_input<'a>(value: &'a Value, name: &str) -> Result<&'a List, VmError> {
@@ -4017,6 +4177,11 @@ fn primitive_names() -> &'static [&'static str] {
         "text",
         "fulltext",
         "copydef",
+        "define",
+        ".defmacro",
+        "macrop",
+        "macro?",
+        "macroexpand",
         "po",
         "poall",
         "pons",
@@ -4205,6 +4370,32 @@ fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> Str
         index += consumed.max(1);
     }
     rendered.join(" ")
+}
+
+fn macro_list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> String {
+    list.iter()
+        .map(|value| match value {
+            Value::List(inner) => format!("[{}]", macro_list_to_source(inner, interner, arities)),
+            Value::Word(symbol) => {
+                let spelling = interner.spelling(*symbol);
+                if spelling.starts_with(':') || arities.get(spelling).is_some() || is_operator_word(spelling) {
+                    spelling.to_string()
+                } else {
+                    format!("\"{spelling}")
+                }
+            }
+            Value::BareWord(symbol) => {
+                let spelling = interner.spelling(*symbol);
+                if let Some(binding) = template_binding_name(spelling) {
+                    format!(":{binding}")
+                } else {
+                    spelling.to_string()
+                }
+            }
+            _ => value.show(interner),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn before_text(a: &str, b: &str) -> bool {
@@ -4969,7 +5160,7 @@ mod tests {
     fn catch_error_records_unknown_procedure_code_and_context() {
         let mut vm = Vm::new();
         let symbol = vm.interner_mut().intern("mystery");
-        let error = vm.call(symbol, vec![]).unwrap_err();
+        let error = vm.call(symbol, vec![], false).unwrap_err();
         vm.record_caught_error(&error);
 
         let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {

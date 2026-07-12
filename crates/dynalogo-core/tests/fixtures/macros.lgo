@@ -1,0 +1,20 @@
+.macro double :x
+output list "output product :x 2
+end
+
+print double 21
+
+to shout :word
+make "loud word :word "!
+print :loud
+end
+
+.macro exclaim :word
+output list "shout :word
+end
+
+exclaim "hello
+
+print macrop "double
+print macrop "shout
+print macroexpand [double 5]
