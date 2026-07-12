@@ -199,7 +199,7 @@ The Atari manual organizes features into these areas:
 - `KEYP`
 - joystick/paddle input: `JOY`, `JOYB`, `PADDLE`, `PADDLEB`
 - sound: `TOOT`, `SETENV`, `TIMEOUT`
-- cursor/screen helpers such as `SETCURSOR`
+- cursor/screen helpers such as `SETCURSOR`, `TEXTSCREEN`, `SPLITSCREEN`, `FULLSCREEN`
 
 ### 9. Workspace management
 
@@ -255,8 +255,8 @@ DynaLOGO:
    - verify any adjacent helper surface beyond `REALWORDP`, `RANK`, `RANPICK`, `EVENP`, `DIVISORP`, `FACTORIAL`, `ASCII`, `CHAR`, `LOWERCASE`, and `REV`
 5. **Graphics/screen extras**
    - `SETBG`, `SETC`, `SETX`, `SETY`, `SHAPE`, `SETSH`, `GETSH`, `PUTSH`, `SETSP`, `SPEED`, `WINDOW`, `WRAP`, multi-pen semantics, `LABEL`, `FILL`
-6. **Atari outside-world features**
-   - `KEYP`, joystick/paddle input, `TOOT`, `SETENV`, cursor/text-screen primitives
+6. **Remaining Atari outside-world features**
+   - any deeper printer/device hooks beyond `KEYP`, joystick/paddle input, `TOOT`, `SETENV`, and cursor/text-screen primitives already integrated
 
 ## Notes
 

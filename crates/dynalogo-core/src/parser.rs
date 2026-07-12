@@ -243,6 +243,7 @@ impl ArityTable {
             ("SETSPEED", 1),
             ("SETSHAPE", 2),
             ("TOUCHING", 2),
+            ("OVER", 1),
             ("WHEN", 2),
             ("TOOT", 4),
         ] {

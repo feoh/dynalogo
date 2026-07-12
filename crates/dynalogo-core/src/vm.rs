@@ -24,7 +24,7 @@ use crate::demon::{DemonCondition, DemonEvent, DemonScheduler};
 use crate::dynaturtle::{TurtleId, TurtleStore};
 use crate::lexer::{lex, InfixOp, TokenKind};
 use crate::parser::{parse_source, Arity, ArityTable, ParseError};
-use crate::turtle::Point;
+use crate::turtle::{Point, TurtleEvent};
 use crate::value::{Interner, List, LogoArray, LogoNumber, Symbol, Value};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -629,6 +629,22 @@ impl Vm {
         let report = detect_collisions(&self.turtles, self.collision_config);
         self.demons
             .push_collision_report(report.turtle_pairs, report.edge_contacts);
+        let mut over_colors = Vec::new();
+        for demon in self.demons.demons() {
+            if let DemonCondition::OverColor(color) = demon.condition() {
+                if !over_colors.contains(color) {
+                    over_colors.push(*color);
+                }
+            }
+        }
+        for color in over_colors {
+            for index in 0..self.turtles.len() {
+                let id = TurtleId::new(index);
+                if turtle_over_color(self.turtles.events(), &self.turtles, id, color) {
+                    self.demons.push_event(DemonEvent::OverColor { turtle: id, color });
+                }
+            }
+        }
         let drained = self.demons.drain_with_fuel(self.demon_fuel).drained;
         for item in drained {
             let ids = demon_event_turtles(&item.event);
@@ -1018,6 +1034,7 @@ impl Vm {
             "setspeed" => self.dyn_setspeed(args),
             "setshape" => self.dyn_setshape(args),
             "touching" => self.dyn_touching(args),
+            "over" => self.over(args),
             "when" => self.dyn_when(args),
             "toot" => self.toot(args),
             "output" | "op" => self.output_control(args),
@@ -3724,6 +3741,18 @@ impl Vm {
         Ok(PrimitiveResult::Value(self.logo_bool(touching)))
     }
 
+    fn over(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("over", &args, 1)?;
+        let color = number_input(&args[0], &self.interner)? as u32;
+        let over = self
+            .turtles
+            .active()
+            .iter()
+            .copied()
+            .any(|id| turtle_over_color(self.turtles.events(), &self.turtles, id, color));
+        Ok(PrimitiveResult::Value(self.logo_bool(over)))
+    }
+
     fn dyn_when(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("when", &args, 2)?;
         let condition = self.parse_demon_condition(list_input(&args[0], "WHEN")?)?;
@@ -3762,7 +3791,7 @@ impl Vm {
             "edge" if values.len() == 2 => Ok(DemonCondition::Edge(Some(
                 self.turtle_id_from_value(&values[1])?,
             ))),
-            "overcolor" if values.len() == 2 => {
+            "over" | "overcolor" if values.len() == 2 => {
                 let color = number_input(&values[1], &self.interner)? as u32;
                 Ok(DemonCondition::OverColor(color))
             }
@@ -3771,6 +3800,48 @@ impl Vm {
             ))),
         }
     }
+}
+
+fn turtle_over_color(events: &[TurtleEvent], store: &TurtleStore, turtle: TurtleId, color: u32) -> bool {
+    let Some(position) = store.state(turtle).map(|state| state.position) else {
+        return false;
+    };
+    let start = events
+        .iter()
+        .rposition(|event| matches!(event, TurtleEvent::Clear))
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    events[start..].iter().any(|event| match event {
+        TurtleEvent::Line {
+            from,
+            to,
+            color: line_color,
+            width,
+            ..
+        } => *line_color == color && point_near_segment(position, *from, *to, *width / 2.0),
+        _ => false,
+    })
+}
+
+fn point_near_segment(point: Point, a: Point, b: Point, tolerance: f64) -> bool {
+    let segment_dx = b.x - a.x;
+    let segment_dy = b.y - a.y;
+    let segment_length_squared = segment_dx * segment_dx + segment_dy * segment_dy;
+    if segment_length_squared == 0.0 {
+        return distance_squared(point, a) <= tolerance * tolerance;
+    }
+
+    let projection =
+        ((point.x - a.x) * segment_dx + (point.y - a.y) * segment_dy) / segment_length_squared;
+    let projection = projection.clamp(0.0, 1.0);
+    let closest = Point::new(a.x + segment_dx * projection, a.y + segment_dy * projection);
+    distance_squared(point, closest) <= tolerance * tolerance
+}
+
+fn distance_squared(a: Point, b: Point) -> f64 {
+    let dx = a.x - b.x;
+    let dy = a.y - b.y;
+    dx * dx + dy * dy
 }
 
 fn demon_event_turtles(event: &DemonEvent) -> Vec<TurtleId> {
@@ -4500,6 +4571,7 @@ fn primitive_names() -> &'static [&'static str] {
         "setspeed",
         "setshape",
         "touching",
+        "over",
         "when",
         "toot",
     ]
@@ -5151,6 +5223,60 @@ mod tests {
         assert_eq!(lines[10], "120");
         assert_eq!(lines[11], lines[12]);
         assert!(matches!(lines[11], "a" | "b" | "c"));
+    }
+
+    #[test]
+    fn atari_outside_world_output_helpers_store_headless_requests() {
+        let mut vm = Vm::new();
+        vm.eval_source("setenv 1 2 3 4 toot 0 64 10 15 setcursor 5 7")
+            .unwrap();
+
+        assert_eq!(vm.sound_envelope(), [1, 2, 3, 4]);
+        assert_eq!(vm.last_toot(), Some([0, 64, 10, 15]));
+        assert_eq!(vm.text_cursor(), (5, 7));
+    }
+
+    #[test]
+    fn atari_timeout_and_screen_mode_helpers_store_headless_requests() {
+        let mut vm = Vm::new();
+        assert_eq!(vm.text_screen_mode(), "splitscreen");
+        vm.eval_source("timeout 90 textscreen splitscreen fullscreen fs ts ss")
+            .unwrap();
+
+        assert_eq!(vm.timeout_sixtieths(), 90);
+        assert_eq!(vm.text_screen_mode(), "splitscreen");
+    }
+
+    #[test]
+    fn atari_input_helpers_report_mocked_device_state() {
+        let mut vm = Vm::new();
+        vm.push_keypress('a');
+        vm.set_joystick_state(1, 6, true);
+        vm.set_paddle_state(2, 99, true);
+
+        let result = vm
+            .eval_source("print keyp print joy 1 print joyb 1 print paddle 2 print paddleb 2")
+            .unwrap();
+        assert_eq!(result.output, "true\n6\ntrue\n99\ntrue\n");
+    }
+
+    #[test]
+    fn over_reporter_detects_pen_contact() {
+        let (result, _) = run(
+            "tell 0 setpc 3 fd 10 pu setxy 20 20 tell 1 setxy 0 5 print over 3",
+        )
+        .unwrap();
+        assert_eq!(result.output, "true\n");
+    }
+
+    #[test]
+    fn when_over_fires_during_dynaturtle_tick() {
+        let mut vm = Vm::new();
+        vm.eval_source("tell 0 setpc 3 fd 10 pu setxy 20 20 tell 1 setxy 0 5 when [over 3] [print \"hit]")
+            .unwrap();
+        vm.clear_output();
+        vm.dynaturtle_tick(0.0).unwrap();
+        assert_eq!(vm.output(), "hit\n");
     }
 
     #[test]

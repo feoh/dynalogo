@@ -70,7 +70,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - Infix operators: `+`, `-`, `*`, `/`, `<`, `>`, `=`, `<=`, `>=`, `<>`
 - `AND`, `OR`, `NOT`
 
-## Console I/O
+## Console I/O and outside-world helpers
 
 - `PRINT`/`PR`
 - `SHOW`
@@ -81,6 +81,11 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `READER`, `WRITER`
 - `DRIBBLE`, `NODRIBBLE`
 - `READCHAR`/`RC`, `READLIST`/`RL`, `READWORD`/`RW`
+- `KEYP`
+- `JOY`, `JOYB`, `PADDLE`, `PADDLEB`
+- `TIMEOUT`
+- `TEXTSCREEN`/`TS`, `SPLITSCREEN`/`SS`, `FULLSCREEN`/`FS`
+- `SETCURSOR`, `SETENV`
 
 ## Turtle graphics and dynaturtles
 
