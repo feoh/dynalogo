@@ -62,3 +62,6 @@ The suite currently documents these intentional differences from UCBLogo:
 
 As the compatibility corpus grows, additional divergences should be added here
 instead of being left implicit in test code.
+
+See `docs/ucblogo-error-audit.md` for a detailed audit of error-message wording
+and the current UCBLogo error-code map.

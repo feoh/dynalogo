@@ -5828,6 +5828,95 @@ mod tests {
     }
 
     #[test]
+    fn catch_error_records_missing_output_code_and_context() {
+        let mut vm = Vm::new();
+        let error = vm
+            .eval_source(
+                "to noop :x
+             print :x
+             end
+             print noop 5",
+            )
+            .unwrap_err();
+        vm.record_caught_error(&error);
+
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "5");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "noop didn't output to print"
+        );
+    }
+
+    #[test]
+    fn catch_error_records_unused_value_code_and_context() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("sum 2 3 print 9").unwrap_err();
+        vm.record_caught_error(&error);
+
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "9");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "You don't say what to do with 5"
+        );
+    }
+
+    #[test]
+    fn catch_error_records_missing_variable_code_and_context() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("print :missing").unwrap_err();
+        vm.record_caught_error(&error);
+
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "11");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "missing has no value"
+        );
+    }
+
+    #[test]
+    fn catch_error_records_iftrue_without_test_code_and_context() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("iftrue [print 1]").unwrap_err();
+        vm.record_caught_error(&error);
+
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "25");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "IFTRUE/IFFALSE without TEST"
+        );
+    }
+
+    #[test]
+    fn catch_error_records_custom_throw_error_code_and_message() {
+        let mut vm = Vm::new();
+        let result = vm
+            .eval_source("catch \"error [(throw \"error [something broke])]")
+            .unwrap();
+        assert_eq!(result.output, "");
+
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "35");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "[something broke]"
+        );
+    }
+
+    #[test]
     fn pause_continue_resumes_with_mutated_environment() {
         let mut vm = Vm::new();
         vm.push_pause_input("make \"x sum :x 1");

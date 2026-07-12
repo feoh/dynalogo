@@ -112,4 +112,7 @@ Recent work improved several important semantics:
 - last-error reporting through `ERROR`
 
 Still pending is a broader pass to match UCBLogo wording/numbering, plus any
-remaining edge cases surfaced by the compatibility suite and manual audit.
+remaining edge cases surfaced by the compatibility suite and manual audit. See
+`docs/ucblogo-error-audit.md` for a full site-by-site audit of current error
+wording versus the UCBLogo error-code map, and for the prioritized list of
+remaining wording gaps.
