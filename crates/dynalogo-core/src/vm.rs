@@ -5,9 +5,10 @@
 //! stack, primitive dispatch, bytecode stack execution, and `OUTPUT`/`STOP`
 //! control signals.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::f64::consts::PI;
 use std::fmt;
+use std::io::{self, Write};
 use std::thread;
 use std::time::Duration;
 
@@ -27,6 +28,7 @@ pub enum ControlFlow {
     None,
     Output(Value),
     Stop,
+    Continue,
     Throw { tag: Value, value: Value },
 }
 
@@ -237,6 +239,8 @@ pub struct Vm {
     test_result: Option<bool>,
     caught_error: Option<ErrorInfo>,
     call_stack: Vec<String>,
+    pause_depth: usize,
+    pause_inputs: VecDeque<String>,
     random_seed: u64,
     last_toot: Option<[u8; 4]>,
     chunk_cache: ChunkCache,
@@ -285,6 +289,8 @@ impl Default for Vm {
             test_result: None,
             caught_error: None,
             call_stack: Vec::new(),
+            pause_depth: 0,
+            pause_inputs: VecDeque::new(),
             random_seed: 0x4d595df4d0f33173,
             last_toot: None,
             chunk_cache: ChunkCache::new(),
@@ -410,6 +416,10 @@ impl Vm {
 
     pub fn set_demon_fuel(&mut self, fuel: usize) {
         self.demon_fuel = fuel;
+    }
+
+    pub fn push_pause_input(&mut self, line: impl Into<String>) {
+        self.pause_inputs.push_back(line.into());
     }
 
     /// Advances the dynaturtle simulation by one fixed tick: integrates
@@ -775,6 +785,7 @@ impl Vm {
         match result?.control {
             ControlFlow::None | ControlFlow::Stop => Ok(PrimitiveResult::NoValue),
             ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
+            ControlFlow::Continue => Ok(PrimitiveResult::Control(ControlFlow::Continue)),
             ControlFlow::Throw { tag, value } => {
                 Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
             }
@@ -2039,6 +2050,7 @@ impl Vm {
                 }
                 ControlFlow::None | ControlFlow::Stop => Ok(PrimitiveResult::NoValue),
                 ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
+                ControlFlow::Continue => Ok(PrimitiveResult::Control(ControlFlow::Continue)),
                 ControlFlow::Throw { tag, value } => {
                     Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
                 }
@@ -2071,12 +2083,80 @@ impl Vm {
 
     fn pause(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("pause", &args, 0)?;
-        Err(VmError::new("PAUSE debugger is not implemented yet"))
+        self.pause_depth += 1;
+        let result = self.pause_loop();
+        self.pause_depth -= 1;
+        result
+    }
+
+    fn pause_loop(&mut self) -> Result<PrimitiveResult, VmError> {
+        loop {
+            let Some(line) = self.read_pause_line()? else {
+                return Err(VmError::new("PAUSE aborted by end of input"));
+            };
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            match self.eval_source(&line) {
+                Ok(result) => {
+                    if !result.output.is_empty() {
+                        print!("{}", result.output);
+                        self.clear_output();
+                        io::stdout()
+                            .flush()
+                            .map_err(|error| VmError::new(error.to_string()))?;
+                    }
+                    match result.control {
+                        ControlFlow::None => {
+                            for value in result.stack {
+                                println!("{}", value.show(self.interner()));
+                            }
+                        }
+                        ControlFlow::Continue => return Ok(PrimitiveResult::NoValue),
+                        ControlFlow::Output(value) => {
+                            return Ok(PrimitiveResult::Control(ControlFlow::Output(value)));
+                        }
+                        ControlFlow::Stop => {
+                            return Ok(PrimitiveResult::Control(ControlFlow::Stop));
+                        }
+                        ControlFlow::Throw { tag, value } => {
+                            return Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }));
+                        }
+                    }
+                }
+                Err(error) => eprintln!("{error}"),
+            }
+        }
+    }
+
+    fn read_pause_line(&mut self) -> Result<Option<String>, VmError> {
+        if let Some(line) = self.pause_inputs.pop_front() {
+            return Ok(Some(line));
+        }
+
+        print!("pause> ");
+        io::stdout()
+            .flush()
+            .map_err(|error| VmError::new(error.to_string()))?;
+        let mut line = String::new();
+        let bytes = io::stdin()
+            .read_line(&mut line)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        if bytes == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(line))
+        }
     }
 
     fn continue_(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("continue", &args, 0)?;
-        Err(VmError::new("CONTINUE debugger is not implemented yet"))
+        if self.pause_depth == 0 {
+            Err(VmError::new("CONTINUE can only be used inside PAUSE"))
+        } else {
+            Ok(PrimitiveResult::Control(ControlFlow::Continue))
+        }
     }
 
     /// The single turtle classic query primitives (POS, HEADING, ...) read
@@ -2666,6 +2746,7 @@ fn result_value(result: RunResult) -> Result<Value, VmError> {
             .ok_or_else(|| VmError::new("instruction list did not output a value")),
         ControlFlow::Output(value) => Ok(value),
         ControlFlow::Stop => Err(VmError::new("instruction list stopped without output")),
+        ControlFlow::Continue => Err(VmError::new("CONTINUE can only be used inside PAUSE")),
         ControlFlow::Throw { tag, value } => Ok(Value::List(List::from_values([tag, value]))),
     }
 }
@@ -3781,6 +3862,40 @@ mod tests {
             "I don't know how to mystery"
         );
         assert_eq!(list.item(3).unwrap().show(vm.interner()), "mystery");
+    }
+
+    #[test]
+    fn pause_continue_resumes_with_mutated_environment() {
+        let mut vm = Vm::new();
+        vm.push_pause_input("make \"x sum :x 1");
+        vm.push_pause_input("continue");
+        let result = vm
+            .eval_source("make \"x 5 pause print :x")
+            .expect("pause should resume after CONTINUE");
+        assert_eq!(result.output, "6\n");
+    }
+
+    #[test]
+    fn continue_outside_pause_is_an_error() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("continue").unwrap_err();
+        assert_eq!(error.message, "CONTINUE can only be used inside PAUSE");
+    }
+
+    #[test]
+    fn pause_can_output_from_the_enclosing_procedure() {
+        let mut vm = Vm::new();
+        vm.push_pause_input("output 99");
+        let result = vm
+            .eval_source(
+                "to paused.output
+                 pause
+                 output 0
+                 end
+                 print paused.output",
+            )
+            .expect("OUTPUT entered during PAUSE should resume the procedure with a value");
+        assert_eq!(result.output, "99\n");
     }
 
     #[test]

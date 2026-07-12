@@ -153,8 +153,11 @@ These are loaded at VM startup as Logo procedures rather than Rust primitives:
 
 ### Status of PAUSE / CONTINUE
 
-`PAUSE` and `CONTINUE` exist in the surface, but are still partial compared to
-full UCBLogo expectations.
+`PAUSE` enters an interactive pause loop and `CONTINUE` resumes execution.
+Commands entered while paused run in the current dynamic environment, so they
+can inspect or mutate local state before continuing. Entering `OUTPUT`, `STOP`,
+or `THROW` while paused resumes the enclosing computation with that control
+flow.
 
 ## 5. Data, arithmetic, and predicates
 

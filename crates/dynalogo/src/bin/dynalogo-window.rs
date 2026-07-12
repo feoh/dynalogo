@@ -119,6 +119,9 @@ impl App {
         match self.vm.dynaturtle_tick(SIM_DT) {
             Ok(ControlFlow::None | ControlFlow::Stop) => {}
             Ok(ControlFlow::Output(value)) => self.push_log(value.show(self.vm.interner())),
+            Ok(ControlFlow::Continue) => {
+                self.push_log("Error: CONTINUE can only be used inside PAUSE".to_string())
+            }
             Ok(ControlFlow::Throw { tag, value }) => self.push_log(format!(
                 "Uncaught THROW {} {}",
                 tag.show(self.vm.interner()),

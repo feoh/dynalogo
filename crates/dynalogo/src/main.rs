@@ -109,6 +109,9 @@ fn eval_and_print(vm: &mut Vm, source: &str) -> Result<(), String> {
             println!("{}", value.show(vm.interner()));
         }
         ControlFlow::Stop => {}
+        ControlFlow::Continue => {
+            return Err("CONTINUE can only be used inside PAUSE".to_string());
+        }
         ControlFlow::Throw { tag, value } => {
             println!(
                 "Uncaught THROW {} {}",

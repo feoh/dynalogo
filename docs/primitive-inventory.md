@@ -12,7 +12,7 @@ manual comparison against the UCBLogo reference.
 - `PARSE`, `RUNPARSE`, `APPLY`
 - `TEST`, `IFTRUE`/`IFT`, `IFFALSE`/`IFF`
 - `CATCH`, `THROW`, `ERROR`, `WAIT`
-- `PAUSE`, `CONTINUE` currently exist but still return "not implemented yet"
+- `PAUSE`, `CONTINUE` with interactive pause-loop / resume semantics
 
 ## Library control structures
 
