@@ -1,0 +1,4 @@
+setxy -20 -30
+print pos
+run [setxy -40 -50]
+print pos
