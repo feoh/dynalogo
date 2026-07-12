@@ -217,6 +217,10 @@ impl App {
                         logo_color(*color),
                     );
                 }
+                TurtleEvent::Fill { at, color } => {
+                    let at = logo_to_screen(*at, canvas_height);
+                    draw_circle(at.x, at.y, 4.0, logo_color(*color));
+                }
                 TurtleEvent::Clear | TurtleEvent::State(_) => {}
             }
         }

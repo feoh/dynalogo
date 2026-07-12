@@ -1021,6 +1021,7 @@ impl Vm {
             "setpensize" => self.turtle_setpensize(args),
             "setlabelheight" => self.turtle_setlabelheight(args),
             "label" => self.turtle_label(args),
+            "fill" => self.turtle_fill(args),
             "hideturtle" | "ht" => self.turtle_hide(args),
             "init.turtle" => self.init_turtle(args),
             "showturtle" | "st" => self.turtle_show(args),
@@ -3565,6 +3566,19 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn turtle_fill(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("fill", &args, 0)?;
+        for id in self.turtles.active().to_vec() {
+            let color = self
+                .turtles
+                .state(id)
+                .expect("active turtle exists in store")
+                .pen_color;
+            self.turtles.fill(id, color);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
     fn turtle_hide(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("hideturtle", &args, 0)?;
         for id in self.turtles.active().to_vec() {
@@ -4584,6 +4598,7 @@ fn primitive_names() -> &'static [&'static str] {
         "setpensize",
         "setlabelheight",
         "label",
+        "fill",
         "hideturtle",
         "ht",
         "showturtle",
@@ -5318,6 +5333,16 @@ mod tests {
             label,
             Some((Point::new(10.0, 20.0), "[hello logo]".to_string(), 5, 24.0))
         );
+    }
+
+    #[test]
+    fn fill_emits_a_headless_fill_event() {
+        let (_, vm) = run("setxy -5 8 setpc 7 fill").unwrap();
+        let fill = vm.turtles().events().iter().find_map(|event| match event {
+            TurtleEvent::Fill { at, color } => Some((*at, *color)),
+            _ => None,
+        });
+        assert_eq!(fill, Some((Point::new(-5.0, 8.0), 7)));
     }
 
     #[test]

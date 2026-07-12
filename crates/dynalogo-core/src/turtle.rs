@@ -30,6 +30,10 @@ pub enum TurtleEvent {
         color: u32,
         height: f64,
     },
+    Fill {
+        at: Point,
+        color: u32,
+    },
     State(TurtleState),
 }
 

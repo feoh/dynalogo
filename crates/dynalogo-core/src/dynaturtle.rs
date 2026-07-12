@@ -288,6 +288,14 @@ impl TurtleStore {
         });
     }
 
+    pub fn fill(&mut self, id: TurtleId, color: u32) {
+        self.ensure(id);
+        self.events.push(TurtleEvent::Fill {
+            at: self.positions[id.index()],
+            color,
+        });
+    }
+
     pub fn set_visible(&mut self, id: TurtleId, visible: bool) {
         self.ensure(id);
         self.visible[id.index()] = visible;
