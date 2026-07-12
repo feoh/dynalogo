@@ -10,6 +10,7 @@ manual comparison against the UCBLogo reference.
 - `REPEAT`, `REPCOUNT`
 - `IF`, `IFELSE`, `RUN`, `RUNRESULT`
 - `PARSE`, `RUNPARSE`, `APPLY`
+- `CASCADE`, `CASCADE.2`, `TRANSFER`
 - `TEST`, `IFTRUE`/`IFT`, `IFFALSE`/`IFF`
 - `CATCH`, `THROW`, `ERROR`, `WAIT`
 - `PAUSE`, `CONTINUE` with interactive pause-loop / resume semantics
@@ -32,6 +33,10 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `MAP`
 - `FILTER`
 - `REDUCE`
+- `CASCADE`, `CASCADE.2`, `TRANSFER`
+- implicit-slot templates (`?`, `?1`, `?2`, ...)
+- named-slot templates (`[:x :y] [...]`)
+- procedure-name templates
 - `PARSE`, `RUNPARSE`, `RUNRESULT`
 
 ## Words, lists, arrays, and property lists
@@ -48,6 +53,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Variables and workspace predicates
 
 - `MAKE`, `NAME`, `THING`, `LOCAL`
+- `EDIT`/`ED`
 - `NAMEP`
 - `DEFINEDP`/`DEFINED?`
 - `PRIMITIVEP`/`PRIMITIVE?`
@@ -68,7 +74,12 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `PRINT`/`PR`
 - `SHOW`
 - `TYPE`
-- `READLIST`/`RL`
+- `LOAD`, `SAVE`
+- `SETREAD`, `SETWRITE`
+- `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, `CLOSE`
+- `READER`, `WRITER`
+- `DRIBBLE`, `NODRIBBLE`
+- `READCHAR`/`RC`, `READLIST`/`RL`, `READWORD`/`RW`
 
 ## Turtle graphics and dynaturtles
 
@@ -87,8 +98,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Notes
 
 Not yet implemented from nearby roadmap/workspace tasks include remaining
-workspace-management pieces such as `NODES`/`RECYCLE`, file and stream I/O,
-macros, full template follow-ups such as `CASCADE`/`TRANSFER`, richer graphics
+workspace-management pieces such as `NODES`/`RECYCLE`, macros, richer graphics
 primitives like `LABEL`/`FILL`, and dynaturtle follow-ups such as edge/window
 modes and additional compatibility polish. See also
 [primitive-gaps.md](primitive-gaps.md) for the current gap list.

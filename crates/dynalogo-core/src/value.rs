@@ -115,6 +115,7 @@ impl From<f64> for LogoNumber {
 #[derive(Debug, Clone)]
 pub enum Value {
     Word(Symbol),
+    BareWord(Symbol),
     Number(LogoNumber),
     List(List),
     Array(LogoArray),
@@ -122,12 +123,14 @@ pub enum Value {
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Value::Word(a), Value::Word(b)) => a == b,
-            (Value::Number(a), Value::Number(b)) => a == b,
-            (Value::List(a), Value::List(b)) => a == b,
-            (Value::Array(a), Value::Array(b)) => a.ptr_eq(b),
-            _ => false,
+        match (self.word_symbol(), other.word_symbol()) {
+            (Some(a), Some(b)) => a == b,
+            _ => match (self, other) {
+                (Value::Number(a), Value::Number(b)) => a == b,
+                (Value::List(a), Value::List(b)) => a == b,
+                (Value::Array(a), Value::Array(b)) => a.ptr_eq(b),
+                _ => false,
+            },
         }
     }
 }
@@ -135,6 +138,10 @@ impl PartialEq for Value {
 impl Value {
     pub fn word(interner: &mut Interner, spelling: impl AsRef<str>) -> Self {
         Self::Word(interner.intern(spelling))
+    }
+
+    pub fn bare_word(interner: &mut Interner, spelling: impl AsRef<str>) -> Self {
+        Self::BareWord(interner.intern(spelling))
     }
 
     pub fn number(value: f64) -> Self {
@@ -149,10 +156,19 @@ impl Value {
         Self::Array(LogoArray::new(size))
     }
 
+    pub fn word_symbol(&self) -> Option<Symbol> {
+        match self {
+            Value::Word(symbol) | Value::BareWord(symbol) => Some(*symbol),
+            Value::Number(_) | Value::List(_) | Value::Array(_) => None,
+        }
+    }
+
     pub fn as_number(&self, interner: &Interner) -> Option<f64> {
         match self {
             Value::Number(number) => Some(number.get()),
-            Value::Word(symbol) => parse_logo_number(interner.spelling(*symbol)),
+            Value::Word(symbol) | Value::BareWord(symbol) => {
+                parse_logo_number(interner.spelling(*symbol))
+            }
             Value::List(_) | Value::Array(_) => None,
         }
     }
@@ -162,21 +178,23 @@ impl Value {
     }
 
     pub fn equalp(&self, other: &Value, interner: &Interner) -> bool {
-        match (self, other) {
-            (Value::Number(a), Value::Number(b)) => number_equal(a.get(), b.get()),
-            (Value::Word(a), Value::Word(b)) => interner.equal_symbols(*a, *b),
-            (Value::List(a), Value::List(b)) => a.equalp(b, interner),
-            (Value::Array(a), Value::Array(b)) => a.equalp(b, interner),
-            _ => match (self.as_number(interner), other.as_number(interner)) {
-                (Some(a), Some(b)) => number_equal(a, b),
-                _ => false,
+        match (self.word_symbol(), other.word_symbol()) {
+            (Some(a), Some(b)) => interner.equal_symbols(a, b),
+            _ => match (self, other) {
+                (Value::Number(a), Value::Number(b)) => number_equal(a.get(), b.get()),
+                (Value::List(a), Value::List(b)) => a.equalp(b, interner),
+                (Value::Array(a), Value::Array(b)) => a.equalp(b, interner),
+                _ => match (self.as_number(interner), other.as_number(interner)) {
+                    (Some(a), Some(b)) => number_equal(a, b),
+                    _ => false,
+                },
             },
         }
     }
 
     pub fn show(&self, interner: &Interner) -> String {
         match self {
-            Value::Word(symbol) => interner.spelling(*symbol).to_string(),
+            Value::Word(symbol) | Value::BareWord(symbol) => interner.spelling(*symbol).to_string(),
             Value::Number(number) => format_logo_number(number.get()),
             Value::List(list) => list.show(interner),
             Value::Array(array) => array.show(interner),

@@ -6,9 +6,13 @@
 //! control signals.
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::env;
 use std::f64::consts::PI;
 use std::fmt;
+use std::fs;
 use std::io::{self, Write};
+use std::path::PathBuf;
+use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
@@ -224,6 +228,50 @@ impl Environment {
 }
 
 #[derive(Debug, Clone)]
+struct InputStream {
+    path: PathBuf,
+    content: String,
+    cursor: usize,
+}
+
+impl InputStream {
+    fn open(path: PathBuf) -> Result<Self, VmError> {
+        let content = fs::read_to_string(&path)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        Ok(Self {
+            path,
+            content,
+            cursor: 0,
+        })
+    }
+
+    fn read_char(&mut self) -> Option<String> {
+        let tail = self.content.get(self.cursor..)?;
+        let ch = tail.chars().next()?;
+        self.cursor += ch.len_utf8();
+        Some(ch.to_string())
+    }
+
+    fn read_line(&mut self) -> Option<String> {
+        let tail = self.content.get(self.cursor..)?;
+        if tail.is_empty() {
+            return None;
+        }
+        if let Some(newline) = tail.find('\n') {
+            let mut line = &tail[..newline];
+            self.cursor += newline + 1;
+            if let Some(stripped) = line.strip_suffix('\r') {
+                line = stripped;
+            }
+            Some(line.to_string())
+        } else {
+            self.cursor = self.content.len();
+            Some(tail.strip_suffix('\r').unwrap_or(tail).to_string())
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Vm {
     interner: Interner,
     env: Environment,
@@ -236,6 +284,12 @@ pub struct Vm {
     demons: DemonScheduler,
     collision_config: CollisionConfig,
     demon_fuel: usize,
+    read_stream: Option<InputStream>,
+    current_read_managed: bool,
+    read_streams: HashMap<String, InputStream>,
+    current_write: Option<String>,
+    write_streams: HashSet<String>,
+    dribble: Option<PathBuf>,
     test_result: Option<bool>,
     caught_error: Option<ErrorInfo>,
     call_stack: Vec<String>,
@@ -243,7 +297,22 @@ pub struct Vm {
     pause_inputs: VecDeque<String>,
     random_seed: u64,
     last_toot: Option<[u8; 4]>,
+    edit_buffer: Option<EditSession>,
+    editor_override: Option<String>,
     chunk_cache: ChunkCache,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+struct EditContents {
+    procedures: Vec<String>,
+    variables: Vec<String>,
+    plists: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct EditSession {
+    contents: EditContents,
+    text: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -286,6 +355,12 @@ impl Default for Vm {
             demons: DemonScheduler::new(),
             collision_config: CollisionConfig::default(),
             demon_fuel: 256,
+            read_stream: None,
+            current_read_managed: false,
+            read_streams: HashMap::new(),
+            current_write: None,
+            write_streams: HashSet::new(),
+            dribble: None,
             test_result: None,
             caught_error: None,
             call_stack: Vec::new(),
@@ -293,6 +368,8 @@ impl Default for Vm {
             pause_inputs: VecDeque::new(),
             random_seed: 0x4d595df4d0f33173,
             last_toot: None,
+            edit_buffer: None,
+            editor_override: None,
             chunk_cache: ChunkCache::new(),
         }
     }
@@ -327,12 +404,41 @@ impl Vm {
         &mut self.env
     }
 
+    /// Override the command EDIT/ED launch instead of reading `$EDITOR`.
+    pub fn set_editor_command(&mut self, command: impl Into<String>) {
+        self.editor_override = Some(command.into());
+    }
+
     pub fn output(&self) -> &str {
         &self.output
     }
 
     pub fn clear_output(&mut self) {
         self.output.clear();
+    }
+
+    fn write_output_fragment(&mut self, text: &str) -> Result<(), VmError> {
+        if let Some(name) = self.current_write.clone() {
+            let path = PathBuf::from(&name);
+            let mut current = fs::read_to_string(&path).unwrap_or_default();
+            current.push_str(text);
+            fs::write(&path, current)
+                .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        } else {
+            self.output.push_str(text);
+            if let Some(path) = self.dribble.clone() {
+                let mut current = fs::read_to_string(&path).unwrap_or_default();
+                current.push_str(text);
+                fs::write(&path, current)
+                    .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn write_output_line(&mut self, text: &str) -> Result<(), VmError> {
+        self.write_output_fragment(text)?;
+        self.write_output_fragment("\n")
     }
 
     fn remember_error(&mut self, error: VmError) -> VmError {
@@ -657,11 +763,25 @@ impl Vm {
             "print" | "pr" => self.print(args),
             "show" => self.show(args),
             "type" => self.r#type(args),
+            "load" => self.load(args),
+            "save" => self.save(args),
             "ascii" => self.ascii(args),
             "char" => self.char_(args),
             "lowercase" => self.lowercase(args),
             "rev" => self.rev(args),
+            "setread" => self.setread(args),
+            "setwrite" => self.setwrite(args),
+            "openread" => self.openread(args),
+            "openwrite" => self.openwrite(args),
+            "openappend" => self.openappend(args),
+            "close" => self.close(args),
+            "reader" => self.reader(args),
+            "writer" => self.writer(args),
+            "dribble" => self.dribble_command(args),
+            "nodribble" => self.nodribble(args),
+            "readchar" | "rc" => self.readchar(args),
             "readlist" | "rl" => self.readlist(args),
+            "readword" | "rw" => self.readword(args),
             "make" | "name" => self.make(args),
             "thing" => self.thing(args),
             "local" => self.local(args),
@@ -687,6 +807,7 @@ impl Vm {
             "pops" => self.pops(args),
             "pots" => self.pots(args),
             "popls" => self.popls(args),
+            "edit" | "ed" => self.edit(args),
             ".primitives" => self.primitives_command(args),
             "erase" | "er" => self.erase(args),
             "ern" => self.ern(args),
@@ -718,6 +839,9 @@ impl Vm {
             "map" => self.map(args),
             "filter" => self.filter(args),
             "reduce" => self.reduce(args),
+            "cascade" => self.cascade(args),
+            "cascade.2" => self.cascade2(args),
+            "transfer" => self.transfer(args),
             "repcount" => self.repcount(args),
             "test" => self.test(args),
             "iftrue" | "ift" => self.iftrue(args),
@@ -950,7 +1074,9 @@ impl Vm {
     fn emptyp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("emptyp", &args, 1)?;
         let empty = match &args[0] {
-            Value::Word(symbol) => self.interner.spelling(*symbol).is_empty(),
+            Value::Word(symbol) | Value::BareWord(symbol) => {
+                self.interner.spelling(*symbol).is_empty()
+            }
             Value::Number(_) => false,
             Value::List(list) => list.is_empty(),
             Value::Array(array) => array.is_empty(),
@@ -964,7 +1090,7 @@ impl Vm {
             Value::List(list) => list
                 .iter()
                 .any(|value| args[0].equalp(value, &self.interner)),
-            Value::Word(symbol) => self
+            Value::Word(symbol) | Value::BareWord(symbol) => self
                 .interner
                 .spelling(*symbol)
                 .contains(&args[0].show(&self.interner)),
@@ -980,7 +1106,7 @@ impl Vm {
     fn first(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("first", &args, 1)?;
         let value = match &args[0] {
-            Value::Word(symbol) => {
+            Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
                 first_char_value(&mut self.interner, &text)?
             }
@@ -1006,6 +1132,10 @@ impl Vm {
                 let text = drop_first_char(self.interner.spelling(*symbol));
                 Value::word(&mut self.interner, text)
             }
+            Value::BareWord(symbol) => {
+                let text = drop_first_char(self.interner.spelling(*symbol));
+                Value::bare_word(&mut self.interner, text)
+            }
             Value::Number(number) => {
                 let text = drop_first_char(&Value::Number(*number).show(&self.interner));
                 Value::word(&mut self.interner, text)
@@ -1025,7 +1155,7 @@ impl Vm {
     fn last(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("last", &args, 1)?;
         let value = match &args[0] {
-            Value::Word(symbol) => {
+            Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
                 last_char_value(&mut self.interner, &text)?
             }
@@ -1054,6 +1184,10 @@ impl Vm {
             Value::Word(symbol) => {
                 let text = drop_last_char(self.interner.spelling(*symbol));
                 Value::word(&mut self.interner, text)
+            }
+            Value::BareWord(symbol) => {
+                let text = drop_last_char(self.interner.spelling(*symbol));
+                Value::bare_word(&mut self.interner, text)
             }
             Value::Number(number) => {
                 let text = drop_last_char(&Value::Number(*number).show(&self.interner));
@@ -1127,7 +1261,9 @@ impl Vm {
     fn count(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("count", &args, 1)?;
         let count = match &args[0] {
-            Value::Word(symbol) => self.interner.spelling(*symbol).chars().count(),
+            Value::Word(symbol) | Value::BareWord(symbol) => {
+                self.interner.spelling(*symbol).chars().count()
+            }
             Value::Number(number) => Value::Number(*number).show(&self.interner).chars().count(),
             Value::List(list) => list.len(),
             Value::Array(array) => array.len(),
@@ -1139,7 +1275,7 @@ impl Vm {
         expect_arity("item", &args, 2)?;
         let index = number_input(&args[0], &self.interner)? as usize;
         let value = match &args[1] {
-            Value::Word(symbol) => {
+            Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
                 nth_char_value(&mut self.interner, &text, index)?
             }
@@ -1204,7 +1340,7 @@ impl Vm {
                 let index = (self.next_random_u64() as usize) % values.len();
                 Ok(PrimitiveResult::Value(values[index].clone()))
             }
-            Value::Word(symbol) => {
+            Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
                 let random = self.next_random_u64();
                 ranpick_text(&text, &mut self.interner, random)
@@ -1271,21 +1407,47 @@ impl Vm {
 
     fn print(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("print", &args, 1)?;
-        self.output.push_str(&args[0].show(&self.interner));
-        self.output.push('\n');
+        self.write_output_line(&args[0].show(&self.interner))?;
         Ok(PrimitiveResult::NoValue)
     }
 
     fn show(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("show", &args, 1)?;
-        self.output.push_str(&args[0].show(&self.interner));
-        self.output.push('\n');
+        self.write_output_line(&args[0].show(&self.interner))?;
         Ok(PrimitiveResult::NoValue)
     }
 
     fn r#type(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("type", &args, 1)?;
-        self.output.push_str(&args[0].show(&self.interner));
+        self.write_output_fragment(&args[0].show(&self.interner))?;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn load(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("load", &args, 1)?;
+        let path = PathBuf::from(source_text_input(&args[0], &self.interner));
+        let source = fs::read_to_string(&path)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        let result = self.eval_source(&source)?;
+        match result.control {
+            ControlFlow::None => Ok(PrimitiveResult::NoValue),
+            control => Ok(PrimitiveResult::Control(control)),
+        }
+    }
+
+    fn save(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("save", &args, 1)?;
+        let path = PathBuf::from(source_text_input(&args[0], &self.interner));
+        let procedures = self.visible_workspace_procedures();
+        let mut source = String::new();
+        for (index, procedure) in procedures.iter().enumerate() {
+            source.push_str(&procedure_definition_text(procedure, &self.interner));
+            if index + 1 < procedures.len() {
+                source.push('\n');
+            }
+        }
+        fs::write(&path, source)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -1350,15 +1512,226 @@ impl Vm {
                     .collect::<String>();
                 Value::word(&mut self.interner, reversed)
             }
+            Value::BareWord(symbol) => {
+                let reversed = self
+                    .interner
+                    .spelling(*symbol)
+                    .chars()
+                    .rev()
+                    .collect::<String>();
+                Value::bare_word(&mut self.interner, reversed)
+            }
         };
         Ok(PrimitiveResult::Value(value))
     }
 
+    fn park_current_read(&mut self) {
+        if self.current_read_managed {
+            if let Some(stream) = self.read_stream.take() {
+                let key = stream.path.to_string_lossy().to_string();
+                self.read_streams.insert(key, stream);
+            }
+        } else {
+            self.read_stream = None;
+        }
+        self.current_read_managed = false;
+    }
+
+    fn setread(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setread", &args, 1)?;
+        if args[0].is_empty_list() {
+            self.park_current_read();
+        } else {
+            let key = source_text_input(&args[0], &self.interner);
+            self.park_current_read();
+            if let Some(stream) = self.read_streams.remove(&key) {
+                self.read_stream = Some(stream);
+                self.current_read_managed = true;
+            } else {
+                self.read_stream = Some(InputStream::open(PathBuf::from(&key))?);
+                self.current_read_managed = false;
+            }
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn setwrite(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setwrite", &args, 1)?;
+        if args[0].is_empty_list() {
+            self.current_write = None;
+        } else {
+            let key = source_text_input(&args[0], &self.interner);
+            if !self.write_streams.contains(&key) {
+                let path = PathBuf::from(&key);
+                fs::write(&path, "")
+                    .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+            }
+            self.current_write = Some(key);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn openread(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("openread", &args, 1)?;
+        let key = source_text_input(&args[0], &self.interner);
+        let stream = InputStream::open(PathBuf::from(&key))?;
+        self.read_streams.insert(key, stream);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn openwrite(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("openwrite", &args, 1)?;
+        let key = source_text_input(&args[0], &self.interner);
+        let path = PathBuf::from(&key);
+        fs::write(&path, "")
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        self.write_streams.insert(key);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn openappend(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("openappend", &args, 1)?;
+        let key = source_text_input(&args[0], &self.interner);
+        let path = PathBuf::from(&key);
+        if !path.exists() {
+            fs::write(&path, "")
+                .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        }
+        self.write_streams.insert(key);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn close(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("close", &args, 1)?;
+        let key = source_text_input(&args[0], &self.interner);
+        let mut closed = false;
+
+        let active_read_matches = self
+            .read_stream
+            .as_ref()
+            .map(|stream| stream.path.to_string_lossy() == key)
+            .unwrap_or(false);
+        if active_read_matches {
+            self.read_stream = None;
+            self.current_read_managed = false;
+            closed = true;
+        } else if self.read_streams.remove(&key).is_some() {
+            closed = true;
+        }
+
+        if self.current_write.as_deref() == Some(key.as_str()) {
+            self.current_write = None;
+            closed = true;
+        }
+        if self.write_streams.remove(&key) {
+            closed = true;
+        }
+
+        if self
+            .dribble
+            .as_ref()
+            .is_some_and(|path| path.to_string_lossy() == key)
+        {
+            self.dribble = None;
+            closed = true;
+        }
+
+        if closed {
+            Ok(PrimitiveResult::NoValue)
+        } else {
+            Err(VmError::new(format!("CLOSE: {key} is not open")))
+        }
+    }
+
+    fn reader(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("reader", &args, 0)?;
+        let name = self
+            .read_stream
+            .as_ref()
+            .map(|stream| stream.path.to_string_lossy().to_string())
+            .unwrap_or_default();
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            name,
+        )))
+    }
+
+    fn writer(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("writer", &args, 0)?;
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            self.current_write.clone().unwrap_or_default(),
+        )))
+    }
+
+    fn dribble_command(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("dribble", &args, 1)?;
+        let path = PathBuf::from(source_text_input(&args[0], &self.interner));
+        fs::write(&path, "")
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        self.dribble = Some(path);
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn nodribble(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("nodribble", &args, 0)?;
+        self.dribble = None;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn readchar(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("readchar", &args, 0)?;
+        let stream = self
+            .read_stream
+            .as_mut()
+            .ok_or_else(|| VmError::new("READCHAR is not connected to an input stream yet"))?;
+        let ch = stream.read_char().ok_or_else(|| {
+            VmError::new(format!(
+                "READCHAR reached end of input stream {}",
+                stream.path.display()
+            ))
+        })?;
+        Ok(PrimitiveResult::Value(Value::word(&mut self.interner, ch)))
+    }
+
     fn readlist(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("readlist", &args, 0)?;
-        Err(VmError::new(
-            "READLIST is not connected to an input stream yet",
-        ))
+        let stream = self
+            .read_stream
+            .as_mut()
+            .ok_or_else(|| VmError::new("READLIST is not connected to an input stream yet"))?;
+        let line = stream.read_line().ok_or_else(|| {
+            VmError::new(format!(
+                "READLIST reached end of input stream {}",
+                stream.path.display()
+            ))
+        })?;
+        let values = lex(&line)
+            .map_err(|error| VmError::new(error.to_string()))?
+            .into_iter()
+            .filter_map(|token| token_to_data_value(token.kind, &mut self.interner))
+            .collect::<Vec<_>>();
+        Ok(PrimitiveResult::Value(Value::List(List::from_values(
+            values,
+        ))))
+    }
+
+    fn readword(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("readword", &args, 0)?;
+        let stream = self
+            .read_stream
+            .as_mut()
+            .ok_or_else(|| VmError::new("READWORD is not connected to an input stream yet"))?;
+        let line = stream.read_line().ok_or_else(|| {
+            VmError::new(format!(
+                "READWORD reached end of input stream {}",
+                stream.path.display()
+            ))
+        })?;
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            line,
+        )))
     }
 
     fn make(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1715,6 +2088,121 @@ impl Vm {
         procedures
     }
 
+    fn edit(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        if args.len() > 1 {
+            return Err(VmError::new(format!(
+                "edit expected 0 or 1 input(s), got {}",
+                args.len()
+            )));
+        }
+        let (contents, buffer_text) = match args.into_iter().next() {
+            Some(value) => {
+                let contents = contentslist_input(&value, &self.interner)?;
+                let text = self.render_edit_buffer(&contents)?;
+                (contents, text)
+            }
+            None => {
+                let session = self
+                    .edit_buffer
+                    .clone()
+                    .ok_or_else(|| VmError::new("EDIT needs a contents list to edit"))?;
+                (session.contents, session.text)
+            }
+        };
+
+        let edited = self.run_editor_on(&buffer_text)?;
+        self.edit_buffer = Some(EditSession {
+            contents,
+            text: edited.clone(),
+        });
+
+        let result = self.eval_source(&edited)?;
+        match result.control {
+            ControlFlow::None => Ok(PrimitiveResult::NoValue),
+            control => Ok(PrimitiveResult::Control(control)),
+        }
+    }
+
+    fn render_edit_buffer(&mut self, contents: &EditContents) -> Result<String, VmError> {
+        let mut buffer = String::new();
+        for name in &contents.procedures {
+            let key = name.to_ascii_lowercase();
+            match self.procedures.get(&key).cloned() {
+                Some(procedure) => {
+                    buffer.push_str(&procedure_definition_text(&procedure, &self.interner))
+                }
+                None => {
+                    buffer.push_str("to ");
+                    buffer.push_str(name);
+                    buffer.push_str("\nend\n");
+                }
+            }
+            buffer.push('\n');
+        }
+        for name in &contents.variables {
+            match self.env.get(name).cloned() {
+                Some(Value::Array(_)) => {
+                    buffer.push_str("; ");
+                    buffer.push_str(name);
+                    buffer.push_str(" is an array and cannot be edited as text\n");
+                }
+                Some(value) => {
+                    buffer.push_str("make \"");
+                    buffer.push_str(name);
+                    buffer.push(' ');
+                    buffer.push_str(&value_source_literal(&value, &self.interner));
+                    buffer.push('\n');
+                }
+                None => {
+                    buffer.push_str("make \"");
+                    buffer.push_str(name);
+                    buffer.push_str(" []\n");
+                }
+            }
+        }
+        for name in &contents.plists {
+            let key = name.to_ascii_lowercase();
+            if let Some(plist) = self.property_lists.get(&key) {
+                let mut entries: Vec<_> = plist.iter().collect();
+                entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+                for (prop, value) in entries {
+                    buffer.push_str("pprop \"");
+                    buffer.push_str(name);
+                    buffer.push_str(" \"");
+                    buffer.push_str(prop);
+                    buffer.push(' ');
+                    buffer.push_str(&value_source_literal(value, &self.interner));
+                    buffer.push('\n');
+                }
+            }
+        }
+        Ok(buffer)
+    }
+
+    fn run_editor_on(&self, text: &str) -> Result<String, VmError> {
+        let editor = resolve_editor_command(self.editor_override.as_deref(), env::var("EDITOR"))?;
+        let mut parts = editor.split_whitespace();
+        let program = parts
+            .next()
+            .ok_or_else(|| VmError::new("EDITOR is set but empty"))?;
+        let path = edit_temp_path();
+        fs::write(&path, text)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+
+        Command::new(program)
+            .args(parts)
+            .arg(&path)
+            .status()
+            .map_err(|error| {
+                VmError::new(format!("failed to launch EDITOR `{editor}`: {error}"))
+            })?;
+
+        let edited = fs::read_to_string(&path)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        let _ = fs::remove_file(&path);
+        Ok(edited)
+    }
+
     fn write_variable_listing(&mut self) {
         let mut names = self
             .env
@@ -2002,36 +2490,16 @@ impl Vm {
 
     fn apply(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("apply", &args, 2)?;
-        let arg_list = list_input(&args[1], "APPLY")?;
-        match &args[0] {
-            Value::Word(symbol) => {
-                let source = format!(
-                    "{} {}",
-                    self.interner.spelling(*symbol),
-                    list_to_source(arg_list, &self.interner, &self.arities)
-                );
-                let program = parse_source(&source, &mut self.interner, &self.arities)
-                    .map_err(|error| VmError::new(error.to_string()))?;
-                let chunk = Compiler::new()
-                    .compile_program(&program)
-                    .map_err(|error| VmError::new(error.to_string()))?;
-                result_value(self.run(&chunk)?).map(PrimitiveResult::Value)
-            }
-            Value::List(template) => self
-                .eval_template_with_values(template, list_values(arg_list))
-                .map(PrimitiveResult::Value),
-            _ => Err(VmError::new(
-                "APPLY first input must be a word or template list",
-            )),
-        }
+        let values = list_values(list_input(&args[1], "APPLY")?);
+        self.invoke_template_value(&args[0], values)
+            .map(PrimitiveResult::Value)
     }
 
     fn foreach(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("foreach", &args, 2)?;
         let values = list_values(list_input(&args[1], "FOREACH")?);
-        let template = list_input(&args[0], "FOREACH")?.clone();
         for value in values {
-            self.execute_template_for_effect(&template, vec![value])?;
+            self.invoke_template_effect(&args[0], vec![value])?;
         }
         Ok(PrimitiveResult::NoValue)
     }
@@ -2039,10 +2507,9 @@ impl Vm {
     fn map(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("map", &args, 2)?;
         let values = list_values(list_input(&args[1], "MAP")?);
-        let template = list_input(&args[0], "MAP")?.clone();
         let mut mapped = Vec::new();
         for value in values {
-            mapped.push(self.eval_template_with_values(&template, vec![value])?);
+            mapped.push(self.invoke_template_value(&args[0], vec![value])?);
         }
         Ok(PrimitiveResult::Value(Value::List(List::from_values(
             mapped,
@@ -2052,10 +2519,9 @@ impl Vm {
     fn filter(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("filter", &args, 2)?;
         let values = list_values(list_input(&args[1], "FILTER")?);
-        let template = list_input(&args[0], "FILTER")?.clone();
         let mut kept = Vec::new();
         for value in values {
-            let keep = self.eval_template_with_values(&template, vec![value.clone()])?;
+            let keep = self.invoke_template_value(&args[0], vec![value.clone()])?;
             if logo_truth(&keep, &self.interner) {
                 kept.push(value);
             }
@@ -2069,35 +2535,187 @@ impl Vm {
         let Some(mut acc) = values.next() else {
             return Err(VmError::new("REDUCE cannot reduce an empty list"));
         };
-        let template = list_input(&args[0], "REDUCE")?.clone();
         for value in values {
-            acc = self.eval_template_with_values(&template, vec![acc, value])?;
+            acc = self.invoke_template_value(&args[0], vec![acc, value])?;
         }
         Ok(PrimitiveResult::Value(acc))
     }
 
-    fn eval_template_with_values(
-        &mut self,
-        template: &List,
-        values: Vec<Value>,
-    ) -> Result<Value, VmError> {
-        let result = self.execute_template_result(template, values)?;
-        result_value(result)
+    fn cascade2(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("cascade.2", &args, 4)?;
+        self.cascade(vec![
+            args[0].clone(),
+            args[1].clone(),
+            args[2].clone(),
+            args[3].clone(),
+        ])
     }
 
-    fn execute_template_for_effect(
-        &mut self,
-        template: &List,
-        values: Vec<Value>,
-    ) -> Result<ControlFlow, VmError> {
-        Ok(self.execute_template_effect(template, values)?.control)
+    fn transfer(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("transfer", &args, 3)?;
+        let endtest = args[0].clone();
+        let template = args[1].clone();
+        let inbasket = list_input(&args[2], "TRANSFER")?;
+        let mut outbasket = Value::List(List::empty());
+        let no_endtest = matches!(&endtest, Value::List(list) if list.is_empty());
+
+        for item in inbasket.iter() {
+            let transfer_bindings = [("?in", item.clone()), ("?out", outbasket.clone())];
+            if !no_endtest {
+                let stop = self.invoke_template_value_with_bindings(
+                    &endtest,
+                    vec![item.clone(), outbasket.clone()],
+                    &transfer_bindings,
+                )?;
+                if logo_truth(&stop, &self.interner) {
+                    break;
+                }
+            }
+            outbasket = self.invoke_template_value_with_bindings(
+                &template,
+                vec![item.clone(), outbasket.clone()],
+                &transfer_bindings,
+            )?;
+        }
+
+        Ok(PrimitiveResult::Value(outbasket))
     }
 
-    fn execute_template_effect(
+    fn cascade(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        if args.len() < 3 {
+            return Err(VmError::new(format!(
+                "cascade expected at least 3 input(s), got {}",
+                args.len()
+            )));
+        }
+
+        let endtest = args[0].clone();
+        let (template_args, final_template) = if args.len().is_multiple_of(2) {
+            (&args[1..args.len() - 1], Some(args[args.len() - 1].clone()))
+        } else {
+            (&args[1..], None)
+        };
+        if template_args.len() % 2 != 0 {
+            return Err(VmError::new(
+                "CASCADE expects template/startvalue pairs, with an optional final template",
+            ));
+        }
+
+        let mut templates = Vec::new();
+        let mut values = Vec::new();
+        for pair in template_args.chunks_exact(2) {
+            templates.push(pair[0].clone());
+            values.push(pair[1].clone());
+        }
+
+        let mut rounds = 0usize;
+        match &endtest {
+            Value::Number(count) => {
+                let count = count.get();
+                if count < 0.0 || count.fract() != 0.0 {
+                    return Err(VmError::new("cascade count must be a nonnegative integer"));
+                }
+                for round in 1..=(count as usize) {
+                    values = self.cascade_round(&templates, values, round)?;
+                    rounds = round;
+                }
+            }
+            _ => loop {
+                let cascade_bindings = cascade_iteration_bindings(rounds + 1);
+                let stop = self.invoke_template_value_with_bindings(
+                    &endtest,
+                    values.clone(),
+                    &cascade_bindings,
+                )?;
+                if logo_truth(&stop, &self.interner) {
+                    break;
+                }
+                rounds += 1;
+                values = self.cascade_round(&templates, values, rounds)?;
+            },
+        }
+
+        let output = match final_template {
+            Some(final_template) => {
+                let cascade_bindings = cascade_iteration_bindings(rounds);
+                self.invoke_template_value_with_bindings(
+                    &final_template,
+                    values.clone(),
+                    &cascade_bindings,
+                )?
+            }
+            None => values
+                .into_iter()
+                .next()
+                .expect("cascade always has at least one start value"),
+        };
+        Ok(PrimitiveResult::Value(output))
+    }
+
+    fn cascade_round(
         &mut self,
-        template: &List,
+        templates: &[Value],
         values: Vec<Value>,
-    ) -> Result<RunResult, VmError> {
+        round: usize,
+    ) -> Result<Vec<Value>, VmError> {
+        let cascade_bindings = cascade_iteration_bindings(round);
+        templates
+            .iter()
+            .map(|template| {
+                self.invoke_template_value_with_bindings(
+                    template,
+                    values.clone(),
+                    &cascade_bindings,
+                )
+            })
+            .collect()
+    }
+
+    fn classify_template(&self, value: &Value) -> Result<Template, VmError> {
+        match value {
+            Value::Word(symbol) | Value::BareWord(symbol) => Ok(Template::Procedure(*symbol)),
+            Value::List(list) => {
+                if let Some(Value::List(formals)) = list.first() {
+                    let params =
+                        parameter_names_input(&Value::List(formals.clone()), &self.interner)?;
+                    let body = list.butfirst().cloned().unwrap_or_else(List::empty);
+                    Ok(Template::ExplicitSlot { params, body })
+                } else {
+                    Ok(Template::ImplicitSlot(list.clone()))
+                }
+            }
+            _ => Err(VmError::new("template must be a word or a list")),
+        }
+    }
+
+    fn bind_template_params(
+        &mut self,
+        params: &[String],
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<(), VmError> {
+        if params.len() != values.len() {
+            return Err(VmError::new(format!(
+                "template expected {} input(s), got {}",
+                params.len(),
+                values.len()
+            )));
+        }
+        self.env.push_frame();
+        for (param, value) in params.iter().zip(values) {
+            self.env.define_local(param.clone(), value);
+        }
+        self.bind_extra_template_bindings(extra_bindings);
+        Ok(())
+    }
+
+    fn bind_extra_template_bindings(&mut self, extra_bindings: &[(&str, Value)]) {
+        for (name, value) in extra_bindings {
+            self.env.define_local(*name, value.clone());
+        }
+    }
+
+    fn bind_implicit_template_slots(&mut self, values: &[Value], extra_bindings: &[(&str, Value)]) {
         self.env.push_frame();
         for (index, value) in values.iter().cloned().enumerate() {
             let numbered = format!("?{}", index + 1);
@@ -2106,24 +2724,126 @@ impl Vm {
                 self.env.define_local("?", value);
             }
         }
+        self.bind_extra_template_bindings(extra_bindings);
+    }
+
+    fn invoke_template_value(
+        &mut self,
+        template: &Value,
+        values: Vec<Value>,
+    ) -> Result<Value, VmError> {
+        self.invoke_template_value_with_bindings(template, values, &[])
+    }
+
+    fn invoke_template_value_with_bindings(
+        &mut self,
+        template: &Value,
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<Value, VmError> {
+        result_value(self.invoke_template_result_with_bindings(template, values, extra_bindings)?)
+    }
+
+    fn invoke_template_effect(
+        &mut self,
+        template: &Value,
+        values: Vec<Value>,
+    ) -> Result<ControlFlow, VmError> {
+        self.invoke_template_effect_with_bindings(template, values, &[])
+    }
+
+    fn invoke_template_effect_with_bindings(
+        &mut self,
+        template: &Value,
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<ControlFlow, VmError> {
+        match self.classify_template(template)? {
+            Template::Procedure(symbol) => {
+                let result = if extra_bindings.is_empty() {
+                    self.call(symbol, values)
+                } else {
+                    self.env.push_frame();
+                    self.bind_extra_template_bindings(extra_bindings);
+                    let result = self.call(symbol, values);
+                    self.env.pop_frame();
+                    result
+                }?;
+                Ok(primitive_to_run_result(result).control)
+            }
+            Template::ExplicitSlot { params, body } => {
+                self.bind_template_params(&params, values, extra_bindings)?;
+                let result = self.execute_instruction_list_effect(&body);
+                self.env.pop_frame();
+                Ok(result?.control)
+            }
+            Template::ImplicitSlot(list) => {
+                self.execute_template_for_effect_with_bindings(&list, values, extra_bindings)
+            }
+        }
+    }
+
+    fn invoke_template_result_with_bindings(
+        &mut self,
+        template: &Value,
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<RunResult, VmError> {
+        match self.classify_template(template)? {
+            Template::Procedure(symbol) => {
+                let result = if extra_bindings.is_empty() {
+                    self.call(symbol, values)
+                } else {
+                    self.env.push_frame();
+                    self.bind_extra_template_bindings(extra_bindings);
+                    let result = self.call(symbol, values);
+                    self.env.pop_frame();
+                    result
+                }?;
+                Ok(primitive_to_run_result(result))
+            }
+            Template::ExplicitSlot { params, body } => {
+                self.bind_template_params(&params, values, extra_bindings)?;
+                let result = self.execute_instruction_list_result(&body);
+                self.env.pop_frame();
+                result
+            }
+            Template::ImplicitSlot(list) => {
+                self.execute_template_result_with_bindings(&list, values, extra_bindings)
+            }
+        }
+    }
+
+    fn execute_template_for_effect_with_bindings(
+        &mut self,
+        template: &List,
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<ControlFlow, VmError> {
+        Ok(self
+            .execute_template_effect_with_bindings(template, values, extra_bindings)?
+            .control)
+    }
+
+    fn execute_template_effect_with_bindings(
+        &mut self,
+        template: &List,
+        values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
+    ) -> Result<RunResult, VmError> {
+        self.bind_implicit_template_slots(&values, extra_bindings);
         let result = self.execute_instruction_list_effect(template);
         self.env.pop_frame();
         result
     }
 
-    fn execute_template_result(
+    fn execute_template_result_with_bindings(
         &mut self,
         template: &List,
         values: Vec<Value>,
+        extra_bindings: &[(&str, Value)],
     ) -> Result<RunResult, VmError> {
-        self.env.push_frame();
-        for (index, value) in values.iter().cloned().enumerate() {
-            let numbered = format!("?{}", index + 1);
-            self.env.define_local(numbered, value.clone());
-            if index == 0 {
-                self.env.define_local("?", value);
-            }
-        }
+        self.bind_implicit_template_slots(&values, extra_bindings);
         let result = self.execute_instruction_list_result(template);
         self.env.pop_frame();
         result
@@ -2687,8 +3407,9 @@ impl Vm {
         let head = values
             .first()
             .ok_or_else(|| VmError::new("WHEN condition must name TOUCHING, EDGE, or OVERCOLOR"))?;
-        let Value::Word(symbol) = head else {
-            return Err(VmError::new("WHEN condition must start with a word"));
+        let symbol = match head {
+            Value::Word(symbol) | Value::BareWord(symbol) => symbol,
+            _ => return Err(VmError::new("WHEN condition must start with a word")),
         };
         match self.interner.canonical_spelling(*symbol) {
             "touching" if values.len() == 3 => {
@@ -2724,6 +3445,39 @@ enum PrimitiveResult {
     Value(Value),
     NoValue,
     Control(ControlFlow),
+}
+
+/// The three UCBLogo template forms accepted by MAP/FOREACH/FILTER/REDUCE/
+/// APPLY/CASCADE.
+enum Template {
+    Procedure(Symbol),
+    ExplicitSlot { params: Vec<String>, body: List },
+    ImplicitSlot(List),
+}
+
+fn primitive_to_run_result(result: PrimitiveResult) -> RunResult {
+    match result {
+        PrimitiveResult::Value(value) => RunResult {
+            stack: vec![value],
+            output: String::new(),
+            control: ControlFlow::None,
+        },
+        PrimitiveResult::NoValue => RunResult {
+            stack: Vec::new(),
+            output: String::new(),
+            control: ControlFlow::None,
+        },
+        PrimitiveResult::Control(control) => RunResult {
+            stack: Vec::new(),
+            output: String::new(),
+            control,
+        },
+    }
+}
+
+fn cascade_iteration_bindings(round: usize) -> [(&'static str, Value); 2] {
+    let round = Value::number(round as f64);
+    [("#", round.clone()), ("repcount", round)]
 }
 
 fn pop_args(stack: &mut Vec<Value>, argc: usize) -> Result<Vec<Value>, VmError> {
@@ -2790,7 +3544,7 @@ fn number_input(value: &Value, interner: &Interner) -> Result<f64, VmError> {
 
 fn variable_name_input(value: &Value, interner: &Interner) -> Result<String, VmError> {
     match value {
-        Value::Word(symbol) => Ok(interner.spelling(*symbol).to_string()),
+        Value::Word(symbol) | Value::BareWord(symbol) => Ok(interner.spelling(*symbol).to_string()),
         _ => Err(VmError::new(format!(
             "{} is not a variable name",
             value.show(interner)
@@ -2800,7 +3554,9 @@ fn variable_name_input(value: &Value, interner: &Interner) -> Result<String, VmE
 
 fn property_key_input(value: &Value, interner: &Interner) -> Result<String, VmError> {
     match value {
-        Value::Word(symbol) => Ok(interner.canonical_spelling(*symbol).to_string()),
+        Value::Word(symbol) | Value::BareWord(symbol) => {
+            Ok(interner.canonical_spelling(*symbol).to_string())
+        }
         Value::Number(_) => Ok(value.show(interner)),
         Value::List(_) | Value::Array(_) => Err(VmError::new(format!(
             "{} is not a property-list key",
@@ -2811,7 +3567,7 @@ fn property_key_input(value: &Value, interner: &Interner) -> Result<String, VmEr
 
 fn source_text_input(value: &Value, interner: &Interner) -> String {
     match value {
-        Value::Word(symbol) => interner.spelling(*symbol).to_string(),
+        Value::Word(symbol) | Value::BareWord(symbol) => interner.spelling(*symbol).to_string(),
         _ => value.show(interner),
     }
 }
@@ -2834,23 +3590,23 @@ fn ranged_byte_input(
 
 fn token_to_data_value(kind: TokenKind, interner: &mut Interner) -> Option<Value> {
     match kind {
-        TokenKind::Word(word) => Some(number_or_word_value(interner, word)),
+        TokenKind::Word(word) => Some(number_or_bare_word_value(interner, word)),
         TokenKind::QuotedWord(word) => Some(Value::word(interner, word)),
-        TokenKind::ColonWord(word) => Some(Value::word(interner, format!(":{word}"))),
-        TokenKind::Infix(op) => Some(Value::word(interner, op.to_string())),
-        TokenKind::LBracket => Some(Value::word(interner, "[")),
-        TokenKind::RBracket => Some(Value::word(interner, "]")),
-        TokenKind::LParen => Some(Value::word(interner, "(")),
-        TokenKind::RParen => Some(Value::word(interner, ")")),
-        TokenKind::LBrace => Some(Value::word(interner, "{")),
-        TokenKind::RBrace => Some(Value::word(interner, "}")),
+        TokenKind::ColonWord(word) => Some(Value::bare_word(interner, format!(":{word}"))),
+        TokenKind::Infix(op) => Some(Value::bare_word(interner, op.to_string())),
+        TokenKind::LBracket => Some(Value::bare_word(interner, "[")),
+        TokenKind::RBracket => Some(Value::bare_word(interner, "]")),
+        TokenKind::LParen => Some(Value::bare_word(interner, "(")),
+        TokenKind::RParen => Some(Value::bare_word(interner, ")")),
+        TokenKind::LBrace => Some(Value::bare_word(interner, "{")),
+        TokenKind::RBrace => Some(Value::bare_word(interner, "}")),
     }
 }
 
-fn number_or_word_value(interner: &mut Interner, word: String) -> Value {
+fn number_or_bare_word_value(interner: &mut Interner, word: String) -> Value {
     match word.parse::<f64>() {
         Ok(number) if number.is_finite() => Value::number(number),
-        _ => Value::word(interner, word),
+        _ => Value::bare_word(interner, word),
     }
 }
 
@@ -2911,7 +3667,7 @@ fn rank_value(value: &Value) -> usize {
     match value {
         Value::List(list) => 1 + list.iter().map(rank_value).max().unwrap_or(0),
         Value::Array(array) => 1 + array.to_list().iter().map(rank_value).max().unwrap_or(0),
-        Value::Word(_) | Value::Number(_) => 0,
+        Value::Word(_) | Value::BareWord(_) | Value::Number(_) => 0,
     }
 }
 
@@ -2977,11 +3733,15 @@ fn local_names(value: &Value, interner: &Interner) -> Result<Vec<String>, VmErro
 
 fn parameter_names_input(value: &Value, interner: &Interner) -> Result<Vec<String>, VmError> {
     match value {
-        Value::Word(symbol) => Ok(vec![normalize_parameter_name(interner.spelling(*symbol))?]),
+        Value::Word(symbol) | Value::BareWord(symbol) => {
+            Ok(vec![normalize_parameter_name(interner.spelling(*symbol))?])
+        }
         Value::List(list) => list
             .iter()
             .map(|value| match value {
-                Value::Word(symbol) => normalize_parameter_name(interner.spelling(*symbol)),
+                Value::Word(symbol) | Value::BareWord(symbol) => {
+                    normalize_parameter_name(interner.spelling(*symbol))
+                }
                 _ => Err(VmError::new(format!(
                     "{} is not a procedure input name",
                     value.show(interner)
@@ -2992,7 +3752,9 @@ fn parameter_names_input(value: &Value, interner: &Interner) -> Result<Vec<Strin
             .to_list()
             .iter()
             .map(|value| match value {
-                Value::Word(symbol) => normalize_parameter_name(interner.spelling(*symbol)),
+                Value::Word(symbol) | Value::BareWord(symbol) => {
+                    normalize_parameter_name(interner.spelling(*symbol))
+                }
                 _ => Err(VmError::new(format!(
                     "{} is not a procedure input name",
                     value.show(interner)
@@ -3042,7 +3804,9 @@ fn define_body_input(
 
 fn logo_truth(value: &Value, interner: &Interner) -> bool {
     match value {
-        Value::Word(symbol) => !interner.canonical_spelling(*symbol).eq("false"),
+        Value::Word(symbol) | Value::BareWord(symbol) => {
+            !interner.canonical_spelling(*symbol).eq("false")
+        }
         Value::Number(number) => number.get() != 0.0,
         Value::List(list) => !list.is_empty(),
         Value::Array(array) => !array.is_empty(),
@@ -3054,6 +3818,76 @@ fn is_error_catch_tag(value: &Value, interner: &Interner) -> bool {
         value,
         Value::Word(symbol) if interner.canonical_spelling(*symbol).eq("error")
     )
+}
+
+fn procedure_definition_text(procedure: &Procedure, interner: &Interner) -> String {
+    let mut source = String::new();
+    source.push_str("to ");
+    source.push_str(interner.spelling(procedure.name()));
+    for param in procedure.params() {
+        source.push(' ');
+        source.push(':');
+        source.push_str(interner.spelling(*param));
+    }
+    source.push('\n');
+    if !procedure.body_source().is_empty() {
+        source.push_str(procedure.body_source());
+        if !procedure.body_source().ends_with('\n') {
+            source.push('\n');
+        }
+    }
+    source.push_str("end\n");
+    source
+}
+
+fn value_source_literal(value: &Value, interner: &Interner) -> String {
+    match value {
+        Value::Word(symbol) => format!("\"{}", interner.spelling(*symbol)),
+        Value::BareWord(symbol) => interner.spelling(*symbol).to_string(),
+        Value::List(list) => format!(
+            "[{}]",
+            list_to_source(list, interner, &ArityTable::default())
+        ),
+        _ => value.show(interner),
+    }
+}
+
+fn contentslist_input(value: &Value, interner: &Interner) -> Result<EditContents, VmError> {
+    if let Value::List(list) = value {
+        let parts: Vec<&Value> = list.iter().collect();
+        if parts.len() == 3 && parts.iter().all(|part| matches!(part, Value::List(_))) {
+            return Ok(EditContents {
+                procedures: local_names(parts[0], interner)?,
+                variables: local_names(parts[1], interner)?,
+                plists: local_names(parts[2], interner)?,
+            });
+        }
+    }
+    Ok(EditContents {
+        procedures: local_names(value, interner)?,
+        variables: Vec::new(),
+        plists: Vec::new(),
+    })
+}
+
+fn edit_temp_path() -> PathBuf {
+    let mut path = std::env::temp_dir();
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    path.push(format!("dynalogo-edit-{nonce}.lgo"));
+    path
+}
+
+fn resolve_editor_command(
+    override_command: Option<&str>,
+    env_lookup: Result<String, env::VarError>,
+) -> Result<String, VmError> {
+    if let Some(command) = override_command {
+        return Ok(command.to_string());
+    }
+    env_lookup.map_err(|_| VmError::new("EDIT requires the EDITOR environment variable to be set"))
 }
 
 fn procedure_text(
@@ -3153,8 +3987,24 @@ fn primitive_names() -> &'static [&'static str] {
         "pr",
         "show",
         "type",
+        "load",
+        "save",
+        "setread",
+        "setwrite",
+        "openread",
+        "openwrite",
+        "openappend",
+        "close",
+        "reader",
+        "writer",
+        "dribble",
+        "nodribble",
+        "readchar",
+        "rc",
         "readlist",
         "rl",
+        "readword",
+        "rw",
         "make",
         "name",
         "thing",
@@ -3173,6 +4023,8 @@ fn primitive_names() -> &'static [&'static str] {
         "pops",
         "pots",
         "popls",
+        "edit",
+        "ed",
         ".primitives",
         "erase",
         "er",
@@ -3204,6 +4056,9 @@ fn primitive_names() -> &'static [&'static str] {
         "map",
         "filter",
         "reduce",
+        "cascade",
+        "cascade.2",
+        "transfer",
         "repcount",
         "test",
         "iftrue",
@@ -3341,29 +4196,15 @@ fn compile_list_source(
 }
 
 fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> String {
-    list.iter()
-        .map(|value| match value {
-            Value::List(inner) => format!("[{}]", list_to_source(inner, interner, arities)),
-            Value::Word(symbol) => {
-                let spelling = interner.spelling(*symbol);
-                if is_placeholder_word(spelling)
-                    || spelling.starts_with(':')
-                    || arities.get(spelling).is_some()
-                    || is_operator_word(spelling)
-                {
-                    if is_placeholder_word(spelling) {
-                        format!(":{spelling}")
-                    } else {
-                        spelling.to_string()
-                    }
-                } else {
-                    format!("\"{spelling}")
-                }
-            }
-            _ => value.show(interner),
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+    let values: Vec<&Value> = list.iter().collect();
+    let mut rendered = Vec::new();
+    let mut index = 0;
+    while index < values.len() {
+        let (expr, consumed) = value_expr_to_source(&values[index..], interner, arities);
+        rendered.push(expr);
+        index += consumed.max(1);
+    }
+    rendered.join(" ")
 }
 
 fn before_text(a: &str, b: &str) -> bool {
@@ -3459,11 +4300,65 @@ fn is_operator_word(text: &str) -> bool {
     )
 }
 
-fn is_placeholder_word(text: &str) -> bool {
-    text == "?"
-        || text
-            .strip_prefix('?')
-            .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
+fn value_expr_to_source(
+    values: &[&Value],
+    interner: &Interner,
+    arities: &ArityTable,
+) -> (String, usize) {
+    let Some(first) = values.first() else {
+        return (String::new(), 0);
+    };
+
+    match first {
+        Value::List(inner) => (format!("[{}]", list_to_source(inner, interner, arities)), 1),
+        Value::Word(symbol) => (format!("\"{}", interner.spelling(*symbol)), 1),
+        Value::BareWord(symbol) => {
+            let spelling = interner.spelling(*symbol);
+            if let Some(binding) = template_binding_name(spelling) {
+                return (format!(":{binding}"), 1);
+            }
+            if matches!(spelling, "(" | ")" | "[" | "]" | "{" | "}")
+                || spelling.starts_with(':')
+                || is_operator_word(spelling)
+            {
+                return (spelling.to_string(), 1);
+            }
+            if let Some(Arity::Exact(argc)) = arities.get(spelling) {
+                let mut consumed = 1;
+                let mut parts = vec![spelling.to_string()];
+                for _ in 0..argc {
+                    if consumed >= values.len() {
+                        break;
+                    }
+                    let (arg, arg_consumed) =
+                        value_expr_to_source(&values[consumed..], interner, arities);
+                    parts.push(arg);
+                    consumed += arg_consumed.max(1);
+                }
+                return (parts.join(" "), consumed);
+            }
+            (format!("\"{spelling}"), 1)
+        }
+        Value::Number(_) | Value::Array(_) => (first.show(interner), 1),
+    }
+}
+
+fn template_binding_name(text: &str) -> Option<String> {
+    if text == "?" || text == "#" {
+        return Some(text.to_string());
+    }
+
+    let rest = text.strip_prefix('?')?;
+    if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
+        return Some(text.to_string());
+    }
+    if rest.eq_ignore_ascii_case("in") {
+        return Some("?in".to_string());
+    }
+    if rest.eq_ignore_ascii_case("out") {
+        return Some("?out".to_string());
+    }
+    None
 }
 
 #[cfg(test)]

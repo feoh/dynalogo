@@ -219,11 +219,17 @@ The Atari manual organizes features into these areas:
 
 ### 10. Files
 
-**Present in Atari manual but missing**
+**Implemented from the Atari manual surface**
 
 - `LOAD`, `SAVE`
 - `SETREAD`, `SETWRITE`
-- file/device oriented `RC`, `RL`
+- `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, `CLOSE`
+- `READER`, `WRITER`
+- file/device oriented `RC`, `RL`, `RW`
+- `DRIBBLE`, `NODRIBBLE`
+
+**Still missing**
+
 - `ERF`, `CATALOG`, printer/file device handling
 
 ### 11. Special primitives
@@ -243,8 +249,8 @@ DynaLOGO:
    - `ASK`, `TELL`, `EACH`, `WHO`, `OVER`, `TOUCHING`, `WHEN`
 2. **Remaining workspace management work**
    - `NODES`, `RECYCLE`, bury/unbury behavior, and editor integration
-3. **File and device I/O**
-   - `LOAD`, `SAVE`, `SETREAD`, `SETWRITE`, `RC`, `RL`
+3. **File and device follow-through**
+   - printer/catalog/device-specific surface beyond `LOAD`/`SAVE`/streams
 4. **Remaining Atari type/text helper audit**
    - verify any adjacent helper surface beyond `REALWORDP`, `RANK`, `RANPICK`, `EVENP`, `DIVISORP`, `FACTORIAL`, `ASCII`, `CHAR`, `LOWERCASE`, and `REV`
 5. **Graphics/screen extras**

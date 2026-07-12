@@ -19,17 +19,22 @@ Implemented today:
 Still missing from the nearby workspace roadmap bucket:
 
 - `NODES`, `RECYCLE`
-- editor-facing commands such as `EDIT`/`ED`, `EDNS`, `EDSH`
+- the broader editor-family follow-ups such as `EDNS`, `EDSH`
 
-## File and stream I/O still missing on the current integration line
+## File and stream follow-up gaps
 
-The active branch line still lacks the broader file/stream surface:
+Implemented on the current integration line:
 
 - `LOAD`, `SAVE`
-- `OPENREAD`, `OPENWRITE`
-- `READWORD`, `READCHAR`
-- stream plumbing and `DRIBBLE`
-- `EDIT` integration with `$EDITOR`
+- `SETREAD`, `SETWRITE`
+- `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, `CLOSE`
+- `READER`, `WRITER`
+- `DRIBBLE`, `NODRIBBLE`
+- `READCHAR`, `READLIST`, `READWORD`
+- `EDIT`/`ED` via `$EDITOR`
+
+Still missing in the broader file/device area are Atari- and UCBLogo-adjacent
+commands beyond this core stream surface.
 
 ## Macro system is still absent
 
@@ -42,13 +47,16 @@ The roadmap still calls out these missing macro features:
 
 ## Template/control follow-up remains
 
-Current template and library-control support is solid, but roadmap follow-up
-still remains for:
+Current template and library-control support now includes:
 
-- full template forms
+- full template forms across `APPLY`/`FOREACH`/`MAP`/`FILTER`/`REDUCE`
 - `CASCADE`
+- `CASCADE.2`
 - `TRANSFER`
-- any additional UCBLogo-specific template edge cases found during audit
+- preserved literal-word reserialization for instruction-list templates
+
+Remaining work is mainly any additional UCBLogo-specific template edge cases
+found during audit.
 
 ## Graphics/library gaps remain
 
