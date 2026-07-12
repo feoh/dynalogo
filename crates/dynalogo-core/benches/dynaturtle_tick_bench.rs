@@ -50,8 +50,10 @@ fn build_swarm(turtle_count: usize) -> Vm {
             .expect("forcing pair a into contact should run");
         vm.eval_source(&format!("tell {b} setxy 100 100"))
             .expect("forcing pair b into contact should run");
-        vm.eval_source(&format!("when [touching {a} {b}] [make \"hits sum :hits 1]"))
-            .expect("touching demon should register");
+        vm.eval_source(&format!(
+            "when [touching {a} {b}] [make \"hits sum :hits 1]"
+        ))
+        .expect("touching demon should register");
     }
 
     vm
@@ -68,7 +70,8 @@ fn bench_dynaturtle_tick(c: &mut Criterion) {
                 b.iter_batched(
                     || swarm.clone(),
                     |mut vm| {
-                        vm.dynaturtle_tick(TICK_DT).expect("tick should run cleanly");
+                        vm.dynaturtle_tick(TICK_DT)
+                            .expect("tick should run cleanly");
                     },
                     BatchSize::SmallInput,
                 );

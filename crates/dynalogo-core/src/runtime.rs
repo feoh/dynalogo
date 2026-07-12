@@ -55,9 +55,9 @@ impl CooperativeRuntime {
 
     pub fn eval(&mut self, source: impl AsRef<str>) {
         match self.vm.eval_source(source.as_ref()) {
-            Ok(result) => emit_eval_result(&mut self.vm, result, |event| {
-                self.events.push_back(event)
-            }),
+            Ok(result) => {
+                emit_eval_result(&mut self.vm, result, |event| self.events.push_back(event))
+            }
             Err(error) => self
                 .events
                 .push_back(RuntimeEvent::Error(error.to_string())),
@@ -72,12 +72,14 @@ impl CooperativeRuntime {
         let tick_seconds = self.timestep.config().tick.as_secs_f64();
         self.timestep.advance(elapsed, |tick| {
             if let Err(error) = self.vm.dynaturtle_tick(tick_seconds) {
-                self.events.push_back(RuntimeEvent::Error(error.to_string()));
+                self.events
+                    .push_back(RuntimeEvent::Error(error.to_string()));
             }
-            self.events.push_back(RuntimeEvent::Snapshot(TurtleSnapshot {
-                tick,
-                turtles: self.vm.turtles().snapshots(),
-            }));
+            self.events
+                .push_back(RuntimeEvent::Snapshot(TurtleSnapshot {
+                    tick,
+                    turtles: self.vm.turtles().snapshots(),
+                }));
         })
     }
 
@@ -119,10 +121,7 @@ mod threaded {
             }
         }
 
-        pub fn send(
-            &self,
-            command: RuntimeCommand,
-        ) -> Result<(), mpsc::SendError<RuntimeCommand>> {
+        pub fn send(&self, command: RuntimeCommand) -> Result<(), mpsc::SendError<RuntimeCommand>> {
             self.commands.send(command)
         }
 
@@ -195,7 +194,10 @@ fn emit_eval_result(vm: &mut Vm, result: RunResult, mut emit: impl FnMut(Runtime
         emit(RuntimeEvent::Output(result.output));
     }
     for value in result.stack {
-        emit(RuntimeEvent::Output(format!("{}\n", value.show(vm.interner()))));
+        emit(RuntimeEvent::Output(format!(
+            "{}\n",
+            value.show(vm.interner())
+        )));
     }
 }
 
@@ -214,7 +216,10 @@ mod tests {
     fn cooperative_runtime_evaluates_commands_without_threads() {
         let mut runtime = CooperativeRuntime::new(tiny_config());
         runtime.eval("print sum 2 3");
-        assert_eq!(runtime.pop_event(), Some(RuntimeEvent::Output("5\n".to_string())));
+        assert_eq!(
+            runtime.pop_event(),
+            Some(RuntimeEvent::Output("5\n".to_string()))
+        );
     }
 
     #[test]
