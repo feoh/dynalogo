@@ -53,6 +53,8 @@ pub struct TurtleStore {
     headings: Vec<f64>,
     pen_down: Vec<bool>,
     pen_color: Vec<u32>,
+    pens: Vec<[u32; 3]>,
+    active_pen: Vec<u8>,
     pen_size: Vec<f64>,
     label_height: Vec<f64>,
     visible: Vec<bool>,
@@ -70,6 +72,8 @@ impl TurtleStore {
             headings: Vec::new(),
             pen_down: Vec::new(),
             pen_color: Vec::new(),
+            pens: Vec::new(),
+            active_pen: Vec::new(),
             pen_size: Vec::new(),
             label_height: Vec::new(),
             visible: Vec::new(),
@@ -102,6 +106,8 @@ impl TurtleStore {
         self.headings.push(state.heading);
         self.pen_down.push(state.pen_down);
         self.pen_color.push(state.pen_color);
+        self.pens.push(state.pens);
+        self.active_pen.push(state.active_pen);
         self.pen_size.push(state.pen_size);
         self.label_height.push(state.label_height);
         self.visible.push(state.visible);
@@ -123,6 +129,8 @@ impl TurtleStore {
             heading: *self.headings.get(i)?,
             pen_down: *self.pen_down.get(i)?,
             pen_color: *self.pen_color.get(i)?,
+            pens: *self.pens.get(i)?,
+            active_pen: *self.active_pen.get(i)?,
             pen_size: *self.pen_size.get(i)?,
             label_height: *self.label_height.get(i)?,
             visible: *self.visible.get(i)?,
@@ -136,6 +144,8 @@ impl TurtleStore {
         self.headings[i] = state.heading;
         self.pen_down[i] = state.pen_down;
         self.pen_color[i] = state.pen_color;
+        self.pens[i] = state.pens;
+        self.active_pen[i] = state.active_pen;
         self.pen_size[i] = state.pen_size;
         self.label_height[i] = state.label_height;
         self.visible[i] = state.visible;
@@ -264,7 +274,34 @@ impl TurtleStore {
 
     pub fn set_pen_color(&mut self, id: TurtleId, color: u32) {
         self.ensure(id);
-        self.pen_color[id.index()] = color;
+        let i = id.index();
+        self.pen_color[i] = color;
+        let active = self.active_pen[i] as usize - 1;
+        self.pens[i][active] = color;
+    }
+
+    pub fn set_pen_n_color(&mut self, id: TurtleId, pen: u8, color: u32) {
+        self.ensure(id);
+        let i = id.index();
+        self.pens[i][pen as usize - 1] = color;
+        if self.active_pen[i] == pen {
+            self.pen_color[i] = color;
+        }
+    }
+
+    pub fn pen_number(&self, id: TurtleId) -> Option<u8> {
+        self.active_pen.get(id.index()).copied()
+    }
+
+    pub fn pen_color_of(&self, id: TurtleId, pen: u8) -> Option<u32> {
+        self.pens.get(id.index()).map(|pens| pens[pen as usize - 1])
+    }
+
+    pub fn set_active_pen(&mut self, id: TurtleId, pen: u8) {
+        self.ensure(id);
+        let i = id.index();
+        self.active_pen[i] = pen;
+        self.pen_color[i] = self.pens[i][pen as usize - 1];
     }
 
     pub fn set_pen_size(&mut self, id: TurtleId, size: f64) {

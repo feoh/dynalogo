@@ -143,6 +143,8 @@ pub fn interpolate_turtle(a: TurtleState, b: TurtleState, alpha: f64) -> TurtleS
         heading: interpolate_angle_degrees(a.heading, b.heading, alpha),
         pen_down: b.pen_down,
         pen_color: b.pen_color,
+        pens: b.pens,
+        active_pen: b.active_pen,
         pen_size: b.pen_size,
         label_height: b.label_height,
         visible: b.visible,

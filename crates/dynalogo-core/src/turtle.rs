@@ -43,7 +43,12 @@ pub struct TurtleState {
     /// Degrees, where 0 points north/up, matching Logo convention.
     pub heading: f64,
     pub pen_down: bool,
+    /// The active pen's color, kept in sync with `pens[active_pen - 1]`.
     pub pen_color: u32,
+    /// Atari LOGO gives each turtle 3 independently colored pens.
+    pub pens: [u32; 3],
+    /// 1-based index into `pens`, as reported/selected by `PN`/`SETPN`.
+    pub active_pen: u8,
     pub pen_size: f64,
     pub label_height: f64,
     pub visible: bool,
@@ -56,6 +61,8 @@ impl Default for TurtleState {
             heading: 0.0,
             pen_down: true,
             pen_color: 0x00ff_ffff,
+            pens: [0x00ff_ffff; 3],
+            active_pen: 1,
             pen_size: 1.0,
             label_height: 12.0,
             visible: true,

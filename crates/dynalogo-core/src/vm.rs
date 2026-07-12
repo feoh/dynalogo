@@ -1017,6 +1017,9 @@ impl Vm {
             "clearscreen" | "cs" => self.turtle_clearscreen(args),
             "penup" | "pu" => self.turtle_penup(args),
             "pendown" | "pd" => self.turtle_pendown(args),
+            "pn" => self.turtle_pn(args),
+            "setpn" => self.turtle_setpn(args),
+            "pc" => self.turtle_pc(args),
             "setpencolor" | "setpc" => self.turtle_setpencolor(args),
             "setpensize" => self.turtle_setpensize(args),
             "setlabelheight" => self.turtle_setlabelheight(args),
@@ -3531,13 +3534,54 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
-    fn turtle_setpencolor(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
-        expect_arity("setpencolor", &args, 1)?;
-        let color = number_input(&args[0], &self.interner)? as u32;
+    fn turtle_pn(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pn", &args, 0)?;
+        let id = self.current_turtle();
+        Ok(PrimitiveResult::Value(Value::number(
+            self.turtles.pen_number(id).unwrap_or(1) as f64,
+        )))
+    }
+
+    fn turtle_setpn(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setpn", &args, 1)?;
+        let pen = pen_number_input(&args[0], &self.interner)?;
         for id in self.turtles.active().to_vec() {
-            self.turtles.set_pen_color(id, color);
+            self.turtles.set_active_pen(id, pen);
         }
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_pc(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pc", &args, 1)?;
+        let pen = pen_number_input(&args[0], &self.interner)?;
+        let id = self.current_turtle();
+        Ok(PrimitiveResult::Value(Value::number(
+            self.turtles.pen_color_of(id, pen).unwrap_or(0) as f64,
+        )))
+    }
+
+    fn turtle_setpencolor(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        match args.as_slice() {
+            [color] => {
+                let color = number_input(color, &self.interner)? as u32;
+                for id in self.turtles.active().to_vec() {
+                    self.turtles.set_pen_color(id, color);
+                }
+                Ok(PrimitiveResult::NoValue)
+            }
+            [pen, color] => {
+                let pen = pen_number_input(pen, &self.interner)?;
+                let color = number_input(color, &self.interner)? as u32;
+                for id in self.turtles.active().to_vec() {
+                    self.turtles.set_pen_n_color(id, pen, color);
+                }
+                Ok(PrimitiveResult::NoValue)
+            }
+            _ => Err(VmError::new(format!(
+                "setpc expected 1 or 2 input(s), got {}",
+                args.len()
+            ))),
+        }
     }
 
     fn turtle_setpensize(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -4083,6 +4127,16 @@ fn ranged_device_index_input(
     Ok(index)
 }
 
+fn pen_number_input(value: &Value, interner: &Interner) -> Result<u8, VmError> {
+    let pen = number_input(value, interner)? as i64;
+    if !(1..=3).contains(&pen) {
+        return Err(VmError::new(format!(
+            "pen number {pen} must be between 1 and 3"
+        )));
+    }
+    Ok(pen as u8)
+}
+
 fn token_to_data_value(kind: TokenKind, interner: &mut Interner) -> Option<Value> {
     match kind {
         TokenKind::Word(word) => Some(number_or_bare_word_value(interner, word)),
@@ -4605,6 +4659,9 @@ fn primitive_names() -> &'static [&'static str] {
         "pu",
         "pendown",
         "pd",
+        "pn",
+        "setpn",
+        "pc",
         "setpencolor",
         "setpc",
         "setpensize",
@@ -5368,6 +5425,24 @@ mod tests {
             _ => None,
         });
         assert_eq!(fill, Some((Point::new(10.0, 10.0), 9)));
+    }
+
+    #[test]
+    fn setpc_with_two_inputs_sets_a_specific_pen_without_disturbing_the_active_pen() {
+        let (result, vm) =
+            run("setpn 2 setpc 9 (setpc 1 4) print pc 1 print pc 2 print pn").unwrap();
+        assert_eq!(result.output, "4\n9\n2\n");
+        let state = vm.turtles().state(TurtleId::new(0)).unwrap();
+        assert_eq!(state.pen_color, 9);
+    }
+
+    #[test]
+    fn each_turtle_keeps_its_own_pens_independent_of_other_turtles() {
+        let (result, _) = run(
+            "tell 0 setpn 2 setpc 7 tell 1 setpn 2 setpc 8 tell 0 print pc 2 tell 1 print pc 2",
+        )
+        .unwrap();
+        assert_eq!(result.output, "7\n8\n");
     }
 
     #[test]

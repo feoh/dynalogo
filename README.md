@@ -120,7 +120,7 @@ Implemented today:
 - File/outside-world helpers: `LOAD SAVE OPENREAD OPENWRITE OPENAPPEND`
   `READWORD READCHAR DRIBBLE KEYP JOY PADDLE TIMEOUT SETCURSOR SETENV`
 - Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD`
-  `SETPC SETPENSIZE SETLABELHEIGHT LABEL HT ST POS HEADING XCOR YCOR`
+  `PN SETPN PC SETPC SETPENSIZE SETLABELHEIGHT LABEL HT ST POS HEADING XCOR YCOR`
 
 Still in progress: remaining workspace/file parity polish, full UCBLogo error
 parity, additional dynaturtle compatibility surface, and browser/WASM polish.
