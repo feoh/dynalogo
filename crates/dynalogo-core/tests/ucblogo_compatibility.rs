@@ -36,6 +36,11 @@ const FIXTURES: &[Fixture] = &[
         note: "procedure output and TEXT workspace source exposure",
     },
     Fixture {
+        stem: "error_codes",
+        mode: FixtureMode::MatchUcbLogo,
+        note: "CATCH \"ERROR/ERROR list contents for codes 5, 9, 11, 25, and 35",
+    },
+    Fixture {
         stem: "dynaturtle_selection",
         mode: FixtureMode::DynalogoOnly,
         note: "dynaturtle addressing primitives are an intentional extension beyond UCBLogo",

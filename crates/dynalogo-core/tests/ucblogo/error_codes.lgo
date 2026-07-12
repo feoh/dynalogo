@@ -1,0 +1,27 @@
+catch "error [iftrue [print "unreachable]]
+make "err error
+print item 1 :err
+print item 2 :err
+
+to noop :x
+print :x
+end
+catch "error [print noop 5]
+make "err error
+print item 1 :err
+print item 2 :err
+
+catch "error [sum 2 3 print 9]
+make "err error
+print item 1 :err
+print item 2 :err
+
+catch "error [print :missing]
+make "err error
+print item 1 :err
+print item 2 :err
+
+catch "error [throw "error "boom]
+make "err error
+print item 1 :err
+print item 2 :err

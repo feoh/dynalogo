@@ -12,6 +12,10 @@ classic UCBLogo output on the current integration line:
 - core control and expression evaluation
 - `CATCH "ERROR` / `ERROR` behavior
 - workspace procedure source via `TEXT`
+- `CATCH "ERROR`/`ERROR` list contents for error codes 5, 9, 11, 25, and 35
+  (`error_codes`), pinning the numeric code plus message wording for the
+  "didn't output to", "You don't say what to do with", "has no value",
+  "IFTRUE/IFFALSE without TEST", and custom `THROW "ERROR` cases
 
 It also includes an explicit **DynaLOGO-only** fixture for dynaturtle turtle
 selection (`TELL`/`SETPOS`/`POS`) so intentional extensions are documented in
