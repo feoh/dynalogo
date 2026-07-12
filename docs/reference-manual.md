@@ -233,6 +233,7 @@ Implemented workspace-oriented commands include:
 - `ERASE`/`ER`, `ERN`, `ERNS`, `ERPS`, `ERALL`
 - `BURY`, `UNBURY`, `BURIEDP`
 - `NODES`, `RECYCLE`
+- `EDIT`/`ED`, `EDNS`, `EDSH`
 
 These are useful for inspecting procedures, variables, and the primitive set.
 
@@ -242,6 +243,12 @@ ownership model reclaims memory automatically. `NODES` reports real live
 counts of workspace objects (procedures, variables, property lists, turtles)
 rather than fake memory-allocator statistics, and `RECYCLE` is a documented
 no-op — there is no manual reclaim step for it to perform.
+
+`EDIT`/`ED` keep their current contents-list-driven behavior through `$EDITOR`.
+`EDNS` uses the same editor session machinery, but seeds the buffer from the
+currently visible global variables instead of a contents list. `EDSH` is
+present only as an honest placeholder today: it reports that the shape
+registry/editor work is not implemented yet rather than faking a sprite editor.
 
 ## 7. Console I/O
 

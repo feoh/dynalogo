@@ -968,6 +968,8 @@ impl Vm {
             "pots" => self.pots(args),
             "popls" => self.popls(args),
             "edit" | "ed" => self.edit(args),
+            "edns" => self.edns(args),
+            "edsh" => self.edsh(args),
             ".primitives" => self.primitives_command(args),
             "erase" | "er" => self.erase(args),
             "ern" => self.ern(args),
@@ -2514,6 +2516,32 @@ impl Vm {
             }
         };
 
+        self.edit_session(contents, buffer_text)
+    }
+
+    fn edns(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("edns", &args, 0)?;
+        let contents = EditContents {
+            procedures: Vec::new(),
+            variables: self.visible_variable_names(),
+            plists: Vec::new(),
+        };
+        let buffer_text = self.render_edit_buffer(&contents)?;
+        self.edit_session(contents, buffer_text)
+    }
+
+    fn edsh(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("edsh", &args, 0)?;
+        Err(VmError::new(
+            "EDSH requires the shape registry/editor work that DynaLOGO does not yet implement",
+        ))
+    }
+
+    fn edit_session(
+        &mut self,
+        contents: EditContents,
+        buffer_text: String,
+    ) -> Result<PrimitiveResult, VmError> {
         let edited = self.run_editor_on(&buffer_text)?;
         self.edit_buffer = Some(EditSession {
             contents,
@@ -2607,7 +2635,7 @@ impl Vm {
         Ok(edited)
     }
 
-    fn write_variable_listing(&mut self) {
+    fn visible_variable_names(&self) -> Vec<String> {
         let mut names = self
             .env
             .globals
@@ -2616,6 +2644,11 @@ impl Vm {
             .cloned()
             .collect::<Vec<_>>();
         names.sort();
+        names
+    }
+
+    fn write_variable_listing(&mut self) {
+        let names = self.visible_variable_names();
         for name in names {
             if let Some(value) = self.env.globals.get(&name) {
                 self.output.push_str(&name);
@@ -4705,6 +4738,8 @@ fn primitive_names() -> &'static [&'static str] {
         "popls",
         "edit",
         "ed",
+        "edns",
+        "edsh",
         ".primitives",
         "erase",
         "er",
@@ -5710,6 +5745,45 @@ mod tests {
         vm.eval_source("make \"foo 7").unwrap();
         let result = vm.eval_source("recycle print :foo").unwrap();
         assert_eq!(result.output, "7\n");
+    }
+
+    #[test]
+    fn edns_edits_visible_variables_via_existing_editor_flow() {
+        let mut vm = Vm::new();
+        vm.eval_source("make \"foo 7 make \"bar 8 bury [bar]")
+            .unwrap();
+
+        let script_path = std::env::temp_dir().join(format!(
+            "dynalogo-edns-{}.py",
+            std::process::id()
+        ));
+        std::fs::write(
+            &script_path,
+            r#"import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+assert 'make "foo 7' in text
+assert 'make "bar 8' not in text
+path.write_text('make "foo 9\n')
+"#,
+        )
+        .unwrap();
+        vm.set_editor_command(format!("python3 {}", script_path.display()));
+
+        vm.eval_source("edns").unwrap();
+        let result = vm.eval_source("print :foo print :bar").unwrap();
+        assert_eq!(result.output, "9\n8\n");
+        let _ = std::fs::remove_file(script_path);
+    }
+
+    #[test]
+    fn edsh_reports_missing_shape_editor_support() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("edsh").unwrap_err();
+        assert_eq!(
+            error.message,
+            "EDSH requires the shape registry/editor work that DynaLOGO does not yet implement"
+        );
     }
 
     #[test]

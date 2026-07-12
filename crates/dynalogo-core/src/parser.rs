@@ -176,6 +176,8 @@ impl ArityTable {
             ("MACROEXPAND", 1),
             ("EDIT", 1),
             ("ED", 1),
+            ("EDNS", 0),
+            ("EDSH", 0),
             ("PO", 1),
             ("POALL", 0),
             ("PONS", 0),

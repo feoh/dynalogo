@@ -53,7 +53,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Variables and workspace predicates
 
 - `MAKE`, `NAME`, `THING`, `LOCAL`
-- `EDIT`/`ED`
+- `EDIT`/`ED`, `EDNS`, `EDSH`
 - `NAMEP`
 - `DEFINEDP`/`DEFINED?`
 - `PRIMITIVEP`/`PRIMITIVE?`
@@ -107,6 +107,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 
 ## Notes
 
-Not yet implemented from nearby roadmap/workspace tasks include additional
-workspace/editor parity such as `EDNS`/`EDSH` and broader compatibility polish.
+`EDNS` is implemented as an editor-driven variable session using the same
+underlying flow as `EDIT`/`ED`; `EDSH` currently reports that the shape
+registry/editor work is not implemented yet rather than pretending support.
 See also [primitive-gaps.md](primitive-gaps.md) for the current gap list.

@@ -22,7 +22,8 @@ Implemented today:
 
 Still missing from the nearby workspace roadmap bucket:
 
-- the broader editor-family follow-ups such as `EDNS`, `EDSH`
+- a real shape-editor-backed `EDSH` implementation (the command exists today,
+  but honestly reports that the shape registry/editor work is not implemented)
 
 ## File and stream follow-up gaps
 

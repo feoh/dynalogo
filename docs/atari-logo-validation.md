@@ -157,11 +157,13 @@ The Atari manual organizes features into these areas:
 - `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`
 - `POTS`
 
-**Missing from Atari vocabulary**
+**Partial / follow-up status**
 
-- `EDIT`/`ED`
-- `EDNS`, `EDSH`
-- Atari editor/screen behavior itself
+- `EDIT`/`ED` and `EDNS` are available through the current `$EDITOR`-driven
+  text-edit flow
+- `EDSH` currently reports that the shape registry/editor work is not yet
+  implemented
+- Atari editor/screen behavior itself is still not reproduced
 
 ### 6. Flow of control and conditionals
 
