@@ -5,7 +5,7 @@ validation notes, UCBLogo compatibility audit, and the closed-task verification
 passes. It focuses on user-visible gaps that are still intentionally unfinished
 or not fully verifiable in this environment.
 
-## Workspace management still missing
+## Workspace management status
 
 Implemented today:
 
@@ -67,9 +67,12 @@ Implemented:
   outputs the one-step expansion *without* running it.
 - `COPYDEF` preserves the macro/procedure distinction of the source.
 
-Not yet covered: full syntactic (compile-time) macro expansion — macros are
-expanded at call time here, not spliced into the surrounding bytecode chunk,
-so a macro invocation is always dispatched dynamically rather than inlined.
+Design note: macros expand dynamically at call time rather than being spliced
+into the surrounding bytecode chunk during compilation. That is intentional for
+this VM today: the expansion runs in caller dynamic scope and is covered by the
+`macros.lgo` fixture, including `.MACRO`, `MACROP`, and `MACROEXPAND` behavior.
+Future work should only revisit this if a concrete UCBLogo compatibility case
+requires compile-time expansion semantics.
 
 ## Template/control status
 
@@ -106,8 +109,9 @@ The classic dynaturtle-facing language layer is now exposed with:
 - `TOUCHING`, `WHEN`, `TOOT`
 
 No concrete dynaturtle primitive is missing from the current documented surface
-in this file. Future collision/event work should be tracked by specific failing
-manual-comparison cases rather than the earlier broad "polish" bucket.
+in this file. Collision/event follow-up should be tracked only by specific
+failing manual-comparison cases; the earlier broad "polish" bucket was too
+vague to validate or close.
 
 ## Error parity remains incomplete
 
