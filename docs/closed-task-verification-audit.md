@@ -30,6 +30,44 @@ At inventory time, these claimed artifact classes are present on the integrated 
 
 This is not the final verdict; category subtasks must validate each claim in detail.
 
+
+## Verification findings so far
+
+### Confirmed artifacts and checks
+
+- **Closed-task inventory:** 126 closed tasks were captured and categorized in the table above.
+- **Core VM/runtime artifacts exist:** representative functions for macros, templates, `CASCADE.2`, `TRANSFER`, file/editor flows, `NODES`/`RECYCLE`, Atari graphics helpers, dynaturtle edge modes, shape registry, and code-4 numeric errors are present in `crates/dynalogo-core/src/vm.rs`.
+- **Core VM/runtime tests exist:** regression tests cover macros/templates/negative literals, `events_since_clear`, Atari fill/pen/SETSCRUNCH, workspace lifecycle/editor flows, UCBLogo error-code behavior, shape registry, edge modes, speed, and item/numeric code-4 errors.
+- **Frontend/browser/WASM artifacts exist:** `crates/dynalogo/src/bin/dynalogo-window.rs`, `web/index.html`, `web/mq_js_bundle.js`, `.github/workflows/{ci,pages,publish,release,changelog}.yml`, and browser/demo docs are present.
+- **Frontend helper tests exist:** `dynalogo-window` has 25 unit tests covering coordinate transforms, heading vectors, sprite selection, custom shape point parsing, input queue behavior, browser-command filtering, and log retention.
+- **Docs/examples artifacts exist:** all expected docs and example programs are present; relative Markdown links in docs/README/examples checked out with zero missing local targets.
+- **Example smoke run:** every `examples/*.lgo` program executed successfully through the CLI with a 15-second timeout.
+- **Validation commands:** after audit fixes, `cargo fmt --check`, `cargo test --workspace -q`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo build -p dynalogo --bin dynalogo-window --target wasm32-unknown-unknown` have been run successfully.
+
+### Audit findings that required immediate fixes
+
+1. **Formatting drift was real.** `cargo fmt --check` failed on `crates/dynalogo/src/bin/dynalogo-window.rs` and `crates/dynalogo-core/src/vm.rs`.
+   - Corrective Witan task: `tk-fix-formatting-drift-found-by-closed-task-audit-bcb929`
+   - Fix commit: `c505e52`
+2. **Shape-editor/EDSH status wording was stale.** After `PUTSH`/`GETSH`/`SHAPE`, custom rendering, and the browser shape-editor panel landed, docs and the `EDSH` placeholder still said the shape registry/editor work was not implemented.
+   - Corrective Witan task: `tk-fix-stale-edsh-and-shape-editor-wording-after-br-361223`
+   - Fix commit: `48eefe3`
+
+### Audit findings converted into follow-up tasks
+
+These are not immediate artifact-existence failures, but the closed-task audit found that completion claims were broader than the current evidence/test coverage supports:
+
+- `tk-finish-documented-remaining-ucblogo-error-parity-770844` — the repo still documents remaining UCBLogo error-parity gaps despite the parent parity task being closed.
+- `tk-add-automated-browser-shape-editor-ui-tests-64f134` — the browser shape-editor artifact exists, but JavaScript/DOM behavior is not directly automated.
+- `tk-decide-and-implement-real-logo-level-edsh-flow-3ce826` — `EDSH` remains a placeholder even though browser-side shape editing exists.
+- `tk-add-workflow-yaml-validation-to-release-artifact-8c618c` — workflow files exist and contain jobs/steps, but local workflow linting/action validation is not installed or automated.
+
+### Limitations of this audit pass
+
+- Live UCBLogo comparison could not be executed because no `ucblogo`/`logo` binary is available in this environment. The committed compatibility fixtures are still valuable, but they are not a fresh live oracle run.
+- Native GUI/audio behavior can be smoke-built and partially unit-tested through extracted pure helpers, but this environment does not perform visual/audio snapshot testing.
+- GitHub Actions workflows were checked for existence and structural markers and exercised indirectly through local cargo commands, but not executed on GitHub in this audit worktree.
+
 ## Closed task inventory
 
 | # | Category | Type | Slug | Title | Project |
