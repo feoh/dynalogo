@@ -140,10 +140,13 @@ Implemented today:
   `READWORD READCHAR DRIBBLE KEYP JOY PADDLE TIMEOUT SETCURSOR SETENV`
 - Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD`
   `PN SETPN PC SETPC SETPENSIZE SETSCRUNCH SETLABELHEIGHT LABEL HT ST POS HEADING XCOR YCOR`
-- Dynaturtle shape surface: `SETSHAPE SHAPE PUTSH GETSH`
+- Dynaturtle shape surface: `SETSHAPE SHAPE PUTSH GETSH`, registry-backed
+  custom-outline rendering, the browser shape editor, and `$EDITOR`-driven
+  `EDSH`
 
-Still in progress: custom shape rendering/editor follow-through and any
-remaining deeper compatibility polish beyond the now-closed README buckets.
+Remaining polish is now tracked by concrete compatibility gaps rather than the
+old broad README buckets; see [`docs/primitive-gaps.md`](docs/primitive-gaps.md)
+for the current limitations.
 
 ## Example programs
 
