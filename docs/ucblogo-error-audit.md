@@ -77,13 +77,11 @@ correct UCBLogo wording for an empty *word* input (as opposed to an empty
 list/array) could not be verified against a live interpreter in this
 environment:
 
-- `vm.rs:2904` — `"REDUCE cannot reduce an empty list"`
-
 The empty-word cases for `FIRST`, `RANPICK`, and `ASCII`, `ITEM`'s basic
-out-of-range wording, and `SETITEM`'s bad-index wording have since been
-converted to the code-4 `X doesn't like Y as input` idiom. Remaining boundary
-wording still needs live-UCBLogo verification, especially for cases like
-`REDUCE` on an empty list.
+out-of-range wording, `SETITEM`'s bad-index wording, and `REDUCE` on an empty
+list have since been converted to the code-4 `X doesn't like Y as input` idiom.
+Remaining boundary wording still needs live-UCBLogo verification as new cases
+are discovered.
 
 ### 2c. Internal/defensive invariants (likely not user-reachable)
 

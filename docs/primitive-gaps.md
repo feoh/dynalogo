@@ -1,7 +1,9 @@
-# Primitive gap list (initial pass)
+# Primitive gap list
 
-This is a first-pass gap list derived from the current implementation snapshot
-and roadmap, not yet a full audit against the UCBLogo manual.
+This is a current implementation gap list derived from the roadmap, Atari LOGO
+validation notes, UCBLogo compatibility audit, and the closed-task verification
+passes. It focuses on user-visible gaps that are still intentionally unfinished
+or not fully verifiable in this environment.
 
 ## Workspace management still missing
 
@@ -25,7 +27,7 @@ implemented through `PUTSH`/`GETSH`/`SHAPE`, the browser demo has a shape-editor
 panel, and `EDSH` opens the existing `$EDITOR` flow on shape definitions by
 rendering them as editable `PUTSH` commands.
 
-## File and stream follow-up gaps
+## File and stream status
 
 Implemented on the current integration line:
 
@@ -37,10 +39,9 @@ Implemented on the current integration line:
 - `READCHAR`, `READLIST`, `READWORD`
 - `EDIT`/`ED` via `$EDITOR`
 
-Still missing in the broader file/device area are Atari- and UCBLogo-adjacent
-commands beyond this core stream surface.
-
-Note: this whole file/stream surface depends on `std::fs`, so it only works
+The remaining limitation here is frontend/platform support, not missing native
+stream primitives from the currently targeted surface. This whole file/stream
+surface depends on `std::fs`, so it only works
 in the native frontends. In the browser (WASM) build there is no filesystem,
 so these primitives error instead of doing anything useful there. See
 [`browser-demo.md`](browser-demo.md).
@@ -70,7 +71,7 @@ Not yet covered: full syntactic (compile-time) macro expansion — macros are
 expanded at call time here, not spliced into the surrounding bytecode chunk,
 so a macro invocation is always dispatched dynamically rather than inlined.
 
-## Template/control follow-up remains
+## Template/control status
 
 Current template and library-control support now includes:
 
@@ -80,20 +81,21 @@ Current template and library-control support now includes:
 - `TRANSFER`
 - preserved literal-word reserialization for instruction-list templates
 
-Remaining work is mainly any additional UCBLogo-specific template edge cases
-found during audit.
+No concrete template/control gap is currently tracked from this file. Future
+work should be driven by specific UCBLogo compatibility cases rather than this
+broad bucket.
 
-## Graphics/library gaps remain
+## Graphics/library status
 
-Static turtle graphics are usable, and the current integration line now includes
-`LABEL` / `SETLABELHEIGHT`, basic `FILL` / `FILLED` seed-event helpers, and
-basic multi-pen color selection (`PN` / `SETPN` / `PC` / `SETPC`), but the
-remaining parity/polish bucket still includes:
+Static turtle graphics are usable, and the current integration line includes
+`LABEL` / `SETLABELHEIGHT`, `FILL` / `FILLED` seed-event helpers with native
+software flood-fill rendering, multi-pen color selection (`PN` / `SETPN` /
+`PC` / `SETPC`), and pen-mode state/reporting (`PEN`, `PE`, `PX`). The known
+remaining rendering limitation is true per-pixel XOR compositing for `PX`:
+DynaLOGO tracks reverse-pen state but renders reverse segments like `PD` unless
+a future backend adds real raster inversion.
 
-- fuller `FILL` / `FILLED` rendering semantics
-- remaining pen-mode / multi-pen polish
-
-## Dynaturtle follow-up surface remains
+## Dynaturtle status
 
 The classic dynaturtle-facing language layer is now exposed with:
 
@@ -103,9 +105,9 @@ The classic dynaturtle-facing language layer is now exposed with:
 - `BOUNCE`, `WRAP`, `FENCE`, `WINDOW`
 - `TOUCHING`, `WHEN`, `TOOT`
 
-Still missing from the broader dynaturtle roadmap are:
-
-- any remaining collision/event polish found during manual comparison
+No concrete dynaturtle primitive is missing from the current documented surface
+in this file. Future collision/event work should be tracked by specific failing
+manual-comparison cases rather than the earlier broad "polish" bucket.
 
 ## Error parity remains incomplete
 
@@ -122,7 +124,7 @@ Recent work improved several important semantics:
 Still pending is a broader pass to match UCBLogo wording/numbering, plus any
 remaining edge cases surfaced by the compatibility suite and manual audit. The
 shared numeric-input family now threads primitive-name context through its
-callers, and `SETITEM` index failures use the same code-4 wording. Remaining
-boundary wording such as `REDUCE` on an empty list still needs live-UCBLogo
-verification. See `docs/ucblogo-error-audit.md` for the full site-by-site
-breakdown and the prioritized list of remaining wording gaps.
+callers, `SETITEM` index failures use the same code-4 wording, and `REDUCE` on
+an empty list now reports `reduce doesn't like [] as input`. See
+[`ucblogo-error-audit.md`](ucblogo-error-audit.md) for the remaining
+site-by-site wording gaps.

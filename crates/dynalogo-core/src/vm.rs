@@ -3013,7 +3013,7 @@ impl Vm {
         expect_arity("reduce", &args, 2)?;
         let mut values = list_values(list_input(&args[1], "REDUCE")?).into_iter();
         let Some(mut acc) = values.next() else {
-            return Err(VmError::new("REDUCE cannot reduce an empty list"));
+            return Err(doesnt_like_as_input("reduce", &args[1], &self.interner));
         };
         for value in values {
             acc = self.invoke_template_value(&args[0], vec![acc, value])?;
@@ -6269,6 +6269,29 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
             .eval_source("make \"arr array 2 setitem \"oops :arr \"value")
             .unwrap_err();
         assert_eq!(error.message, "setitem doesn't like oops as input");
+    }
+
+    #[test]
+    fn reduce_empty_list_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("reduce [sum ?1 ?2] []").unwrap_err();
+        assert_eq!(error.message, "reduce doesn't like [] as input");
+    }
+
+    #[test]
+    fn catch_error_records_reduce_empty_list_bad_input_code_and_context() {
+        let mut vm = Vm::new();
+        vm.eval_source("catch \"error [reduce [sum ?1 ?2] []]")
+            .unwrap();
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "4");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "reduce doesn't like [] as input"
+        );
+        assert_eq!(list.item(3).unwrap().show(vm.interner()), "reduce");
     }
 
     #[test]
