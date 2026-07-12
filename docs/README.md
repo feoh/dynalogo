@@ -6,6 +6,9 @@ Start here for user-facing documentation inside the repository.
 
 - [`getting-started.md`](getting-started.md) — installation, REPL basics,
   first turtle programs, procedures, window frontend, and dynaturtle demos
+- [`browser-demo.md`](browser-demo.md) — running the WASM browser demo
+  locally, how the in-page REPL panel works, and how it differs from the
+  native window
 
 ## Reference
 

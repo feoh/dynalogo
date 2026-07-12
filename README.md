@@ -44,6 +44,8 @@ END
 
 - [`docs/getting-started.md`](docs/getting-started.md) — the best place to
   begin if you are new to DynaLOGO
+- [`docs/browser-demo.md`](docs/browser-demo.md) — running the WASM browser
+  demo locally and how it differs from the native window
 - [`docs/reference-manual.md`](docs/reference-manual.md) — user reference for
   the currently implemented language and dynaturtle surface
 - [`docs/ucblogo-compatibility.md`](docs/ucblogo-compatibility.md) —
@@ -92,6 +94,10 @@ files into the published site artifact. The shell includes a grouped example
 gallery dropdown covering every program in `examples/`, plus a Starter
 snippet; picking one and pressing "Load Example" fills the REPL textarea for
 "Run in Demo".
+
+See [`docs/browser-demo.md`](docs/browser-demo.md) for a full local-serving
+walkthrough and an honest list of what differs from the native window (mainly:
+no real file I/O, and audio may need a user gesture first).
 
 ### WASM/core status
 

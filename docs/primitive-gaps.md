@@ -36,6 +36,11 @@ Implemented on the current integration line:
 Still missing in the broader file/device area are Atari- and UCBLogo-adjacent
 commands beyond this core stream surface.
 
+Note: this whole file/stream surface depends on `std::fs`, so it only works
+in the native frontends. In the browser (WASM) build there is no filesystem,
+so these primitives error instead of doing anything useful there. See
+[`browser-demo.md`](browser-demo.md).
+
 ## Macro system
 
 Implemented:

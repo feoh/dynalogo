@@ -252,6 +252,8 @@ sed -n '1,200p' examples/README.md
 After this tutorial, useful next reads are:
 
 - [`../README.md`](../README.md) — project overview and current status
+- [`browser-demo.md`](browser-demo.md) — running the WASM browser demo and
+  what differs from the native window you just used
 - [`../examples/README.md`](../examples/README.md) — example gallery
 - [`primitive-inventory.md`](primitive-inventory.md) — implemented primitive
   snapshot

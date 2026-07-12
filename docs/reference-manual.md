@@ -426,7 +426,8 @@ include:
 - full file/workspace parity is still incomplete
 - macros are not at full parity
 - richer UCBLogo error-message parity remains ongoing
-- browser / WASM support is still future work
+- the browser demo has no real file I/O (see below); `LOAD`/`SAVE`/
+  `OPENREAD`/`OPENWRITE`/`DRIBBLE` only work in the native frontends
 
 ### UCBLogo / Atari compatibility is a target, not a guarantee everywhere
 
@@ -451,6 +452,22 @@ best dynaturtle experience because it:
 
 The terminal frontend is still excellent for quick experiments, scripts, and
 core language work.
+
+### Native window vs browser demo
+
+The browser demo (see [`browser-demo.md`](browser-demo.md)) is the same
+`dynalogo-window` binary and VM core compiled to `wasm32-unknown-unknown`, so
+turtle graphics, dynaturtles, and `WHEN`/`TOUCHING` demons all behave the
+same. The real differences are:
+
+- **No filesystem.** `LOAD`, `SAVE`, `OPENREAD`, `OPENWRITE`, `OPENAPPEND`,
+  and `DRIBBLE` call `std::fs` directly, which has nothing to talk to under
+  `wasm32-unknown-unknown` in a browser and will error there.
+- **Audio may need a user gesture** before `TOOT` sound will play, per
+  typical browser autoplay policy.
+- **An extra input path.** The browser page adds a side panel that queues
+  commands into the same evaluator the in-canvas prompt uses; the native
+  window only has the in-canvas prompt.
 
 ## 12. Suggested reading order
 

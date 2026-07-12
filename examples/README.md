@@ -9,8 +9,9 @@ cargo run -p dynalogo --bin dynalogo < examples/square.lgo
 ```
 
 The classic turtle examples work well in either frontend. The dynaturtle demos
-below are best experienced in the native window so their animation and sound
-can run continuously.
+below are best experienced in the native window or the [browser
+demo](../docs/browser-demo.md) so their animation and sound can run
+continuously.
 
 ## Run in the native window
 
