@@ -139,9 +139,10 @@ Implemented today:
   `READWORD READCHAR DRIBBLE KEYP JOY PADDLE TIMEOUT SETCURSOR SETENV`
 - Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD`
   `PN SETPN PC SETPC SETPENSIZE SETSCRUNCH SETLABELHEIGHT LABEL HT ST POS HEADING XCOR YCOR`
+- Dynaturtle shape surface: `SETSHAPE SHAPE PUTSH GETSH`
 
-Still in progress: remaining workspace/file parity polish, full UCBLogo error
-parity, additional dynaturtle compatibility surface, and browser/WASM polish.
+Still in progress: custom shape rendering/editor follow-through and any
+remaining deeper compatibility polish beyond the now-closed README buckets.
 
 ## Example programs
 

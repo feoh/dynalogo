@@ -1,6 +1,7 @@
 use dynalogo_core::dynaturtle::TurtleId;
 use dynalogo_core::graphics::SoftwareCanvas;
 use dynalogo_core::turtle::{events_since_clear, Point, TurtleEvent, TurtleState};
+use dynalogo_core::value::{List, Value};
 use dynalogo_core::vm::{ControlFlow, Vm};
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, Sound};
 use macroquad::prelude::*;
@@ -266,7 +267,33 @@ impl App {
             SpriteKind::Dog => draw_dog_sprite(center, forward, right, phase),
             SpriteKind::Ship => draw_ship_sprite(center, forward, right, phase),
             SpriteKind::Turtle => {
-                draw_turtle_sprite(center, forward, right, phase, logo_color(state.pen_color))
+                if let Some(definition) = self.vm.shape_definition(shape) {
+                    if let Some(points) = custom_shape_points(&definition) {
+                        draw_custom_shape(
+                            center,
+                            forward,
+                            right,
+                            &points,
+                            logo_color(state.pen_color),
+                        );
+                    } else {
+                        draw_turtle_sprite(
+                            center,
+                            forward,
+                            right,
+                            phase,
+                            logo_color(state.pen_color),
+                        )
+                    }
+                } else {
+                    draw_turtle_sprite(
+                        center,
+                        forward,
+                        right,
+                        phase,
+                        logo_color(state.pen_color),
+                    )
+                }
             }
         }
     }
@@ -551,6 +578,51 @@ fn sprite_kind_for_shape(shape: &str) -> SpriteKind {
     }
 }
 
+fn custom_shape_points(value: &Value) -> Option<Vec<Vec2>> {
+    let Value::List(points) = value else {
+        return None;
+    };
+    let parsed: Option<Vec<Vec2>> = points.iter().map(point_from_value).collect();
+    let parsed = parsed?;
+    if parsed.len() < 2 {
+        None
+    } else {
+        Some(parsed)
+    }
+}
+
+fn point_from_value(value: &Value) -> Option<Vec2> {
+    let Value::List(pair) = value else {
+        return None;
+    };
+    if pair.len() != 2 {
+        return None;
+    }
+    let x = point_part(pair, 1)?;
+    let y = point_part(pair, 2)?;
+    Some(Vec2::new(x, y))
+}
+
+fn point_part(pair: &List, index: usize) -> Option<f32> {
+    let value = pair.item(index)?;
+    match value {
+        Value::Number(number) => Some(number.get() as f32),
+        _ => None,
+    }
+}
+
+fn draw_custom_shape(center: Vec2, forward: Vec2, right: Vec2, points: &[Vec2], color: Color) {
+    for i in 0..points.len() {
+        let a = project_shape_point(center, forward, right, points[i]);
+        let b = project_shape_point(center, forward, right, points[(i + 1) % points.len()]);
+        draw_line(a.x, a.y, b.x, b.y, 2.0, color);
+    }
+}
+
+fn project_shape_point(center: Vec2, forward: Vec2, right: Vec2, point: Vec2) -> Vec2 {
+    center + right * point.x - forward * point.y
+}
+
 fn logo_color(color: u32) -> Color {
     let r = ((color >> 16) & 0xff) as f32 / 255.0;
     let g = ((color >> 8) & 0xff) as f32 / 255.0;
@@ -651,6 +723,7 @@ fn generate_bark_wav() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dynalogo_core::value::Interner;
 
     fn assert_vec2_close(actual: Vec2, expected: Vec2) {
         assert!(
@@ -736,6 +809,24 @@ mod tests {
         assert_eq!(sprite_kind_for_shape("turtle"), SpriteKind::Turtle);
         assert_eq!(sprite_kind_for_shape("unknown"), SpriteKind::Turtle);
         assert_eq!(sprite_kind_for_shape(""), SpriteKind::Turtle);
+    }
+
+    #[test]
+    fn custom_shape_points_accepts_point_lists() {
+        let value = Value::list([
+            Value::list([Value::number(0.0), Value::number(10.0)]),
+            Value::list([Value::number(8.0), Value::number(-6.0)]),
+            Value::list([Value::number(-8.0), Value::number(-6.0)]),
+        ]);
+        let points = custom_shape_points(&value).unwrap();
+        assert_eq!(points.len(), 3);
+        assert_eq!(points[0], Vec2::new(0.0, 10.0));
+    }
+
+    #[test]
+    fn custom_shape_points_rejects_non_point_data() {
+        let value = Value::list([Value::word(&mut Interner::new(), "oops")]);
+        assert!(custom_shape_points(&value).is_none());
     }
 
     #[test]

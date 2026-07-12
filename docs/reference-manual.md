@@ -388,10 +388,18 @@ Current user-facing rendered shapes in the native window include:
 The window frontend animates these shapes with simple sprite-like motion such
 as flipper motion, leg swing, tail wagging, or thruster flicker.
 
-Today, `PUTSH`/`GETSH` provide an honest registry layer for custom shape data,
-but the native/browser frontends still render only the built-in sprite set.
-That follow-through belongs to the custom-shape rendering task rather than this
-registry/reporter slice.
+Today, `PUTSH`/`GETSH` provide an honest registry layer for custom shape data.
+The current native/browser frontend understands a stored value shaped like a
+list of point pairs, for example:
+
+```logo
+putsh "diamond [[0 12] [8 0] [0 -12] [-8 0]]
+setshape "diamond 12
+```
+
+That simple polygon format is enough for custom-outline rendering, while the
+built-in animated sprite set (`"turtle`, `"dog`, `"ship`, `"rocket`) remains
+available as before.
 
 ### Collisions and predicates
 

@@ -600,6 +600,10 @@ impl Vm {
         &self.turtles
     }
 
+    pub fn shape_definition(&self, name: &str) -> Option<Value> {
+        self.shape_registry.get(&name.to_ascii_lowercase()).cloned()
+    }
+
     pub fn turtles_mut(&mut self) -> &mut TurtleStore {
         &mut self.turtles
     }
