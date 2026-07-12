@@ -45,10 +45,11 @@ Pages settings for the live URL.
 [`web/index.html`](../web/index.html) loads the compiled binary onto a
 `<canvas>` and adds a side panel that:
 
-- lets you load one of the bundled example programs (`Shape Parade`,
-  `Dogs in the Park`, or a small starter script) into a textarea
+- lets you load one of the bundled example programs into a textarea
 - pushes the textarea's contents onto a JS array,
   `window.__dynalogoCommands`, when you press **Run in Demo**
+- includes a small shape-editor section that builds `PUTSH` / `SETSHAPE`
+  commands for registry-backed custom outline shapes
 - mirrors the in-app REPL log back into a read-only textarea
 
 On the Rust side, `dynalogo-window` drains that JS array once per frame
@@ -79,9 +80,9 @@ demons, and the REPL all behave the same. A few things genuinely differ:
   until the page has seen a user interaction. If `TOOT` (the bark sound in
   `dogs_in_the_park.lgo`) seems silent on first load, click the canvas or a
   panel button first, then try again.
-- **Extra JS-driven input path.** The side panel's "Run in Demo" queue exists
-  only in the browser build (`cfg(target_arch = "wasm32")`); the native
-  window only has the in-canvas typed prompt.
+- **Extra JS-driven input path.** The side panel's example loader and shape
+  editor queue commands through browser-only JS helpers; the native window only
+  has the in-canvas typed prompt.
 
 Everything else — turtle rendering, collision detection, `WHEN`/`TOUCHING`,
 shapes, and the fixed-tick dynaturtle simulation — runs identically to the

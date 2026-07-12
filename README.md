@@ -102,7 +102,8 @@ copies that shell, the compiled `dynalogo-window.wasm`, and the example `.lgo`
 files into the published site artifact. The shell includes a grouped example
 gallery dropdown covering every program in `examples/`, plus a Starter
 snippet; picking one and pressing "Load Example" fills the REPL textarea for
-"Run in Demo".
+"Run in Demo". It also includes a small browser-side shape editor for building
+`PUTSH` / `SETSHAPE` commands against the current shape registry.
 
 See [`docs/browser-demo.md`](docs/browser-demo.md) for a full local-serving
 walkthrough and an honest list of what differs from the native window (mainly:

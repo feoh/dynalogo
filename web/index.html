@@ -45,7 +45,8 @@
         color: #b8c3cf;
         font-size: 0.95rem;
       }
-      textarea {
+      textarea,
+      input {
         width: 100%;
         box-sizing: border-box;
         border-radius: 8px;
@@ -61,6 +62,10 @@
       }
       #command {
         min-height: 170px;
+        margin: 8px 0 10px;
+      }
+      #shape-points {
+        min-height: 92px;
         margin: 8px 0 10px;
       }
       #repl-log {
@@ -108,6 +113,12 @@
         font-size: 0.85rem;
         color: #8b949e;
       }
+      .section-title {
+        margin: 14px 0 8px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #e6edf3;
+      }
     </style>
   </head>
   <body>
@@ -140,6 +151,23 @@
       <div class="row">
         <button onclick="queueCommand()">Run in Demo</button>
         <button class="secondary" onclick="clearCommand()">Clear</button>
+      </div>
+
+      <div class="section-title">Shape editor</div>
+      <p>
+        Define a custom outline with <code>PUTSH</code>, then apply it with
+        <code>SETSHAPE</code>. Points are written as Logo lists like
+        <code>[[0 12] [8 0] [0 -12] [-8 0]]</code>.
+      </p>
+      <input id="shape-name" spellcheck="false" />
+      <div class="row">
+        <input id="shape-radius" spellcheck="false" />
+      </div>
+      <textarea id="shape-points" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="secondary" onclick="loadShapeSample()">Load Sample</button>
+        <button class="secondary" onclick="queueShapeCommand(false)">Save Shape</button>
+        <button onclick="queueShapeCommand(true)">Save + Apply</button>
       </div>
 
       <textarea id="repl-log" readonly spellcheck="false"></textarea>
@@ -266,6 +294,25 @@
         ].join("\n");
       }
 
+      function loadShapeSample() {
+        document.getElementById("shape-name").value = "diamond";
+        document.getElementById("shape-radius").value = "12";
+        document.getElementById("shape-points").value =
+          "[[0 12] [8 0] [0 -12] [-8 0]]";
+      }
+
+      function queueShapeCommand(applyShape) {
+        const name = document.getElementById("shape-name").value.trim();
+        const radius = document.getElementById("shape-radius").value.trim();
+        const points = document.getElementById("shape-points").value.trim();
+        if (!name || !radius || !points) return;
+        const commands = [`putsh \"${name} ${points}`];
+        if (applyShape) {
+          commands.push(`setshape \"${name} ${radius}`);
+        }
+        window.__dynalogoCommands.push(commands.join("\n"));
+      }
+
       window.addEventListener("keydown", (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
           event.preventDefault();
@@ -275,6 +322,7 @@
 
       populateExampleSelect();
       loadStarter();
+      loadShapeSample();
     </script>
 
     <script src="mq_js_bundle.js"></script>
