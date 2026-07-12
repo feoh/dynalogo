@@ -271,6 +271,53 @@ impl InputStream {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TextScreenMode {
+    SplitScreen,
+    FullScreen,
+    TextScreen,
+}
+
+impl TextScreenMode {
+    fn name(self) -> &'static str {
+        match self {
+            Self::SplitScreen => "splitscreen",
+            Self::FullScreen => "fullscreen",
+            Self::TextScreen => "textscreen",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OutsideWorldState {
+    key_buffer: Vec<char>,
+    joystick_directions: [u8; 4],
+    joystick_buttons: [bool; 4],
+    paddle_positions: [u8; 8],
+    paddle_buttons: [bool; 8],
+    sound_envelope: [u8; 4],
+    text_cursor: (usize, usize),
+    timeout_sixtieths: usize,
+    text_screen_mode: TextScreenMode,
+}
+
+impl Default for OutsideWorldState {
+    fn default() -> Self {
+        Self {
+            key_buffer: Vec::new(),
+            joystick_directions: [15; 4],
+            joystick_buttons: [false; 4],
+            paddle_positions: [0; 8],
+            paddle_buttons: [false; 8],
+            sound_envelope: [0; 4],
+            text_cursor: (0, 0),
+            timeout_sixtieths: 0,
+            text_screen_mode: TextScreenMode::SplitScreen,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Vm {
     interner: Interner,
@@ -290,6 +337,7 @@ pub struct Vm {
     current_write: Option<String>,
     write_streams: HashSet<String>,
     dribble: Option<PathBuf>,
+    outside_world: OutsideWorldState,
     test_result: Option<bool>,
     caught_error: Option<ErrorInfo>,
     call_stack: Vec<String>,
@@ -366,6 +414,7 @@ impl Default for Vm {
             current_write: None,
             write_streams: HashSet::new(),
             dribble: None,
+            outside_world: OutsideWorldState::default(),
             test_result: None,
             caught_error: None,
             call_stack: Vec::new(),
@@ -420,6 +469,44 @@ impl Vm {
 
     pub fn clear_output(&mut self) {
         self.output.clear();
+    }
+
+    pub fn push_keypress(&mut self, key: char) {
+        self.outside_world.key_buffer.push(key);
+    }
+
+    pub fn clear_keypresses(&mut self) {
+        self.outside_world.key_buffer.clear();
+    }
+
+    pub fn set_joystick_state(&mut self, index: usize, direction: u8, button: bool) {
+        if index < self.outside_world.joystick_directions.len() {
+            self.outside_world.joystick_directions[index] = direction;
+            self.outside_world.joystick_buttons[index] = button;
+        }
+    }
+
+    pub fn set_paddle_state(&mut self, index: usize, position: u8, button: bool) {
+        if index < self.outside_world.paddle_positions.len() {
+            self.outside_world.paddle_positions[index] = position;
+            self.outside_world.paddle_buttons[index] = button;
+        }
+    }
+
+    pub fn sound_envelope(&self) -> [u8; 4] {
+        self.outside_world.sound_envelope
+    }
+
+    pub fn text_cursor(&self) -> (usize, usize) {
+        self.outside_world.text_cursor
+    }
+
+    pub fn timeout_sixtieths(&self) -> usize {
+        self.outside_world.timeout_sixtieths
+    }
+
+    pub fn text_screen_mode(&self) -> &'static str {
+        self.outside_world.text_screen_mode.name()
     }
 
     fn write_output_fragment(&mut self, text: &str) -> Result<(), VmError> {
@@ -816,6 +903,17 @@ impl Vm {
             "readchar" | "rc" => self.readchar(args),
             "readlist" | "rl" => self.readlist(args),
             "readword" | "rw" => self.readword(args),
+            "keyp" => self.keyp(args),
+            "joy" => self.joy(args),
+            "joyb" => self.joyb(args),
+            "paddle" => self.paddle(args),
+            "paddleb" => self.paddleb(args),
+            "timeout" => self.timeout(args),
+            "textscreen" | "ts" => self.textscreen(args),
+            "splitscreen" | "ss" => self.splitscreen(args),
+            "fullscreen" | "fs" => self.fullscreen(args),
+            "setcursor" => self.setcursor(args),
+            "setenv" => self.setenv(args),
             "make" | "name" => self.make(args),
             "thing" => self.thing(args),
             "local" => self.local(args),
@@ -1840,6 +1938,90 @@ impl Vm {
             &mut self.interner,
             line,
         )))
+    }
+
+    fn keyp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("keyp", &args, 0)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(!self.outside_world.key_buffer.is_empty()),
+        ))
+    }
+
+    fn joy(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("joy", &args, 1)?;
+        let index = ranged_device_index_input(&args[0], &self.interner, "JOY", 4)?;
+        Ok(PrimitiveResult::Value(Value::number(
+            self.outside_world.joystick_directions[index] as f64,
+        )))
+    }
+
+    fn joyb(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("joyb", &args, 1)?;
+        let index = ranged_device_index_input(&args[0], &self.interner, "JOYB", 4)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(self.outside_world.joystick_buttons[index]),
+        ))
+    }
+
+    fn paddle(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("paddle", &args, 1)?;
+        let index = ranged_device_index_input(&args[0], &self.interner, "PADDLE", 8)?;
+        Ok(PrimitiveResult::Value(Value::number(
+            self.outside_world.paddle_positions[index] as f64,
+        )))
+    }
+
+    fn paddleb(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("paddleb", &args, 1)?;
+        let index = ranged_device_index_input(&args[0], &self.interner, "PADDLEB", 8)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(self.outside_world.paddle_buttons[index]),
+        ))
+    }
+
+    fn timeout(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("timeout", &args, 1)?;
+        self.outside_world.timeout_sixtieths =
+            non_negative_integer_input(&args[0], &self.interner, "TIMEOUT")?;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn textscreen(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("textscreen", &args, 0)?;
+        self.outside_world.text_screen_mode = TextScreenMode::TextScreen;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn splitscreen(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("splitscreen", &args, 0)?;
+        self.outside_world.text_screen_mode = TextScreenMode::SplitScreen;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn fullscreen(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("fullscreen", &args, 0)?;
+        self.outside_world.text_screen_mode = TextScreenMode::FullScreen;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn setcursor(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setcursor", &args, 2)?;
+        self.outside_world.text_cursor = (
+            non_negative_integer_input(&args[0], &self.interner, "SETCURSOR")?,
+            non_negative_integer_input(&args[1], &self.interner, "SETCURSOR")?,
+        );
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn setenv(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setenv", &args, 4)?;
+        self.outside_world.sound_envelope = [
+            ranged_byte_input(&args[0], &self.interner, "SETENV", 255)?,
+            ranged_byte_input(&args[1], &self.interner, "SETENV", 255)?,
+            ranged_byte_input(&args[2], &self.interner, "SETENV", 255)?,
+            ranged_byte_input(&args[3], &self.interner, "SETENV", 255)?,
+        ];
+        Ok(PrimitiveResult::NoValue)
     }
 
     fn make(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -3747,6 +3929,33 @@ fn ranged_byte_input(
     Ok(number as u8)
 }
 
+fn non_negative_integer_input(
+    value: &Value,
+    interner: &Interner,
+    name: &str,
+) -> Result<usize, VmError> {
+    let number = number_input(value, interner)?;
+    if number < 0.0 || number.fract() != 0.0 {
+        return Err(VmError::new(format!(
+            "{name} requires a non-negative integer input"
+        )));
+    }
+    Ok(number as usize)
+}
+
+fn ranged_device_index_input(
+    value: &Value,
+    interner: &Interner,
+    name: &str,
+    device_count: usize,
+) -> Result<usize, VmError> {
+    let index = non_negative_integer_input(value, interner, name)?;
+    if index >= device_count {
+        return Err(VmError::new(format!("{name} index {index} is out of range")));
+    }
+    Ok(index)
+}
+
 fn token_to_data_value(kind: TokenKind, interner: &mut Interner) -> Option<Value> {
     match kind {
         TokenKind::Word(word) => Some(number_or_bare_word_value(interner, word)),
@@ -4165,6 +4374,20 @@ fn primitive_names() -> &'static [&'static str] {
         "rl",
         "readword",
         "rw",
+        "keyp",
+        "joy",
+        "joyb",
+        "paddle",
+        "paddleb",
+        "timeout",
+        "textscreen",
+        "ts",
+        "splitscreen",
+        "ss",
+        "fullscreen",
+        "fs",
+        "setcursor",
+        "setenv",
         "make",
         "name",
         "thing",
