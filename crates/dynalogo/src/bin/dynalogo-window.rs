@@ -13,8 +13,14 @@ use wasm_bindgen::JsValue;
 #[cfg(target_arch = "wasm32")]
 use web_sys::HtmlTextAreaElement;
 
-const PROMPT_HEIGHT: f32 = 92.0;
+const PROMPT_HEIGHT: f32 = 156.0;
 const LOG_LINES: usize = 5;
+const LOG_FONT_SIZE: f32 = 18.0;
+const INPUT_FONT_SIZE: f32 = 22.0;
+const LOG_LINE_HEIGHT: f32 = 20.0;
+const PROMPT_TOP_PADDING: f32 = 12.0;
+const INPUT_BASELINE_OFFSET: f32 = 14.0;
+const LOG_INPUT_GAP: f32 = 8.0;
 const SIM_DT: f64 = 1.0 / 60.0;
 const CANVAS_BACKGROUND: Color = Color::new(18.0 / 255.0, 20.0 / 255.0, 26.0 / 255.0, 1.0);
 
@@ -293,21 +299,20 @@ impl App {
     }
 
     fn draw_prompt(&self) {
-        let top = screen_height() - PROMPT_HEIGHT;
+        let layout = prompt_layout(screen_height(), PROMPT_HEIGHT, LOG_LINES);
         draw_rectangle(
             0.0,
-            top,
+            layout.top,
             screen_width(),
             PROMPT_HEIGHT,
             Color::from_rgba(8, 10, 14, 255),
         );
-        draw_line(0.0, top, screen_width(), top, 2.0, DARKGRAY);
+        draw_line(0.0, layout.top, screen_width(), layout.top, 2.0, DARKGRAY);
 
-        let mut y = top + 18.0;
-        let start = self.log.len().saturating_sub(LOG_LINES);
-        for line in &self.log[start..] {
-            draw_text(line, 12.0, y, 18.0, LIGHTGRAY);
-            y += 16.0;
+        let start = self.log.len().saturating_sub(layout.log_lines);
+        for (index, line) in self.log[start..].iter().enumerate() {
+            let y = layout.log_start_y + index as f32 * layout.log_line_height;
+            draw_text(line, 12.0, y, LOG_FONT_SIZE, LIGHTGRAY);
         }
 
         let cursor = if ((get_time() * 2.0) as i64) % 2 == 0 {
@@ -318,8 +323,8 @@ impl App {
         draw_text(
             format!("? {}{cursor}", self.input),
             12.0,
-            screen_height() - 14.0,
-            22.0,
+            layout.input_baseline,
+            INPUT_FONT_SIZE,
             WHITE,
         );
     }
@@ -366,6 +371,39 @@ fn process_browser_commands(commands: Vec<String>) -> Vec<String> {
         .into_iter()
         .filter(|command| !command.trim().is_empty())
         .collect()
+}
+
+struct PromptLayout {
+    top: f32,
+    log_start_y: f32,
+    log_line_height: f32,
+    log_lines: usize,
+    input_baseline: f32,
+}
+
+fn prompt_layout(
+    screen_height: f32,
+    prompt_height: f32,
+    requested_log_lines: usize,
+) -> PromptLayout {
+    let top = (screen_height - prompt_height).max(0.0);
+    let input_baseline = (screen_height - INPUT_BASELINE_OFFSET).max(0.0);
+    let log_start_y = top + PROMPT_TOP_PADDING + LOG_FONT_SIZE;
+    let last_log_baseline = input_baseline - INPUT_FONT_SIZE - LOG_INPUT_GAP;
+    let available_height = (last_log_baseline - log_start_y).max(0.0);
+    let available_lines = if log_start_y <= last_log_baseline {
+        (available_height / LOG_LINE_HEIGHT).floor() as usize + 1
+    } else {
+        0
+    };
+
+    PromptLayout {
+        top,
+        log_start_y,
+        log_line_height: LOG_LINE_HEIGHT,
+        log_lines: requested_log_lines.min(available_lines),
+        input_baseline,
+    }
 }
 
 fn append_log_line(log: &mut Vec<String>, line: String, max_visible_lines: usize) {
@@ -938,6 +976,25 @@ mod tests {
     fn process_browser_commands_keeps_untrimmed_text() {
         let commands = process_browser_commands(vec!["  fd 100  ".to_string()]);
         assert_eq!(commands, vec!["  fd 100  ".to_string()]);
+    }
+
+    #[test]
+    fn prompt_layout_keeps_five_history_lines_above_input() {
+        let layout = prompt_layout(768.0, PROMPT_HEIGHT, LOG_LINES);
+        assert_eq!(layout.log_lines, LOG_LINES);
+        assert!(layout.log_line_height >= LOG_FONT_SIZE);
+
+        let last_log_baseline =
+            layout.log_start_y + (layout.log_lines - 1) as f32 * layout.log_line_height;
+        assert!(last_log_baseline + INPUT_FONT_SIZE + LOG_INPUT_GAP <= layout.input_baseline);
+    }
+
+    #[test]
+    fn prompt_layout_reduces_history_capacity_for_compact_windows() {
+        let layout = prompt_layout(120.0, PROMPT_HEIGHT, LOG_LINES);
+        assert!(layout.log_lines < LOG_LINES);
+        assert!(layout.top >= 0.0);
+        assert!(layout.input_baseline >= layout.top);
     }
 
     #[test]
