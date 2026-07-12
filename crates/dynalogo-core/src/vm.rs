@@ -2613,7 +2613,7 @@ impl Vm {
             let key = name.to_ascii_lowercase();
             if let Some(plist) = self.property_lists.get(&key) {
                 let mut entries: Vec<_> = plist.iter().collect();
-                entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+                entries.sort_by_key(|(a, _)| *a);
                 for (prop, value) in entries {
                     buffer.push_str("pprop \"");
                     buffer.push_str(name);
@@ -2784,7 +2784,7 @@ impl Vm {
         let mut values = Vec::new();
         if let Some(plist) = self.property_lists.get(&plist_name) {
             let mut entries: Vec<_> = plist.iter().collect();
-            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            entries.sort_by_key(|(a, _)| *a);
             for (name, value) in entries {
                 values.push(Value::word(&mut self.interner, name));
                 values.push(value.clone());
