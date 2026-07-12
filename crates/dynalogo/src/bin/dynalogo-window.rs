@@ -69,34 +69,30 @@ impl App {
     }
 
     fn handle_input(&mut self) {
+        let mut events = Vec::new();
         while let Some(ch) = get_char_pressed() {
             if !ch.is_control() {
-                self.input.push(ch);
+                events.push(InputEvent::Char(ch));
             }
         }
-
         if is_key_pressed(KeyCode::Backspace) {
-            self.input.pop();
+            events.push(InputEvent::Backspace);
         }
-
         if is_key_pressed(KeyCode::Enter) {
-            let command = self.input.trim().to_string();
-            self.input.clear();
-            if !command.is_empty() {
-                self.eval_command(command);
-            }
+            events.push(InputEvent::Submit);
+        }
+        if is_key_pressed(KeyCode::Escape) {
+            events.push(InputEvent::Cancel);
         }
 
-        if is_key_pressed(KeyCode::Escape) {
-            self.input.clear();
+        for command in process_input_events(&mut self.input, events) {
+            self.eval_command(command);
         }
     }
 
     fn handle_browser_commands(&mut self) {
-        for command in drain_browser_commands() {
-            if !command.trim().is_empty() {
-                self.eval_command(command);
-            }
+        for command in process_browser_commands(drain_browser_commands()) {
+            self.eval_command(command);
         }
     }
 
@@ -313,12 +309,54 @@ impl App {
     }
 
     fn push_log(&mut self, line: String) {
-        self.log.push(line);
-        let keep = LOG_LINES * 2;
-        if self.log.len() > keep {
-            self.log.drain(0..self.log.len() - keep);
-        }
+        append_log_line(&mut self.log, line, LOG_LINES);
         sync_browser_log(&self.log);
+    }
+}
+
+enum InputEvent {
+    Char(char),
+    Backspace,
+    Submit,
+    Cancel,
+}
+
+fn process_input_events(
+    input: &mut String,
+    events: impl IntoIterator<Item = InputEvent>,
+) -> Vec<String> {
+    let mut commands = Vec::new();
+    for event in events {
+        match event {
+            InputEvent::Char(ch) => input.push(ch),
+            InputEvent::Backspace => {
+                input.pop();
+            }
+            InputEvent::Submit => {
+                let command = input.trim().to_string();
+                input.clear();
+                if !command.is_empty() {
+                    commands.push(command);
+                }
+            }
+            InputEvent::Cancel => input.clear(),
+        }
+    }
+    commands
+}
+
+fn process_browser_commands(commands: Vec<String>) -> Vec<String> {
+    commands
+        .into_iter()
+        .filter(|command| !command.trim().is_empty())
+        .collect()
+}
+
+fn append_log_line(log: &mut Vec<String>, line: String, max_visible_lines: usize) {
+    log.push(line);
+    let keep = max_visible_lines * 2;
+    if log.len() > keep {
+        log.drain(0..log.len() - keep);
     }
 }
 
@@ -680,7 +718,7 @@ mod tests {
 
     #[test]
     fn heading_wraps_beyond_full_circle() {
-        let (forward, _) = heading_to_vectors(360.0 + 90.0);
+        let (forward, _) = heading_to_vectors(450.0);
         assert_vec2_close(forward, Vec2::new(1.0, 0.0));
     }
 
@@ -724,5 +762,120 @@ mod tests {
         assert!((white.r - 1.0).abs() < 1e-3);
         assert!((white.g - 1.0).abs() < 1e-3);
         assert!((white.b - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn process_input_events_builds_typed_command() {
+        let mut input = String::new();
+        let commands = process_input_events(
+            &mut input,
+            [
+                InputEvent::Char('f'),
+                InputEvent::Char('d'),
+                InputEvent::Char(' '),
+                InputEvent::Char('5'),
+                InputEvent::Submit,
+            ],
+        );
+        assert_eq!(commands, vec!["fd 5".to_string()]);
+        assert!(input.is_empty());
+    }
+
+    #[test]
+    fn process_input_events_backspace_removes_last_char() {
+        let mut input = String::new();
+        let commands = process_input_events(
+            &mut input,
+            [
+                InputEvent::Char('f'),
+                InputEvent::Char('x'),
+                InputEvent::Backspace,
+                InputEvent::Char('d'),
+                InputEvent::Submit,
+            ],
+        );
+        assert_eq!(commands, vec!["fd".to_string()]);
+    }
+
+    #[test]
+    fn process_input_events_cancel_clears_input_without_submitting() {
+        let mut input = String::new();
+        let commands = process_input_events(
+            &mut input,
+            [
+                InputEvent::Char('f'),
+                InputEvent::Char('d'),
+                InputEvent::Cancel,
+            ],
+        );
+        assert!(commands.is_empty());
+        assert!(input.is_empty());
+    }
+
+    #[test]
+    fn process_input_events_submit_ignores_blank_input() {
+        let mut input = String::new();
+        let commands = process_input_events(
+            &mut input,
+            [
+                InputEvent::Char(' '),
+                InputEvent::Char(' '),
+                InputEvent::Submit,
+            ],
+        );
+        assert!(commands.is_empty());
+        assert!(input.is_empty());
+    }
+
+    #[test]
+    fn process_input_events_trims_submitted_command() {
+        let mut input = String::new();
+        let commands = process_input_events(
+            &mut input,
+            [
+                InputEvent::Char(' '),
+                InputEvent::Char('f'),
+                InputEvent::Char('d'),
+                InputEvent::Char(' '),
+                InputEvent::Submit,
+            ],
+        );
+        assert_eq!(commands, vec!["fd".to_string()]);
+    }
+
+    #[test]
+    fn process_browser_commands_filters_blank_entries() {
+        let commands = process_browser_commands(vec![
+            "fd 100".to_string(),
+            "   ".to_string(),
+            String::new(),
+            "rt 90".to_string(),
+        ]);
+        assert_eq!(commands, vec!["fd 100".to_string(), "rt 90".to_string()]);
+    }
+
+    #[test]
+    fn process_browser_commands_keeps_untrimmed_text() {
+        let commands = process_browser_commands(vec!["  fd 100  ".to_string()]);
+        assert_eq!(commands, vec!["  fd 100  ".to_string()]);
+    }
+
+    #[test]
+    fn append_log_line_keeps_within_bounds() {
+        let mut log = Vec::new();
+        for i in 0..11 {
+            append_log_line(&mut log, format!("line {i}"), LOG_LINES);
+        }
+        assert_eq!(log.len(), LOG_LINES * 2);
+        assert_eq!(log.first().unwrap(), "line 1");
+        assert_eq!(log.last().unwrap(), "line 10");
+    }
+
+    #[test]
+    fn append_log_line_does_not_trim_below_limit() {
+        let mut log = Vec::new();
+        append_log_line(&mut log, "hello".to_string(), LOG_LINES);
+        append_log_line(&mut log, "world".to_string(), LOG_LINES);
+        assert_eq!(log, vec!["hello".to_string(), "world".to_string()]);
     }
 }
