@@ -48,6 +48,12 @@ END
   demo locally and how it differs from the native window
 - [`docs/reference-manual.md`](docs/reference-manual.md) — user reference for
   the currently implemented language and dynaturtle surface
+- [`docs/debugging-and-errors.md`](docs/debugging-and-errors.md) — practical
+  debugging and error-handling guidance
+- [`docs/developer-guide.md`](docs/developer-guide.md) — contributor-oriented
+  internals and extension points
+- [`docs/wasm-and-browser.md`](docs/wasm-and-browser.md) — WASM/browser build
+  and embedding guidance
 - [`docs/ucblogo-compatibility.md`](docs/ucblogo-compatibility.md) —
   compatibility corpus, live-UCBLogo harness notes, and intentional
   divergences

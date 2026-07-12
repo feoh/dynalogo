@@ -9,6 +9,12 @@ Start here for user-facing documentation inside the repository.
 - [`browser-demo.md`](browser-demo.md) — running the WASM browser demo
   locally, how the in-page REPL panel works, and how it differs from the
   native window
+- [`debugging-and-errors.md`](debugging-and-errors.md) — practical debugging,
+  common failure modes, and error-handling guidance
+- [`developer-guide.md`](developer-guide.md) — contributor-oriented VM,
+  parser, primitive, and dynaturtle internals
+- [`wasm-and-browser.md`](wasm-and-browser.md) — WASM/browser build and
+  embedding guidance beyond the user demo walkthrough
 
 ## Reference
 
