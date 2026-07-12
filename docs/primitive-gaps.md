@@ -15,10 +15,13 @@ Implemented today:
 - `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `POPLS`, `.PRIMITIVES`
 - `ERASE` / `ER`, `ERN`, `ERNS`, `ERPS`, `ERPL`, `ERALL`
 - `BURY`, `UNBURY`, `BURIEDP`
+- `NODES`, `RECYCLE` (honest-limits implementation: `NODES` reports live
+  workspace object counts rather than allocator statistics since DynaLOGO has
+  no fixed node pool; `RECYCLE` is a documented no-op since Rust reclaims
+  memory automatically and there is nothing for it to manually free)
 
 Still missing from the nearby workspace roadmap bucket:
 
-- `NODES`, `RECYCLE`
 - the broader editor-family follow-ups such as `EDNS`, `EDSH`
 
 ## File and stream follow-up gaps

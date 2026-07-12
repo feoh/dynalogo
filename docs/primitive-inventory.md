@@ -62,6 +62,8 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `POPLS`, `.PRIMITIVES`
 - `ERASE`/`ER`, `ERN`, `ERNS`, `ERPS`, `ERPL`, `ERALL`
 - `BURY`, `UNBURY`, `BURIEDP`
+- `NODES`, `RECYCLE` (see [primitive-gaps.md](primitive-gaps.md) for the
+  honest-limits notes on these two)
 
 ## Arithmetic, comparison, and logic
 
@@ -105,7 +107,6 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 
 ## Notes
 
-Not yet implemented from nearby roadmap/workspace tasks include remaining
-workspace-management pieces such as `NODES`/`RECYCLE` and additional
-compatibility polish. See also [primitive-gaps.md](primitive-gaps.md) for the
-current gap list.
+Not yet implemented from nearby roadmap/workspace tasks include additional
+workspace/editor parity such as `EDNS`/`EDSH` and broader compatibility polish.
+See also [primitive-gaps.md](primitive-gaps.md) for the current gap list.

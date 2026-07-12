@@ -190,6 +190,8 @@ impl ArityTable {
             ("ERPS", 0),
             ("ERPL", 1),
             ("ERALL", 0),
+            ("NODES", 0),
+            ("RECYCLE", 0),
             ("BURY", 1),
             ("UNBURY", 1),
             ("BURIEDP", 1),

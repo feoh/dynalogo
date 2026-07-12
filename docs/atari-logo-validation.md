@@ -212,12 +212,16 @@ The Atari manual organizes features into these areas:
 - `TEXT`, `FULLTEXT`, `COPYDEF`
 - `PO`, `POALL`, `POPS`, `PONS`, `POTS`, `.PRIMITIVES`
 - `ERASE` / `ER`, `ERALL`, `ERN`, `ERNS`, `ERPS`
+- `BURY`, `UNBURY`, `BURIEDP`
+- `DEFINE`
+- `NODES`, `RECYCLE` (honest-limits: `NODES` reports live workspace object
+  counts rather than allocator statistics, since DynaLOGO has no fixed node
+  pool; `RECYCLE` is a documented no-op since Rust reclaims memory
+  automatically)
 
 **Present in Atari manual but missing**
 
-- `NODES`, `RECYCLE`
-- `DEFINE`
-- `BURY`, `UNBURY`, `BURIEDP` are also still missing from the roadmap bucket
+- none remaining in this section
 
 ### 10. Files
 
@@ -250,7 +254,7 @@ DynaLOGO:
 1. **Turtle addressing and event primitives**
    - `ASK`, `TELL`, `EACH`, `WHO`, `OVER`, `TOUCHING`, `WHEN`
 2. **Remaining workspace management work**
-   - `NODES`, `RECYCLE`, bury/unbury behavior, and editor integration
+   - editor integration (`NODES`, `RECYCLE`, and bury/unbury are now implemented)
 3. **File and device follow-through**
    - printer/catalog/device-specific surface beyond `LOAD`/`SAVE`/streams
 4. **Remaining Atari type/text helper audit**

@@ -231,8 +231,17 @@ Implemented workspace-oriented commands include:
 - `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`
 - `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `.PRIMITIVES`
 - `ERASE`/`ER`, `ERN`, `ERNS`, `ERPS`, `ERALL`
+- `BURY`, `UNBURY`, `BURIEDP`
+- `NODES`, `RECYCLE`
 
 These are useful for inspecting procedures, variables, and the primitive set.
+
+`NODES` and `RECYCLE` are honest-but-limited compared with classic Logo:
+DynaLOGO has no fixed-size node pool or manual garbage collector, since Rust's
+ownership model reclaims memory automatically. `NODES` reports real live
+counts of workspace objects (procedures, variables, property lists, turtles)
+rather than fake memory-allocator statistics, and `RECYCLE` is a documented
+no-op — there is no manual reclaim step for it to perform.
 
 ## 7. Console I/O
 

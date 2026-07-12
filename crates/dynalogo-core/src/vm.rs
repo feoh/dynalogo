@@ -975,6 +975,8 @@ impl Vm {
             "erps" => self.erps(args),
             "erpl" => self.erpl(args),
             "erall" => self.erall(args),
+            "nodes" => self.nodes(args),
+            "recycle" => self.recycle(args),
             "bury" => self.bury(args),
             "unbury" => self.unbury(args),
             "buriedp" => self.buriedp(args),
@@ -2422,6 +2424,23 @@ impl Vm {
         self.erps(vec![])?;
         self.property_lists.clear();
         self.buried_names.clear();
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn nodes(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("nodes", &args, 0)?;
+        self.output.push_str(&format!(
+            "Procedures: {}\nVariables: {}\nProperty lists: {}\nTurtles: {}\n",
+            self.procedures.len(),
+            self.env.globals.len(),
+            self.property_lists.len(),
+            self.turtles.len(),
+        ));
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn recycle(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("recycle", &args, 0)?;
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -4687,6 +4706,8 @@ fn primitive_names() -> &'static [&'static str] {
         "erps",
         "erpl",
         "erall",
+        "nodes",
+        "recycle",
         "bury",
         "unbury",
         "buriedp",
@@ -5656,6 +5677,32 @@ mod tests {
         assert!(result.output.contains("alpha"));
         assert!(result.output.contains("foo 7"));
         assert!(result.output.contains("animal [legs 4]"));
+    }
+
+    #[test]
+    fn nodes_reports_live_workspace_object_counts() {
+        let mut vm = Vm::new();
+        vm.eval_source(
+            "to alpha :x
+             output :x
+             end
+             make \"foo 7
+             pprop \"animal \"legs 4",
+        )
+        .unwrap();
+        let result = vm.eval_source("nodes").unwrap();
+        assert!(result.output.contains("Procedures: 1"));
+        assert!(result.output.contains("Variables: 1"));
+        assert!(result.output.contains("Property lists: 1"));
+        assert!(result.output.contains("Turtles: 1"));
+    }
+
+    #[test]
+    fn recycle_is_a_documented_no_op() {
+        let mut vm = Vm::new();
+        vm.eval_source("make \"foo 7").unwrap();
+        let result = vm.eval_source("recycle print :foo").unwrap();
+        assert_eq!(result.output, "7\n");
     }
 
     #[test]
