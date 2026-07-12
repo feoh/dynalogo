@@ -256,16 +256,9 @@ DynaLOGO:
 4. **Remaining Atari type/text helper audit**
    - verify any adjacent helper surface beyond `REALWORDP`, `RANK`, `RANPICK`, `EVENP`, `DIVISORP`, `FACTORIAL`, `ASCII`, `CHAR`, `LOWERCASE`, and `REV`
 5. **Graphics/screen extras**
-<<<<<<< HEAD
-   - `SETBG`, `SETC`, `SETX`, `SETY`, `SHAPE`, `SETSH`, `GETSH`, `PUTSH`, `SETSP`, multi-pen semantics, `LABEL`, `FILL`
-||||||| parent of 16c98a6 (Add PEN reporter and PE/PX pen-mode semantics)
-   - `SETBG`, `SETC`, `SETX`, `SETY`, `SHAPE`, `SETSH`, `GETSH`, `PUTSH`, `SETSP`, `SPEED`, `WINDOW`, `WRAP`, multi-pen semantics, `LABEL`, `FILL`
-=======
-   - `SETBG`, `SETC`, `SETX`, `SETY`, `SHAPE`, `SETSH`, `GETSH`, `PUTSH`, `SETSP`, `SPEED`, `WINDOW`, `WRAP`, `LABEL`, `FILL`
+   - `SETBG`, `SETC`, `SETX`, `SETY`, `SHAPE`, `SETSH`, `GETSH`, `PUTSH`, `SETSP`
    - `PX`'s reverse/XOR pixel compositing (needs a persistent raster canvas the current vector event-replay renderers don't have)
-
->>>>>>> 16c98a6 (Add PEN reporter and PE/PX pen-mode semantics)
-1. **Remaining Atari outside-world features**
+6. **Remaining Atari outside-world features**
    - any deeper printer/device hooks beyond `KEYP`, joystick/paddle input, `TOOT`, `SETENV`, and cursor/text-screen primitives already integrated
 
 ## Notes

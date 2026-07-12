@@ -228,6 +228,8 @@ impl ArityTable {
             ("SETPENCOLOR", 1),
             ("SETPC", 1),
             ("SETPENSIZE", 1),
+            ("SETSCRUNCH", 2),
+            ("SETSCR", 2),
             ("SETLABELHEIGHT", 1),
             ("LABEL", 1),
             ("FILL", 0),

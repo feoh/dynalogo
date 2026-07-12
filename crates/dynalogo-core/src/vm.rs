@@ -1033,6 +1033,7 @@ impl Vm {
             "pc" => self.turtle_pc(args),
             "setpencolor" | "setpc" => self.turtle_setpencolor(args),
             "setpensize" => self.turtle_setpensize(args),
+            "setscrunch" | "setscr" => self.turtle_setscrunch(args),
             "setlabelheight" => self.turtle_setlabelheight(args),
             "label" => self.turtle_label(args),
             "fill" => self.turtle_fill(args),
@@ -3635,6 +3636,17 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn turtle_setscrunch(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setscrunch", &args, 2)?;
+        let x_scrunch = number_input(&args[0], &self.interner)?;
+        let y_scrunch = number_input(&args[1], &self.interner)?;
+        if x_scrunch <= 0.0 || y_scrunch <= 0.0 {
+            return Err(VmError::new("SETSCRUNCH inputs must be positive"));
+        }
+        self.turtles.set_scrunch(x_scrunch, y_scrunch);
+        Ok(PrimitiveResult::NoValue)
+    }
+
     fn turtle_setlabelheight(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setlabelheight", &args, 1)?;
         let height = number_input(&args[0], &self.interner)?;
@@ -4741,6 +4753,8 @@ fn primitive_names() -> &'static [&'static str] {
         "setpencolor",
         "setpc",
         "setpensize",
+        "setscrunch",
+        "setscr",
         "setlabelheight",
         "label",
         "fill",
@@ -5894,6 +5908,30 @@ mod tests {
             .filter(|event| matches!(event, TurtleEvent::Line { .. }))
             .count();
         assert_eq!(line_count, 1);
+    }
+
+    #[test]
+    fn setscrunch_sets_global_scrunch_and_setscr_is_an_alias() {
+        let (_, vm) = run("setscrunch 2 0.5").unwrap();
+        assert_eq!(vm.turtles().scrunch(), (2.0, 0.5));
+
+        let (_, vm) = run("setscr 3 4").unwrap();
+        assert_eq!(vm.turtles().scrunch(), (3.0, 4.0));
+    }
+
+    #[test]
+    fn setscrunch_rejects_non_positive_inputs() {
+        let error = run("setscrunch 0 1").unwrap_err();
+        assert_eq!(error.to_string(), "SETSCRUNCH inputs must be positive");
+
+        let error = run("setscrunch 1 -2").unwrap_err();
+        assert_eq!(error.to_string(), "SETSCRUNCH inputs must be positive");
+    }
+
+    #[test]
+    fn setscrunch_is_global_not_per_turtle() {
+        let (_, vm) = run("tell 1 setscrunch 2 3 tell 0").unwrap();
+        assert_eq!(vm.turtles().scrunch(), (2.0, 3.0));
     }
 
     #[test]

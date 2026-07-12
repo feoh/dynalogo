@@ -65,5 +65,5 @@
 
 - Audit of all ~400 UCBLogo primitives against the manual
 - Compatibility test suite run against UCBLogo behavior
-- Remaining graphics: `LABEL SETLABELHEIGHT FILL`, multiple pens
+- Remaining graphics: `LABEL SETLABELHEIGHT FILL SETSCRUNCH`, multiple pens
 - Dynaturtle polish: sprite animation, sound (`TOOT`), demo gallery

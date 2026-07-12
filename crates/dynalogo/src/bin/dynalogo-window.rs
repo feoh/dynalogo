@@ -178,6 +178,7 @@ impl App {
             Color::from_rgba(55, 60, 70, 255),
         );
 
+        let (x_scrunch, y_scrunch) = self.vm.turtles().scrunch();
         let events = self.vm.turtles().events();
         let start = events
             .iter()
@@ -193,8 +194,9 @@ impl App {
                     width,
                     mode,
                 } => {
-                    let from = logo_to_screen(*from, canvas_height);
-                    let to = logo_to_screen(*to, canvas_height);
+                    let from =
+                        logo_to_screen(scale_point(*from, x_scrunch, y_scrunch), canvas_height);
+                    let to = logo_to_screen(scale_point(*to, x_scrunch, y_scrunch), canvas_height);
                     // PX (Reverse) has no true per-pixel XOR compositing in this
                     // vector event-replay renderer, so it paints like PD; see the
                     // TurtleEvent::Line doc comment for why.
@@ -210,7 +212,7 @@ impl App {
                     color,
                     height,
                 } => {
-                    let at = logo_to_screen(*at, canvas_height);
+                    let at = logo_to_screen(scale_point(*at, x_scrunch, y_scrunch), canvas_height);
                     draw_text(
                         text,
                         at.x,
@@ -220,7 +222,7 @@ impl App {
                     );
                 }
                 TurtleEvent::Fill { at, color } => {
-                    let at = logo_to_screen(*at, canvas_height);
+                    let at = logo_to_screen(scale_point(*at, x_scrunch, y_scrunch), canvas_height);
                     draw_circle(at.x, at.y, 4.0, logo_color(*color));
                 }
                 TurtleEvent::Clear | TurtleEvent::State(_) => {}
@@ -228,7 +230,13 @@ impl App {
         }
 
         for (index, state) in self.vm.turtles().snapshots().into_iter().enumerate() {
-            self.draw_turtle(TurtleId::new(index), state, canvas_height);
+            self.draw_turtle(
+                TurtleId::new(index),
+                state,
+                canvas_height,
+                x_scrunch,
+                y_scrunch,
+            );
         }
 
         if self.bark_flash_until > get_time() {
@@ -236,12 +244,22 @@ impl App {
         }
     }
 
-    fn draw_turtle(&self, id: TurtleId, state: TurtleState, canvas_height: f32) {
+    fn draw_turtle(
+        &self,
+        id: TurtleId,
+        state: TurtleState,
+        canvas_height: f32,
+        x_scrunch: f64,
+        y_scrunch: f64,
+    ) {
         if !state.visible {
             return;
         }
 
-        let center = logo_to_screen(state.position, canvas_height);
+        let center = logo_to_screen(
+            scale_point(state.position, x_scrunch, y_scrunch),
+            canvas_height,
+        );
         let heading = state.heading.to_radians() as f32;
         let forward = Vec2::new(heading.sin(), -heading.cos());
         let right = Vec2::new(forward.y, -forward.x);
@@ -421,6 +439,10 @@ fn draw_ship_sprite(center: Vec2, forward: Vec2, right: Vec2, phase: f32) {
         thruster - forward * flame,
         ORANGE,
     );
+}
+
+fn scale_point(point: Point, x_scrunch: f64, y_scrunch: f64) -> Point {
+    Point::new(point.x * x_scrunch, point.y * y_scrunch)
 }
 
 fn logo_to_screen(point: Point, canvas_height: f32) -> Vec2 {

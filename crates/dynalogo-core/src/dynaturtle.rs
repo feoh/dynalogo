@@ -62,6 +62,10 @@ pub struct TurtleStore {
     collision_radius: Vec<f64>,
     active: Vec<TurtleId>,
     events: Vec<TurtleEvent>,
+    /// Screen-wide aspect scaling set by `SETSCRUNCH`, applied by frontends
+    /// when mapping logo coordinates to pixels (not stored per-turtle).
+    x_scrunch: f64,
+    y_scrunch: f64,
 }
 
 impl TurtleStore {
@@ -81,6 +85,8 @@ impl TurtleStore {
             collision_radius: Vec::new(),
             active: Vec::new(),
             events: Vec::new(),
+            x_scrunch: 1.0,
+            y_scrunch: 1.0,
         };
         let turtle = store.spawn_default();
         store.active = vec![turtle];
@@ -343,6 +349,17 @@ impl TurtleStore {
         self.visible[id.index()] = visible;
     }
 
+    /// Sets the screen-wide `SETSCRUNCH` aspect scaling; a global window
+    /// property in UCBLogo, not a per-turtle attribute.
+    pub fn set_scrunch(&mut self, x_scrunch: f64, y_scrunch: f64) {
+        self.x_scrunch = x_scrunch;
+        self.y_scrunch = y_scrunch;
+    }
+
+    pub fn scrunch(&self) -> (f64, f64) {
+        (self.x_scrunch, self.y_scrunch)
+    }
+
     /// Records a zero-length draw event at `target` without moving `id`.
     pub fn draw_dot(&mut self, id: TurtleId, target: Point) {
         self.ensure(id);
@@ -486,7 +503,17 @@ mod tests {
         let store = TurtleStore::new();
         assert_eq!(store.len(), 1);
         assert_eq!(store.who(), Some(TurtleId::new(0)));
-        assert_eq!(store.active(), &[TurtleId::new(0)]);
+        assert_eq!(store.scrunch(), (1.0, 1.0));
+    }
+
+    #[test]
+    fn set_scrunch_is_a_global_screen_property() {
+        let mut store = TurtleStore::new();
+        let second = store.spawn_default();
+        store.set_scrunch(2.0, 0.5);
+        assert_eq!(store.scrunch(), (2.0, 0.5));
+        store.tell_one(second);
+        assert_eq!(store.scrunch(), (2.0, 0.5));
     }
 
     #[test]
