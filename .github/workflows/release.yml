@@ -39,8 +39,8 @@ jobs:
         run: >-
           cargo build --release -p dynalogo --bins --target ${{ matrix.target }}
 
-      - name: Stage package (Unix)
-        if: runner.os != 'Windows'
+      - name: Stage package (Linux)
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
@@ -51,6 +51,19 @@ jobs:
           cp README.md LICENSE "$stage/"
           cp -r examples "$stage/examples"
           tar czf "$stage.tar.gz" "$stage"
+
+      - name: Stage package (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="dynalogo-${{ matrix.target }}"
+          mkdir -p "$stage"
+          cp "target/${{ matrix.target }}/release/dynalogo" "$stage/"
+          cp "target/${{ matrix.target }}/release/dynalogo-window" "$stage/"
+          cp README.md LICENSE "$stage/"
+          cp -r examples "$stage/examples"
+          ditto -c -k --sequesterRsrc --keepParent "$stage" "$stage.zip"
 
       - name: Stage package (Windows)
         if: runner.os == 'Windows'
