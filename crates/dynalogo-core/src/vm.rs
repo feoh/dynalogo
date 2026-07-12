@@ -2553,7 +2553,7 @@ impl Vm {
     fn edsh(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("edsh", &args, 0)?;
         Err(VmError::new(
-            "EDSH requires the shape registry/editor work that DynaLOGO does not yet implement",
+            "EDSH is not interactive yet; use PUTSH/GETSH or the browser shape editor",
         ))
     }
 
@@ -5838,12 +5838,12 @@ path.write_text('make "foo 9\n')
     }
 
     #[test]
-    fn edsh_reports_missing_shape_editor_support() {
+    fn edsh_reports_missing_interactive_editor_support() {
         let mut vm = Vm::new();
         let error = vm.eval_source("edsh").unwrap_err();
         assert_eq!(
             error.message,
-            "EDSH requires the shape registry/editor work that DynaLOGO does not yet implement"
+            "EDSH is not interactive yet; use PUTSH/GETSH or the browser shape editor"
         );
     }
 

@@ -22,8 +22,10 @@ Implemented today:
 
 Still missing from the nearby workspace roadmap bucket:
 
-- a real shape-editor-backed `EDSH` implementation (the command exists today,
-  but honestly reports that the shape registry/editor work is not implemented)
+- a real interactive `EDSH` command. Shape data itself is implemented through
+  `PUTSH`/`GETSH`/`SHAPE`, and the browser demo has a shape-editor panel, but
+  invoking `EDSH` from Logo still reports an honest placeholder instead of
+  opening an Atari-style shape editor.
 
 ## File and stream follow-up gaps
 
@@ -105,8 +107,9 @@ The classic dynaturtle-facing language layer is now exposed with:
 
 Still missing from the broader dynaturtle roadmap are:
 
-- custom shape rendering in the native/browser frontends
-- interactive shape-editor UI / real `EDSH`
+- a real Logo-level interactive `EDSH` flow; browser users can use the web
+  shape-editor panel, and native/browser rendering can draw registry-backed
+  polygon outlines
 - any remaining collision/event polish found during manual comparison
 
 ## Error parity remains incomplete

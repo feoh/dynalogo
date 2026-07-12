@@ -123,8 +123,8 @@ For editor-driven commands:
 
 - `EDIT`/`ED` require `$EDITOR` or `Vm::set_editor_command(...)`
 - `EDNS` uses the same editor flow for visible global variables
-- `EDSH` currently reports that the shape editor/registry work is not yet
-  implemented
+- `EDSH` is not interactive yet; use `PUTSH`/`GETSH` directly or the browser
+  shape editor to create custom outlines
 
 In browser/WASM frontends, filesystem/editor-backed flows are not available in
 any meaningful way.

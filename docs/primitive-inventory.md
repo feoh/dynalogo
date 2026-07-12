@@ -108,9 +108,10 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Notes
 
 `EDNS` is implemented as an editor-driven variable session using the same
-underlying flow as `EDIT`/`ED`; `EDSH` currently reports that the shape editor
-UI is not implemented yet. The current shape-registry primitives (`PUTSH`,
-`GETSH`, `SHAPE`) store/query shape data and the active turtle's shape name,
-but native/browser rendering still uses the built-in sprite set until the
-follow-on rendering task lands. See also [primitive-gaps.md](primitive-gaps.md)
-for the current gap list.
+underlying flow as `EDIT`/`ED`. `EDSH` remains a non-interactive placeholder;
+use `PUTSH`/`GETSH` directly or the browser shape editor for custom outlines.
+The current shape-registry primitives (`PUTSH`, `GETSH`, `SHAPE`) store/query
+shape data and the active turtle's shape name, and native/browser rendering can
+draw registry-backed polygon outlines while preserving built-in sprites for
+`turtle`, `dog`, `ship`, and `rocket`. See also
+[primitive-gaps.md](primitive-gaps.md) for the current gap list.
