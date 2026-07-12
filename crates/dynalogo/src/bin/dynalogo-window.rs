@@ -1,5 +1,5 @@
 use dynalogo_core::dynaturtle::TurtleId;
-use dynalogo_core::turtle::{Point, TurtleEvent, TurtleState};
+use dynalogo_core::turtle::{PenMode, Point, TurtleEvent, TurtleState};
 use dynalogo_core::vm::{ControlFlow, Vm};
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, Sound};
 use macroquad::prelude::*;
@@ -14,13 +14,14 @@ use web_sys::HtmlTextAreaElement;
 const PROMPT_HEIGHT: f32 = 92.0;
 const LOG_LINES: usize = 5;
 const SIM_DT: f64 = 1.0 / 60.0;
+const CANVAS_BACKGROUND: Color = Color::new(18.0 / 255.0, 20.0 / 255.0, 26.0 / 255.0, 1.0);
 
 #[macroquad::main(window_conf)]
 async fn main() {
     let mut app = App::new().await;
 
     loop {
-        clear_background(Color::from_rgba(18, 20, 26, 255));
+        clear_background(CANVAS_BACKGROUND);
         app.handle_input();
         app.handle_browser_commands();
         app.update_sim();
@@ -190,17 +191,18 @@ impl App {
                     to,
                     color,
                     width,
+                    mode,
                 } => {
                     let from = logo_to_screen(*from, canvas_height);
                     let to = logo_to_screen(*to, canvas_height);
-                    draw_line(
-                        from.x,
-                        from.y,
-                        to.x,
-                        to.y,
-                        (*width).max(1.0) as f32,
-                        logo_color(*color),
-                    );
+                    // PX (Reverse) has no true per-pixel XOR compositing in this
+                    // vector event-replay renderer, so it paints like PD; see the
+                    // TurtleEvent::Line doc comment for why.
+                    let paint = match mode {
+                        PenMode::Erase => CANVAS_BACKGROUND,
+                        PenMode::Down | PenMode::Reverse | PenMode::Up => logo_color(*color),
+                    };
+                    draw_line(from.x, from.y, to.x, to.y, (*width).max(1.0) as f32, paint);
                 }
                 TurtleEvent::Label {
                     at,

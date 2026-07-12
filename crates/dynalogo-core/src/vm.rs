@@ -24,7 +24,7 @@ use crate::demon::{DemonCondition, DemonEvent, DemonScheduler};
 use crate::dynaturtle::{EdgeMode, TurtleId, TurtleStore, WorldBounds};
 use crate::lexer::{lex, InfixOp, TokenKind};
 use crate::parser::{parse_source, Arity, ArityTable, ParseError};
-use crate::turtle::{Point, TurtleEvent};
+use crate::turtle::{PenMode, Point, TurtleEvent};
 use crate::value::{Interner, List, LogoArray, LogoNumber, Symbol, Value};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1025,6 +1025,9 @@ impl Vm {
             "clearscreen" | "cs" => self.turtle_clearscreen(args),
             "penup" | "pu" => self.turtle_penup(args),
             "pendown" | "pd" => self.turtle_pendown(args),
+            "pe" => self.turtle_pe(args),
+            "px" => self.turtle_px(args),
+            "pen" => self.turtle_pen(args),
             "pn" => self.turtle_pn(args),
             "setpn" => self.turtle_setpn(args),
             "pc" => self.turtle_pc(args),
@@ -3534,7 +3537,7 @@ impl Vm {
     fn turtle_penup(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("penup", &args, 0)?;
         for id in self.turtles.active().to_vec() {
-            self.turtles.set_pen_down(id, false);
+            self.turtles.set_pen_mode(id, PenMode::Up);
         }
         Ok(PrimitiveResult::NoValue)
     }
@@ -3542,9 +3545,35 @@ impl Vm {
     fn turtle_pendown(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("pendown", &args, 0)?;
         for id in self.turtles.active().to_vec() {
-            self.turtles.set_pen_down(id, true);
+            self.turtles.set_pen_mode(id, PenMode::Down);
         }
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_pe(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pe", &args, 0)?;
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_pen_mode(id, PenMode::Erase);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_px(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("px", &args, 0)?;
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_pen_mode(id, PenMode::Reverse);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_pen(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pen", &args, 0)?;
+        let id = self.current_turtle();
+        let word = self.turtles.pen_mode(id).unwrap_or(PenMode::Down).as_word();
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            word,
+        )))
     }
 
     fn turtle_pn(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -4703,6 +4732,9 @@ fn primitive_names() -> &'static [&'static str] {
         "pu",
         "pendown",
         "pd",
+        "pe",
+        "px",
+        "pen",
         "pn",
         "setpn",
         "pc",
@@ -5019,7 +5051,7 @@ fn template_binding_name(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::turtle::{Point, TurtleEvent};
+    use crate::turtle::{PenMode, Point, TurtleEvent};
 
     fn run(source: &str) -> Result<(RunResult, Vm), VmError> {
         let mut vm = Vm::new();
@@ -5495,6 +5527,37 @@ mod tests {
     }
 
     #[test]
+    fn pen_reporter_returns_atari_mode_words() {
+        let (result, _) =
+            run("print pen pu print pen pd print pen pe print pen px print pen").unwrap();
+        assert_eq!(result.output, "PD\nPU\nPD\nPE\nPX\n");
+    }
+
+    #[test]
+    fn pe_and_px_still_move_and_draw_the_turtle() {
+        let (_, vm) = run("pe fd 10 px fd 10").unwrap();
+        let state = vm.turtles().state(TurtleId::new(0)).unwrap();
+        assert_eq!(state.pen_mode, PenMode::Reverse);
+        assert_eq!(state.position, Point::new(0.0, 20.0));
+        let modes: Vec<PenMode> = vm
+            .turtles()
+            .events()
+            .iter()
+            .filter_map(|event| match event {
+                TurtleEvent::Line { mode, .. } => Some(*mode),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(modes, vec![PenMode::Erase, PenMode::Reverse]);
+    }
+
+    #[test]
+    fn each_turtle_keeps_its_own_pen_mode_independent_of_other_turtles() {
+        let (result, _) = run("tell 0 pe tell 1 px tell 0 print pen tell 1 print pen").unwrap();
+        assert_eq!(result.output, "PE\nPX\n");
+    }
+
+    #[test]
     fn when_over_fires_during_dynaturtle_tick() {
         let mut vm = Vm::new();
         vm.eval_source(
@@ -5820,7 +5883,7 @@ mod tests {
             run("pu fd 10 pd setpc 3 setpensize 4 fd 5 ht st print xcor print ycor").unwrap();
         assert_eq!(result.output, "0\n15\n");
         let state = vm.turtles().state(TurtleId::new(0)).unwrap();
-        assert!(state.pen_down);
+        assert_eq!(state.pen_mode, PenMode::Down);
         assert!(state.visible);
         assert_eq!(state.pen_color, 3);
         assert_eq!(state.pen_size, 4.0);
@@ -5923,11 +5986,11 @@ mod tests {
             assert_eq!(state.heading, 90.0);
             assert!((state.position.x - 5.0).abs() < 1e-9);
             assert!(state.position.y.abs() < 1e-9);
-            assert!(!state.pen_down);
+            assert_eq!(state.pen_mode, PenMode::Up);
         }
         let untouched = vm.turtles().state(TurtleId::new(0)).unwrap();
         assert_eq!(untouched.position, Point::new(0.0, 0.0));
-        assert!(untouched.pen_down);
+        assert_eq!(untouched.pen_mode, PenMode::Down);
     }
 
     #[test]

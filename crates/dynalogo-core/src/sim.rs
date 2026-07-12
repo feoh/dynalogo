@@ -141,7 +141,7 @@ pub fn interpolate_turtle(a: TurtleState, b: TurtleState, alpha: f64) -> TurtleS
     TurtleState {
         position: interpolate_point(a.position, b.position, alpha),
         heading: interpolate_angle_degrees(a.heading, b.heading, alpha),
-        pen_down: b.pen_down,
+        pen_mode: b.pen_mode,
         pen_color: b.pen_color,
         pens: b.pens,
         active_pen: b.active_pen,

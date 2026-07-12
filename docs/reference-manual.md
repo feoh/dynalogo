@@ -264,9 +264,19 @@ same TurtleStore-backed engine used by dynaturtles.
 
 ### Pen and visibility
 
-- `PENUP`/`PU`
-- `PENDOWN`/`PD`
-- `SETPENCOLOR`/`SETPC`
+- `PENUP`/`PU`, `PENDOWN`/`PD`
+- `PE`, `PX` — Atari's erase and reverse pen modes; each moves and draws the
+  turtle like `PD`, but tags the resulting line so it composites
+  differently. `PE` draws using the canvas background, so lines painted
+  while a pen is erasing visually disappear. `PX` is tracked and reported
+  correctly, but true per-pixel XOR compositing is not implemented — the
+  vector event-replay renderers in this workspace have no persistent
+  raster canvas to invert, so `PX` segments currently render like `PD`.
+- `PEN` reports the active pen mode as one of `PD`/`PU`/`PE`/`PX`
+- `PN`, `SETPN`, `PC` — each turtle has 3 independently colored pens;
+  `SETPN` selects the active one, `PC` reports a given pen's color
+- `SETPENCOLOR`/`SETPC` — `(SETPC pen color)` sets one pen's color
+  without disturbing the active pen
 - `SETPENSIZE`
 - `HIDETURTLE`/`HT`
 - `SHOWTURTLE`/`ST`

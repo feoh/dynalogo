@@ -4,7 +4,7 @@
 //! passes walk positions, headings, velocities, and flags as dense vectors.
 //! Language-level `TELL`, `ASK`, `EACH`, and `WHO` map to the active selection.
 
-use crate::turtle::{point_from_heading, Point, TurtleEvent, TurtleState};
+use crate::turtle::{point_from_heading, PenMode, Point, TurtleEvent, TurtleState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdgeMode {
@@ -51,7 +51,7 @@ pub struct TurtleStore {
     positions: Vec<Point>,
     velocities: Vec<Point>,
     headings: Vec<f64>,
-    pen_down: Vec<bool>,
+    pen_mode: Vec<PenMode>,
     pen_color: Vec<u32>,
     pens: Vec<[u32; 3]>,
     active_pen: Vec<u8>,
@@ -70,7 +70,7 @@ impl TurtleStore {
             positions: Vec::new(),
             velocities: Vec::new(),
             headings: Vec::new(),
-            pen_down: Vec::new(),
+            pen_mode: Vec::new(),
             pen_color: Vec::new(),
             pens: Vec::new(),
             active_pen: Vec::new(),
@@ -104,7 +104,7 @@ impl TurtleStore {
         self.positions.push(state.position);
         self.velocities.push(Point::new(0.0, 0.0));
         self.headings.push(state.heading);
-        self.pen_down.push(state.pen_down);
+        self.pen_mode.push(state.pen_mode);
         self.pen_color.push(state.pen_color);
         self.pens.push(state.pens);
         self.active_pen.push(state.active_pen);
@@ -127,7 +127,7 @@ impl TurtleStore {
         Some(TurtleState {
             position: *self.positions.get(i)?,
             heading: *self.headings.get(i)?,
-            pen_down: *self.pen_down.get(i)?,
+            pen_mode: *self.pen_mode.get(i)?,
             pen_color: *self.pen_color.get(i)?,
             pens: *self.pens.get(i)?,
             active_pen: *self.active_pen.get(i)?,
@@ -142,7 +142,7 @@ impl TurtleStore {
         let i = id.index();
         self.positions[i] = state.position;
         self.headings[i] = state.heading;
-        self.pen_down[i] = state.pen_down;
+        self.pen_mode[i] = state.pen_mode;
         self.pen_color[i] = state.pen_color;
         self.pens[i] = state.pens;
         self.active_pen[i] = state.active_pen;
@@ -213,16 +213,17 @@ impl TurtleStore {
         self.headings[id.index()] = heading.rem_euclid(360.0);
     }
 
-    /// Moves `id` to `to`, recording a draw line event if its pen is down.
+    /// Moves `id` to `to`, recording a draw line event unless its pen is up.
     pub fn goto(&mut self, id: TurtleId, to: Point) {
         self.ensure(id);
         let i = id.index();
-        if self.pen_down[i] {
+        if self.pen_mode[i].draws() {
             self.events.push(TurtleEvent::Line {
                 from: self.positions[i],
                 to,
                 color: self.pen_color[i],
                 width: self.pen_size[i],
+                mode: self.pen_mode[i],
             });
         }
         self.positions[i] = to;
@@ -267,9 +268,13 @@ impl TurtleStore {
         }
     }
 
-    pub fn set_pen_down(&mut self, id: TurtleId, down: bool) {
+    pub fn pen_mode(&self, id: TurtleId) -> Option<PenMode> {
+        self.pen_mode.get(id.index()).copied()
+    }
+
+    pub fn set_pen_mode(&mut self, id: TurtleId, mode: PenMode) {
         self.ensure(id);
-        self.pen_down[id.index()] = down;
+        self.pen_mode[id.index()] = mode;
     }
 
     pub fn set_pen_color(&mut self, id: TurtleId, color: u32) {
@@ -347,6 +352,7 @@ impl TurtleStore {
             to: target,
             color: self.pen_color[i],
             width: self.pen_size[i],
+            mode: PenMode::Down,
         });
     }
 
@@ -623,7 +629,7 @@ mod tests {
     fn pen_up_moves_without_drawing() {
         let mut store = TurtleStore::new();
         let id = TurtleId::new(0);
-        store.set_pen_down(id, false);
+        store.set_pen_mode(id, PenMode::Up);
         store.forward(id, 10.0);
         assert!(store
             .events()

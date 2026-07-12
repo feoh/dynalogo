@@ -15,6 +15,34 @@ impl Point {
     }
 }
 
+/// Atari LOGO's four pen modes: `PU`/`PD` gate whether the pen draws at
+/// all, while `PE`/`PX` change how a drawn line composites against
+/// whatever is already on the canvas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PenMode {
+    Up,
+    Down,
+    Erase,
+    Reverse,
+}
+
+impl PenMode {
+    /// The word `PEN` reports for this mode, matching Atari LOGO's PD/PU/PE/PX.
+    pub fn as_word(self) -> &'static str {
+        match self {
+            PenMode::Up => "PU",
+            PenMode::Down => "PD",
+            PenMode::Erase => "PE",
+            PenMode::Reverse => "PX",
+        }
+    }
+
+    /// Whether this mode leaves a mark on the canvas at all (`PU` does not).
+    pub fn draws(self) -> bool {
+        self != PenMode::Up
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TurtleEvent {
     Clear,
@@ -23,6 +51,14 @@ pub enum TurtleEvent {
         to: Point,
         color: u32,
         width: f64,
+        /// How this segment should composite against the canvas.
+        ///
+        /// `PenMode::Reverse` (Atari's `PX`) is tracked here so frontends
+        /// can distinguish it, but true per-pixel XOR compositing is not
+        /// implemented: the vector event-replay renderers in this
+        /// workspace have no persistent raster canvas to invert, so
+        /// `Reverse` segments currently render identically to `Down`.
+        mode: PenMode,
     },
     Label {
         at: Point,
@@ -42,7 +78,7 @@ pub struct TurtleState {
     pub position: Point,
     /// Degrees, where 0 points north/up, matching Logo convention.
     pub heading: f64,
-    pub pen_down: bool,
+    pub pen_mode: PenMode,
     /// The active pen's color, kept in sync with `pens[active_pen - 1]`.
     pub pen_color: u32,
     /// Atari LOGO gives each turtle 3 independently colored pens.
@@ -59,7 +95,7 @@ impl Default for TurtleState {
         Self {
             position: Point::new(0.0, 0.0),
             heading: 0.0,
-            pen_down: true,
+            pen_mode: PenMode::Down,
             pen_color: 0x00ff_ffff,
             pens: [0x00ff_ffff; 3],
             active_pen: 1,
