@@ -21,9 +21,9 @@ Still missing from the nearby workspace roadmap bucket:
 - `NODES`, `RECYCLE`
 - editor-facing commands such as `EDIT`/`ED`, `EDNS`, `EDSH`
 
-## File I/O is still absent
+## File and stream I/O still missing on the current integration line
 
-No user-facing file or stream primitives are implemented yet:
+The active branch line still lacks the broader file/stream surface:
 
 - `LOAD`, `SAVE`
 - `OPENREAD`, `OPENWRITE`
@@ -60,16 +60,19 @@ includes:
 - `FILL`
 - multiple pens and related graphics polish
 
-## Dynaturtle command surface is not yet exposed
+## Dynaturtle follow-up surface remains
 
-The engine groundwork exists, but the classic dynaturtle-facing language layer
-still needs user-visible commands such as:
+The classic dynaturtle-facing language layer is now exposed with:
 
 - `TELL`, `ASK`, `EACH`, `WHO`
-- `SETSPEED`, `SPEED`, `SETVELOCITY`
-- `TOUCHING`
-- `WHEN` event/demon surface
-- `BOUNCE`, `WRAP`, `FENCE`, `WINDOW`, `SETSHAPE`
+- `SETSPEED`, `SETVELOCITY`, `SETSHAPE`
+- `TOUCHING`, `WHEN`, `TOOT`
+
+Still missing from the broader dynaturtle roadmap are:
+
+- edge/window modes such as `BOUNCE`, `WRAP`, `FENCE`, `WINDOW`
+- compatibility helpers such as a `SPEED` query primitive
+- any remaining collision/event polish found during manual comparison
 
 ## Error parity remains incomplete
 
@@ -80,5 +83,5 @@ Recent work improved several important semantics:
 - `CATCH "ERROR`
 - last-error reporting through `ERROR`
 
-Still pending is a broader pass to match UCBLogo wording/numbering and any
-remaining edge cases from the manual.
+Still pending is a broader pass to match UCBLogo wording/numbering, plus any
+remaining edge cases surfaced by the compatibility suite and manual audit.

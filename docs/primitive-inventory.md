@@ -27,16 +27,19 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 
 ## Templates and collection processing
 
+- `APPLY`
 - `FOREACH`
 - `MAP`
 - `FILTER`
 - `REDUCE`
+- `PARSE`, `RUNPARSE`, `RUNRESULT`
 
 ## Words, lists, arrays, and property lists
 
 - `FIRST`, `BUTFIRST`/`BF`, `LAST`, `BUTLAST`/`BL`
 - `FPUT`, `LPUT`, `SENTENCE`/`SE`, `LIST`, `WORD`
-- `COUNT`, `ITEM`, `RANK`, `RANPICK`, `WHICH`, `EMPTYP`/`EMPTY?`, `EQUALP`/`EQUAL?`, `MEMBERP`/`MEMBER?`
+- `COUNT`, `ITEM`, `RANK`, `RANPICK`, `WHICH`
+- `EMPTYP`/`EMPTY?`, `EQUALP`/`EQUAL?`, `MEMBERP`/`MEMBER?`
 - `BEFORE`, `INSERT`, `SORT`, `SUPERSORT`, `ASCII`, `CHAR`, `LOWERCASE`, `REV`
 - `WORDP`, `REALWORDP`, `LISTP`, `NUMBERP`, `INTP`, `DECIMALP`, `EVENP`, `DIVISORP`
 - `ARRAY`, `SETITEM`, `LISTTOARRAY`, `ARRAYTOLIST`
@@ -67,7 +70,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `TYPE`
 - `READLIST`/`RL`
 
-## Turtle graphics
+## Turtle graphics and dynaturtles
 
 - `FORWARD`/`FD`, `BACK`/`BK`
 - `LEFT`/`LT`, `RIGHT`/`RT`
@@ -77,12 +80,15 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `SETPENCOLOR`/`SETPC`, `SETPENSIZE`
 - `HIDETURTLE`/`HT`, `SHOWTURTLE`/`ST`, `SHOWNP`
 - `POS`, `HEADING`, `XCOR`, `YCOR`
+- `TELL`, `ASK`, `EACH`, `WHO`
+- `SETVELOCITY`, `SETSPEED`, `SETSHAPE`
+- `TOUCHING`, `WHEN`, `TOOT`
 
 ## Notes
 
 Not yet implemented from nearby roadmap/workspace tasks include remaining
-workspace-management pieces such as `NODES`/`RECYCLE`, file I/O (`LOAD`,
-`SAVE`, streams), macros, richer graphics primitives like `LABEL`/`FILL`, and
-the dynaturtle-specific runtime commands such as `TELL`, `ASK`, velocity, and
-collision/event APIs. See also [primitive-gaps.md](primitive-gaps.md) for the
-current first-pass gap list.
+workspace-management pieces such as `NODES`/`RECYCLE`, file and stream I/O,
+macros, full template follow-ups such as `CASCADE`/`TRANSFER`, richer graphics
+primitives like `LABEL`/`FILL`, and dynaturtle follow-ups such as edge/window
+modes and additional compatibility polish. See also
+[primitive-gaps.md](primitive-gaps.md) for the current gap list.
