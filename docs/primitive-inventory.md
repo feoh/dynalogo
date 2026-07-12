@@ -62,8 +62,8 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `POPLS`, `.PRIMITIVES`
 - `ERASE`/`ER`, `ERN`, `ERNS`, `ERPS`, `ERPL`, `ERALL`
 - `BURY`, `UNBURY`, `BURIEDP`
-- `NODES`, `RECYCLE` (see [primitive-gaps.md](primitive-gaps.md) for the
-  honest-limits notes on these two)
+- `NODES`, `RECYCLE` (honest-limits implementation: `NODES` reports workspace
+  object counts; `RECYCLE` is a no-op because Rust handles memory reclamation)
 
 ## Arithmetic, comparison, and logic
 
@@ -113,5 +113,5 @@ definitions by rendering them as editable `PUTSH` commands. The current
 shape-registry primitives (`PUTSH`, `GETSH`, `SHAPE`) store/query shape data
 and the active turtle's shape name, and native/browser rendering can draw
 registry-backed polygon outlines while preserving built-in sprites for `turtle`,
-`dog`, `ship`, and `rocket`. See also [primitive-gaps.md](primitive-gaps.md) for
-the current gap list.
+`dog`, `ship`, and `rocket`. Current compatibility limitations are documented
+in the reference manual and Atari/UCBLogo compatibility notes.

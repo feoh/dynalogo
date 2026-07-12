@@ -38,10 +38,8 @@ print error
 then `ERROR` reports a structured list describing the last caught error.
 That list is the main debugging interface for Logo-level error handling.
 
-For compatibility details and the current coded error map, see:
-
-- [`ucblogo-compatibility.md`](ucblogo-compatibility.md)
-- [`ucblogo-error-audit.md`](ucblogo-error-audit.md)
+For compatibility details and the current coded error map, see
+[`ucblogo-compatibility.md`](ucblogo-compatibility.md).
 
 ## Common error families
 
@@ -160,5 +158,4 @@ Then, if the change is compatibility-sensitive:
 
 - [`reference-manual.md`](reference-manual.md)
 - [`ucblogo-compatibility.md`](ucblogo-compatibility.md)
-- [`ucblogo-error-audit.md`](ucblogo-error-audit.md)
 - [`developer-guide.md`](developer-guide.md)

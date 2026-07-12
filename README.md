@@ -144,9 +144,10 @@ Implemented today:
   custom-outline rendering, the browser shape editor, and `$EDITOR`-driven
   `EDSH`
 
-Remaining polish is now tracked by concrete compatibility gaps rather than the
-old broad README buckets; see [`docs/primitive-gaps.md`](docs/primitive-gaps.md)
-for the current limitations.
+Remaining compatibility notes now live in the reference and compatibility docs;
+see [`docs/reference-manual.md`](docs/reference-manual.md),
+[`docs/ucblogo-compatibility.md`](docs/ucblogo-compatibility.md), and
+[`docs/atari-logo-validation.md`](docs/atari-logo-validation.md).
 
 ## Example programs
 

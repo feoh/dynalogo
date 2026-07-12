@@ -257,7 +257,7 @@ After this tutorial, useful next reads are:
 - [`../examples/README.md`](../examples/README.md) — example gallery
 - [`primitive-inventory.md`](primitive-inventory.md) — implemented primitive
   snapshot
-- [`primitive-gaps.md`](primitive-gaps.md) — what is still missing or partial
-
-A fuller reference manual is tracked separately and will grow into the main
-feature-by-feature user reference.
+- [`reference-manual.md`](reference-manual.md) — the main feature-by-feature
+  user reference
+- [`ucblogo-compatibility.md`](ucblogo-compatibility.md) — compatibility corpus
+  and intentional divergence notes

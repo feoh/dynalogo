@@ -21,7 +21,13 @@ This audit was created because prior completion claims need independent verifica
 
 At inventory time, these claimed artifact classes are present on the integrated branch:
 
-- Docs: `docs/getting-started.md`, `docs/reference-manual.md`, `docs/developer-guide.md`, `docs/wasm-and-browser.md`, `docs/debugging-and-errors.md`, `docs/browser-demo.md`, `docs/release-process.md`, `docs/releasing.md`, `docs/versioning.md`, `docs/ucblogo-compatibility.md`, `docs/ucblogo-error-audit.md`
+- Docs: `docs/getting-started.md`, `docs/reference-manual.md`,
+  `docs/developer-guide.md`, `docs/wasm-and-browser.md`,
+  `docs/debugging-and-errors.md`, `docs/browser-demo.md`,
+  `docs/release-process.md`, `docs/releasing.md`, `docs/versioning.md`,
+  `docs/ucblogo-compatibility.md`; the former UCBLogo error-audit document was
+  retired after its remaining actionable wording gaps were covered by
+  code/tests.
 - Examples: `examples/dogs_in_the_park.lgo`, `examples/shape_parade.lgo`, `examples/spaceship_thrust.lgo`, `examples/bouncing_ball.lgo`, `examples/orbit_simulation.lgo`, `examples/pong_demons.lgo`, plus v0.1 examples.
 - Workflows: `.github/workflows/ci.yml`, `pages.yml`, `publish.yml`, `release.yml`, `changelog.yml`
 - Web artifacts: `web/index.html`, `web/mq_js_bundle.js`
@@ -29,7 +35,6 @@ At inventory time, these claimed artifact classes are present on the integrated 
 - Core fixtures: `crates/dynalogo-core/tests/fixtures/` contains arithmetic, control, templates, macros, negative_literals, catch_error, and unused-value cases.
 
 This is not the final verdict; category subtasks must validate each claim in detail.
-
 
 ## Verification findings so far
 
@@ -73,7 +78,6 @@ These are not immediate artifact-existence failures, but the closed-task audit f
 - Live UCBLogo comparison could not be executed because no `ucblogo`/`logo` binary is available in this environment. The committed compatibility fixtures are still valuable, but they are not a fresh live oracle run.
 - Native GUI/audio behavior can be smoke-built and partially unit-tested through extracted pure helpers, but this environment does not perform visual/audio snapshot testing.
 - GitHub Actions workflows are now checked by `scripts/validate_workflows.rb` for local YAML parsing and basic workflow/job/step structure, but they still have not been executed on GitHub in this audit worktree.
-
 
 ## Final audit outcome
 

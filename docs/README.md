@@ -22,7 +22,6 @@ Start here for user-facing documentation inside the repository.
   reference for currently implemented behavior
 - [`primitive-inventory.md`](primitive-inventory.md) — snapshot of implemented
   primitives
-- [`primitive-gaps.md`](primitive-gaps.md) — known gaps and partial areas
 - [`atari-logo-validation.md`](atari-logo-validation.md) — Atari LOGO manual
   compatibility notes
 - [`ucblogo-compatibility.md`](ucblogo-compatibility.md) — compatibility test

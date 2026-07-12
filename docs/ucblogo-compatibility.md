@@ -67,6 +67,8 @@ The suite currently documents these intentional differences from UCBLogo:
 As the compatibility corpus grows, additional divergences should be added here
 instead of being left implicit in test code.
 
-See `docs/ucblogo-error-audit.md` for a site-by-site audit of VM error wording,
-which UCBLogo numeric error codes are assigned today, and which wording buckets
-still need follow-up.
+Error-code behavior is pinned by the compatibility fixtures plus focused VM
+regression tests. Current coded families include wrong-type input (code 4),
+missing output (5), not-enough-inputs (6), unused values (9), missing variables
+(11), unknown procedures (13), `IFTRUE`/`IFFALSE` without `TEST` (25), and
+custom `THROW "ERROR` values (35).

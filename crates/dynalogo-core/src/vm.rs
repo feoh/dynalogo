@@ -1151,7 +1151,7 @@ impl Vm {
                 )))
             }
         };
-        let list = list_input(&expansion, &name.to_ascii_uppercase())?;
+        let list = list_input(&expansion, &name.to_ascii_uppercase(), &self.interner)?;
         let source = macro_list_to_source(list, &self.interner, &self.arities);
         let program = parse_source(&source, &mut self.interner, &self.arities)
             .map_err(vm_error_from_parse)?;
@@ -1571,12 +1571,7 @@ impl Vm {
         let values = match &args[1] {
             Value::List(list) => list.iter().cloned().collect::<Vec<_>>(),
             Value::Array(array) => array.to_list().iter().cloned().collect::<Vec<_>>(),
-            _ => {
-                return Err(VmError::new(format!(
-                    "{} is not a list",
-                    args[1].show(&self.interner)
-                )))
-            }
+            _ => return Err(doesnt_like_as_input("which", &args[1], &self.interner)),
         };
         let position = values
             .iter()
@@ -1648,12 +1643,7 @@ impl Vm {
         expect_arity("insert", &args, 2)?;
         let tree = match &args[1] {
             Value::List(list) => list.clone(),
-            _ => {
-                return Err(VmError::new(format!(
-                    "{} is not a sort tree",
-                    args[1].show(&self.interner)
-                )))
-            }
+            _ => return Err(doesnt_like_as_input("insert", &args[1], &self.interner)),
         };
         Ok(PrimitiveResult::Value(Value::List(insert_sorted_tree(
             args[0].clone(),
@@ -1664,8 +1654,8 @@ impl Vm {
 
     fn sort(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("sort", &args, 2)?;
-        let values = list_values(list_input(&args[0], "SORT")?);
-        let mut tree = list_input(&args[1], "SORT")?.clone();
+        let values = list_values(list_input(&args[0], "SORT", &self.interner)?);
+        let mut tree = list_input(&args[1], "SORT", &self.interner)?.clone();
         for value in values {
             tree = insert_sorted_tree(value, &tree, &self.interner)?;
         }
@@ -1674,7 +1664,7 @@ impl Vm {
 
     fn supersort(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("supersort", &args, 1)?;
-        let tree = list_input(&args[0], "SUPERSORT")?.clone();
+        let tree = list_input(&args[0], "SUPERSORT", &self.interner)?.clone();
         Ok(PrimitiveResult::Value(Value::List(flatten_sorted_tree(
             &tree,
         )?)))
@@ -2293,7 +2283,7 @@ impl Vm {
 
     fn macroexpand(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("macroexpand", &args, 1)?;
-        let list = list_input(&args[0], "MACROEXPAND")?;
+        let list = list_input(&args[0], "MACROEXPAND", &self.interner)?;
         let mut items = list.iter().cloned();
         let head = items
             .next()
@@ -2820,7 +2810,7 @@ impl Vm {
         expect_arity("setitem", &args, 3)?;
         let index = number_input_named("setitem", &args[0], &self.interner)? as isize;
         let Value::Array(array) = &args[1] else {
-            return Err(VmError::new("SETITEM second input must be an array"));
+            return Err(doesnt_like_as_input("setitem", &args[1], &self.interner));
         };
         if !array.set_item(index, args[2].clone()) {
             return Err(doesnt_like_as_input("setitem", &args[0], &self.interner));
@@ -2830,7 +2820,7 @@ impl Vm {
 
     fn listtoarray(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("listtoarray", &args, 1)?;
-        let list = list_input(&args[0], "LISTTOARRAY")?;
+        let list = list_input(&args[0], "LISTTOARRAY", &self.interner)?;
         Ok(PrimitiveResult::Value(Value::Array(
             LogoArray::from_values(list.iter().cloned()),
         )))
@@ -2839,7 +2829,11 @@ impl Vm {
     fn arraytolist(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("arraytolist", &args, 1)?;
         let Value::Array(array) = &args[0] else {
-            return Err(VmError::new("ARRAYTOLIST input must be an array"));
+            return Err(doesnt_like_as_input(
+                "arraytolist",
+                &args[0],
+                &self.interner,
+            ));
         };
         Ok(PrimitiveResult::Value(Value::List(array.to_list())))
     }
@@ -2847,7 +2841,7 @@ impl Vm {
     fn repeat(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("repeat", &args, 2)?;
         let count = number_input_named("repeat", &args[0], &self.interner)? as usize;
-        let list = list_input(&args[1], "REPEAT")?;
+        let list = list_input(&args[1], "REPEAT", &self.interner)?;
         for i in 1..=count {
             self.env.define_local("repcount", Value::number(i as f64));
             match self.execute_instruction_list(list)? {
@@ -2860,7 +2854,7 @@ impl Vm {
 
     fn forever(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("forever", &args, 1)?;
-        let list = list_input(&args[0], "FOREVER")?;
+        let list = list_input(&args[0], "FOREVER", &self.interner)?;
         loop {
             match self.execute_instruction_list(list)? {
                 ControlFlow::None => {}
@@ -2873,7 +2867,7 @@ impl Vm {
     fn r#if(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("if", &args, 2)?;
         if logo_truth(&args[0], &self.interner) {
-            let list = list_input(&args[1], "IF")?;
+            let list = list_input(&args[1], "IF", &self.interner)?;
             match self.execute_instruction_list(list)? {
                 ControlFlow::None => Ok(PrimitiveResult::NoValue),
                 control => Ok(PrimitiveResult::Control(control)),
@@ -2886,9 +2880,9 @@ impl Vm {
     fn ifelse(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("ifelse", &args, 3)?;
         let list = if logo_truth(&args[0], &self.interner) {
-            list_input(&args[1], "IFELSE")?
+            list_input(&args[1], "IFELSE", &self.interner)?
         } else {
-            list_input(&args[2], "IFELSE")?
+            list_input(&args[2], "IFELSE", &self.interner)?
         };
         match self.execute_instruction_list(list)? {
             ControlFlow::None => Ok(PrimitiveResult::NoValue),
@@ -2898,7 +2892,7 @@ impl Vm {
 
     fn run_list(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("run", &args, 1)?;
-        let list = list_input(&args[0], "RUN")?;
+        let list = list_input(&args[0], "RUN", &self.interner)?;
         match self.execute_instruction_list(list)? {
             ControlFlow::None => Ok(PrimitiveResult::NoValue),
             control => Ok(PrimitiveResult::Control(control)),
@@ -2939,7 +2933,7 @@ impl Vm {
 
     fn runresult(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("runresult", &args, 1)?;
-        let list = list_input(&args[0], "RUNRESULT")?;
+        let list = list_input(&args[0], "RUNRESULT", &self.interner)?;
         let result = self.execute_instruction_list_result(list)?;
         result_value(result).map(PrimitiveResult::Value)
     }
@@ -2970,14 +2964,14 @@ impl Vm {
 
     fn apply(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("apply", &args, 2)?;
-        let values = list_values(list_input(&args[1], "APPLY")?);
+        let values = list_values(list_input(&args[1], "APPLY", &self.interner)?);
         self.invoke_template_value(&args[0], values)
             .map(PrimitiveResult::Value)
     }
 
     fn foreach(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("foreach", &args, 2)?;
-        let values = list_values(list_input(&args[1], "FOREACH")?);
+        let values = list_values(list_input(&args[1], "FOREACH", &self.interner)?);
         for value in values {
             self.invoke_template_effect(&args[0], vec![value])?;
         }
@@ -2986,7 +2980,7 @@ impl Vm {
 
     fn map(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("map", &args, 2)?;
-        let values = list_values(list_input(&args[1], "MAP")?);
+        let values = list_values(list_input(&args[1], "MAP", &self.interner)?);
         let mut mapped = Vec::new();
         for value in values {
             mapped.push(self.invoke_template_value(&args[0], vec![value])?);
@@ -2998,7 +2992,7 @@ impl Vm {
 
     fn filter(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("filter", &args, 2)?;
-        let values = list_values(list_input(&args[1], "FILTER")?);
+        let values = list_values(list_input(&args[1], "FILTER", &self.interner)?);
         let mut kept = Vec::new();
         for value in values {
             let keep = self.invoke_template_value(&args[0], vec![value.clone()])?;
@@ -3011,7 +3005,7 @@ impl Vm {
 
     fn reduce(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("reduce", &args, 2)?;
-        let mut values = list_values(list_input(&args[1], "REDUCE")?).into_iter();
+        let mut values = list_values(list_input(&args[1], "REDUCE", &self.interner)?).into_iter();
         let Some(mut acc) = values.next() else {
             return Err(doesnt_like_as_input("reduce", &args[1], &self.interner));
         };
@@ -3035,7 +3029,7 @@ impl Vm {
         expect_arity("transfer", &args, 3)?;
         let endtest = args[0].clone();
         let template = args[1].clone();
-        let inbasket = list_input(&args[2], "TRANSFER")?;
+        let inbasket = list_input(&args[2], "TRANSFER", &self.interner)?;
         let mut outbasket = Value::List(List::empty());
         let no_endtest = matches!(&endtest, Value::List(list) if list.is_empty());
 
@@ -3164,7 +3158,7 @@ impl Vm {
                     Ok(Template::ImplicitSlot(list.clone()))
                 }
             }
-            _ => Err(VmError::new("template must be a word or a list")),
+            _ => Err(doesnt_like_as_input("template", value, &self.interner)),
         }
     }
 
@@ -3349,7 +3343,7 @@ impl Vm {
         expect_arity("iftrue", &args, 1)?;
         match self.test_result {
             Some(true) => {
-                let list = list_input(&args[0], "IFTRUE")?;
+                let list = list_input(&args[0], "IFTRUE", &self.interner)?;
                 match self.execute_instruction_list(list)? {
                     ControlFlow::None => Ok(PrimitiveResult::NoValue),
                     control => Ok(PrimitiveResult::Control(control)),
@@ -3364,7 +3358,7 @@ impl Vm {
         expect_arity("iffalse", &args, 1)?;
         match self.test_result {
             Some(false) => {
-                let list = list_input(&args[0], "IFFALSE")?;
+                let list = list_input(&args[0], "IFFALSE", &self.interner)?;
                 match self.execute_instruction_list(list)? {
                     ControlFlow::None => Ok(PrimitiveResult::NoValue),
                     control => Ok(PrimitiveResult::Control(control)),
@@ -3385,7 +3379,7 @@ impl Vm {
     fn catch(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("catch", &args, 2)?;
         let tag = args[0].clone();
-        let list = list_input(&args[1], "CATCH")?;
+        let list = list_input(&args[1], "CATCH", &self.interner)?;
 
         match self.execute_instruction_list(list) {
             Ok(control) => match control {
@@ -3776,7 +3770,7 @@ impl Vm {
     fn turtle_filled(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("filled", &args, 2)?;
         let color = number_input_named("filled", &args[0], &self.interner)? as u32;
-        let body = list_input(&args[1], "FILLED")?.clone();
+        let body = list_input(&args[1], "FILLED", &self.interner)?.clone();
         self.execute_instruction_list_effect(&body)?;
         for id in self.turtles.active().to_vec() {
             self.turtles.fill(id, color);
@@ -3908,7 +3902,7 @@ impl Vm {
     fn dyn_ask(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("ask", &args, 2)?;
         let id = self.turtle_id_from_value(&args[0])?;
-        let list = list_input(&args[1], "ASK")?.clone();
+        let list = list_input(&args[1], "ASK", &self.interner)?.clone();
         let previous = self.turtles.active().to_vec();
         self.turtles.tell_one(id);
         let control = self.execute_instruction_list(&list)?;
@@ -3921,7 +3915,7 @@ impl Vm {
 
     fn dyn_each(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("each", &args, 1)?;
-        let list = list_input(&args[0], "EACH")?.clone();
+        let list = list_input(&args[0], "EACH", &self.interner)?.clone();
         let ids = self.turtles.active().to_vec();
         for id in ids {
             self.turtles.tell_one(id);
@@ -4058,8 +4052,9 @@ impl Vm {
 
     fn dyn_when(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("when", &args, 2)?;
-        let condition = self.parse_demon_condition(list_input(&args[0], "WHEN")?)?;
-        let body = list_input(&args[1], "WHEN")?.clone();
+        let condition =
+            self.parse_demon_condition(list_input(&args[0], "WHEN", &self.interner)?)?;
+        let body = list_input(&args[1], "WHEN", &self.interner)?.clone();
         self.demons.register(condition, body);
         Ok(PrimitiveResult::NoValue)
     }
@@ -4275,10 +4270,7 @@ fn number_input_named(primitive: &str, value: &Value, interner: &Interner) -> Re
 fn variable_name_input(value: &Value, interner: &Interner) -> Result<String, VmError> {
     match value {
         Value::Word(symbol) | Value::BareWord(symbol) => Ok(interner.spelling(*symbol).to_string()),
-        _ => Err(VmError::new(format!(
-            "{} is not a variable name",
-            value.show(interner)
-        ))),
+        _ => Err(doesnt_like_as_input("variable name", value, interner)),
     }
 }
 
@@ -4288,10 +4280,9 @@ fn property_key_input(value: &Value, interner: &Interner) -> Result<String, VmEr
             Ok(interner.canonical_spelling(*symbol).to_string())
         }
         Value::Number(_) => Ok(value.show(interner)),
-        Value::List(_) | Value::Array(_) => Err(VmError::new(format!(
-            "{} is not a property-list key",
-            value.show(interner)
-        ))),
+        Value::List(_) | Value::Array(_) => {
+            Err(doesnt_like_as_input("property-list key", value, interner))
+        }
     }
 }
 
@@ -4408,10 +4399,14 @@ fn parse_to_header(line: &str) -> Result<(String, Vec<String>, bool), VmError> {
     Ok((name, params, is_macro))
 }
 
-fn list_input<'a>(value: &'a Value, name: &str) -> Result<&'a List, VmError> {
+fn list_input<'a>(value: &'a Value, name: &str, interner: &Interner) -> Result<&'a List, VmError> {
     match value {
         Value::List(list) => Ok(list),
-        _ => Err(VmError::new(format!("{name} input must be a list"))),
+        _ => Err(doesnt_like_as_input(
+            &name.to_ascii_lowercase(),
+            value,
+            interner,
+        )),
     }
 }
 
@@ -4458,15 +4453,15 @@ fn ranpick_text(
 }
 
 fn point_input(value: &Value, interner: &Interner) -> Result<Point, VmError> {
-    let list = list_input(value, "SETPOS")?;
+    let list = list_input(value, "SETPOS", interner)?;
     let x = list
         .item(1)
-        .ok_or_else(|| VmError::new("SETPOS requires a two-number list"))?;
+        .ok_or_else(|| doesnt_like_as_input("setpos", value, interner))?;
     let y = list
         .item(2)
-        .ok_or_else(|| VmError::new("SETPOS requires a two-number list"))?;
+        .ok_or_else(|| doesnt_like_as_input("setpos", value, interner))?;
     if list.len() != 2 {
-        return Err(VmError::new("SETPOS requires a two-number list"));
+        return Err(doesnt_like_as_input("setpos", value, interner));
     }
     Ok(Point::new(
         number_input_named("setpos", x, interner)?,
@@ -4494,10 +4489,7 @@ fn local_names(value: &Value, interner: &Interner) -> Result<Vec<String>, VmErro
             .iter()
             .map(|value| variable_name_input(value, interner))
             .collect(),
-        _ => Err(VmError::new(format!(
-            "{} is not a variable name or list of names",
-            value.show(interner)
-        ))),
+        _ => Err(doesnt_like_as_input("variable name", value, interner)),
     }
 }
 
@@ -6276,6 +6268,49 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
         let mut vm = Vm::new();
         let error = vm.eval_source("reduce [sum ?1 ?2] []").unwrap_err();
         assert_eq!(error.message, "reduce doesn't like [] as input");
+    }
+
+    #[test]
+    fn remaining_type_mismatch_helpers_report_ucblogo_style_messages() {
+        let cases = [
+            ("make [] 1", "variable name doesn't like [] as input"),
+            (
+                "pprop [] \"prop 1",
+                "property-list key doesn't like [] as input",
+            ),
+            ("which \"a 3", "which doesn't like 3 as input"),
+            ("insert 1 2", "insert doesn't like 2 as input"),
+            (
+                "make \"arr array 2 setitem 1 [] \"oops",
+                "setitem doesn't like [] as input",
+            ),
+            ("arraytolist []", "arraytolist doesn't like [] as input"),
+            ("foreach [print ?] 1", "foreach doesn't like 1 as input"),
+            ("map 5 [1 2]", "template doesn't like 5 as input"),
+            ("setpos [1]", "setpos doesn't like [1] as input"),
+        ];
+        for (source, expected) in cases {
+            let mut vm = Vm::new();
+            let error = match vm.eval_source(source) {
+                Ok(result) => panic!("{source} should fail, got output {:?}", result.output),
+                Err(error) => error,
+            };
+            assert_eq!(error.message, expected, "source: {source}");
+        }
+    }
+
+    #[test]
+    fn catch_error_records_converted_helper_bad_input_code() {
+        let mut vm = Vm::new();
+        vm.eval_source("catch \"error [setpos [1]]").unwrap();
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "4");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "setpos doesn't like [1] as input"
+        );
     }
 
     #[test]

@@ -467,10 +467,10 @@ DynaLOGO intentionally follows UCBLogo-style syntax and also tracks Atari LOGO
 semantics where useful, but users should assume that edge cases may still differ
 until the remaining compatibility tasks are complete.
 
-For current audit notes, see:
+For current compatibility notes, see:
 
-- [`primitive-gaps.md`](primitive-gaps.md)
 - [`primitive-inventory.md`](primitive-inventory.md)
+- [`ucblogo-compatibility.md`](ucblogo-compatibility.md)
 - [`atari-logo-validation.md`](atari-logo-validation.md)
 
 ### Native window vs terminal REPL
@@ -509,4 +509,4 @@ If you are new to the project, read in this order:
 2. this reference manual
 3. [`../examples/README.md`](../examples/README.md)
 4. [`primitive-inventory.md`](primitive-inventory.md)
-5. [`primitive-gaps.md`](primitive-gaps.md)
+5. [`ucblogo-compatibility.md`](ucblogo-compatibility.md)
