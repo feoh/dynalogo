@@ -1,5 +1,9 @@
 # DynaLOGO Roadmap
 
+This is a long-term compatibility roadmap, not a list of currently assigned
+work. The current implementation snapshot and concrete limitations are
+maintained in the README and compatibility documentation.
+
 ## v0.1 — "The turtle crawls" (core language + static turtle graphics)
 
 - Lexer/reader: UCBLogo tokenization — words, `[lists]`, `(parens)`,
@@ -65,5 +69,9 @@
 
 - Audit of all ~400 UCBLogo primitives against the manual
 - Compatibility test suite run against UCBLogo behavior
-- Remaining graphics: `LABEL SETLABELHEIGHT FILL SETSCRUNCH`, multiple pens
-- Dynaturtle polish: sprite animation, sound (`TOOT`), demo gallery
+- Remaining Atari/UCBLogo surface: `SETBG`, `SETC`, `SETSP`, `CT`, `READLINE`,
+  `ERF`, `CATALOG`, and low-level Atari special primitives
+- Remaining graphics fidelity: true per-pixel `PX` reverse/XOR compositing and
+  Atari-native editor/screen behavior
+- Dynaturtle polish: visual/audio snapshot coverage and additional concrete
+  compatibility cases

@@ -68,16 +68,19 @@ The Atari manual organizes features into these areas:
   (`PX`'s reverse/XOR pixel compositing is not implemented; see the
   reference manual's Pen and visibility section)
 
-**Present in Atari manual but still missing or incomplete in DynaLOGO**
+**Implemented on the current DynaLOGO surface**
 
 - `ASK`, `TELL`, `EACH`, `WHO`
-- `OVER`, `TOUCHING`, `WHEN`, event/collision table semantics
-- turtle shape editor behavior beyond the current `SETSHAPE`/`SHAPE`/`GETSH`/`PUTSH` registry layer
-- `SETSP` (Atari-style alias for `SETSPEED`)
-- `SPEED`
-- background/turtle color split: `SETBG`, `SETC`
-- Atari screen-mode commands such as `FS`, `SS`, `TS`, `CT`
-- graphics extras like `LABEL`, `FILL`, `SETSCR`
+- `OVER`, `TOUCHING`, and `WHEN` event/collision conditions
+- `SPEED`, `LABEL`, `FILL`, `FILLED`, and `SETSCRUNCH`/`SETSCR`
+- `FS`, `SS`, and `TS` screen-mode commands
+- `SETSHAPE`/`SHAPE`/`GETSH`/`PUTSH` registry behavior plus native/browser custom-outline rendering
+
+**Still missing or intentionally narrower than Atari LOGO**
+
+- `SETSP` alias, `SETBG`, `SETC`, and `CT`
+- Atari's original interactive shape-editor/screen behavior
+- true per-pixel `PX` reverse/XOR compositing (the current renderer preserves pen mode but does not emulate a persistent Atari raster)
 
 ### 2. Words and lists
 
@@ -93,7 +96,7 @@ The Atari manual organizes features into these areas:
 - `RANK`, `RANPICK`
 - text/character helpers visible in Atari vocabulary such as `ASCII`, `CHAR`, `LOWERCASE`, `REV`
 
-**Missing from Atari vocabulary**
+**Remaining Atari vocabulary work**
 
 - assorted Atari examples/helpers referenced in the glossary that are not yet audited individually
 
@@ -144,7 +147,7 @@ The Atari manual organizes features into these areas:
 - `INTP`, `DECIMALP`, `NUMBERP`
 - `EVENP`, `DIVISORP`, `FACTORIAL`
 
-**Missing from Atari vocabulary**
+**Remaining Atari vocabulary work**
 
 - any remaining Atari numeric helpers beyond the core predicate/math surface above
 
@@ -174,11 +177,10 @@ The Atari manual organizes features into these areas:
 - `TEST`, `IFTRUE`, `IFFALSE`
 - library-level `FOR`, `WHILE`, `UNTIL`, `DO.WHILE`, `CASE`, `COND`
 
-**Present in Atari manual but still missing or only partial**
+**Implemented or intentionally scoped differently**
 
-- full Atari `WHEN` demon/event model
-- Atari collision/event condition numbering and `POD`/`PODS`
-- some named example/event helpers from the glossary (`FOREVER`, `HALT.AT`, etc.) are not implemented
+- DynaLOGO implements `WHEN` with `TOUCHING`, `OVER`, `OVERCOLOR`, and edge conditions; Atari-specific condition numbering and `POD`/`PODS` are not part of the current surface.
+- `FOREVER` is implemented. Other named Atari example/event helpers such as `HALT.AT` remain outside the current compatibility target.
 
 ### 7. Logical operations
 
@@ -195,16 +197,14 @@ The Atari manual organizes features into these areas:
 
 **Implemented now**
 
-- `READLIST`/`RL` exists, but is not connected to a real stream yet
-- `WAIT`
+- `READLIST`/`RL`, `READCHAR`/`RC`, and `READWORD`/`RW`
+- `WAIT`, `KEYP`, joystick/paddle input (`JOY`, `JOYB`, `PADDLE`, `PADDLEB`)
+- sound/environment helpers (`TOOT`, `SETENV`, `TIMEOUT`)
+- cursor/screen helpers (`SETCURSOR`, `TEXTSCREEN`, `SPLITSCREEN`, `FULLSCREEN`)
 
-**Present in Atari manual but missing**
+**Remaining outside-world work**
 
-- `RC` / read-char behavior
-- `KEYP`
-- joystick/paddle input: `JOY`, `JOYB`, `PADDLE`, `PADDLEB`
-- sound: `TOOT`, `SETENV`, `TIMEOUT`
-- cursor/screen helpers such as `SETCURSOR`, `TEXTSCREEN`, `SPLITSCREEN`, `FULLSCREEN`
+- Atari-specific device behavior and exact hardware timing remain outside the current target.
 
 ### 9. Workspace management
 
@@ -222,9 +222,9 @@ The Atari manual organizes features into these areas:
   pool; `RECYCLE` is a documented no-op since Rust reclaims memory
   automatically)
 
-**Present in Atari manual but missing**
+**Section status**
 
-- none remaining in this section
+- No unimplemented workspace item from this validation section remains in the current surface.
 
 ### 10. Files
 
@@ -243,10 +243,9 @@ The Atari manual organizes features into these areas:
 
 ### 11. Special primitives
 
-**Present in Atari manual but missing**
+**Remaining Atari-only special primitives**
 
-- `.DEPOSIT`, `EXAMINE`
-- likely `.CALL` and related low-level/system primitives from the Atari glossary/index
+- `.DEPOSIT`, `EXAMINE`, likely `.CALL`, and related low-level/system primitives from the Atari glossary/index
 - assorted hardware-facing commands tied to Atari devices and memory
 
 ## Highest-priority Atari-derived implementation gaps
