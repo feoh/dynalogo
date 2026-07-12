@@ -9,20 +9,20 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 
 ## [Unreleased]
 
+No changes yet.
+
+## [0.1.0] - 2026-07-12
+
+Initial public release of the workspace. This release packages the current
+Logo interpreter, native frontends, browser demo, and compatibility surface.
+
 ### Added
 
+- GitHub Actions release packaging for Linux, macOS, and Windows archives.
 - A `Publish crates` GitHub Actions workflow that publishes `dynalogo-core`
   and `dynalogo` to crates.io on a `vX.Y.Z` tag push. See
-  [docs/releasing.md](docs/releasing.md) for the manual tag step and the
-  required `CARGO_REGISTRY_TOKEN` secret.
-
-## [0.1.0] - Unreleased
-
-Baseline snapshot of the workspace at the start of changelog tracking. This
-entry summarizes the state of the project rather than a tagged release —
-see [ROADMAP.md](ROADMAP.md) for the version plan.
-
-### Added
+  [docs/releasing.md](docs/releasing.md) for the required
+  `CARGO_REGISTRY_TOKEN` secret.
 
 - Core Logo language: lexer, parser, bytecode VM, `TO`/`END`, REPL, and a
   headless test harness.

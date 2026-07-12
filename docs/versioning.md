@@ -36,11 +36,17 @@ tell whether the entry is meaningful — use judgment.
 
 ## Cutting a release
 
-There is no release automation yet (see the parent packaging/release
-task). Until that lands, cutting a release manually means:
+Release automation is provided by the tag-triggered
+[`release.yml`](../.github/workflows/release.yml) and
+[`publish.yml`](../.github/workflows/publish.yml) workflows. Cutting a release
+still requires a deliberate version/changelog commit:
 
 1. Move the `## [Unreleased]` entries into a new `## [x.y.z] - YYYY-MM-DD`
-   section in `CHANGELOG.md`, and add the corresponding compare/tag links
-   at the bottom of the file.
-2. Bump `workspace.package.version` in `Cargo.toml`.
-3. Commit, tag `vx.y.z`, and push the tag.
+   section in `CHANGELOG.md`, and update the compare/tag links at the bottom.
+2. Bump `workspace.package.version` in `Cargo.toml` and the matching
+   `dynalogo-core` workspace dependency version when starting `x.y.z`.
+3. Run the local validation and package checks, commit the release metadata,
+   and push the commit to `main`.
+4. Create and push tag `vx.y.z`. The release workflow builds platform archives;
+   the publish workflow publishes the two crates when the configured
+   `CARGO_REGISTRY_TOKEN` secret/environment is available.
