@@ -4008,21 +4008,18 @@ fn turtle_over_color(
     let Some(position) = store.state(turtle).map(|state| state.position) else {
         return false;
     };
-    let start = events
+    crate::turtle::events_since_clear(events)
         .iter()
-        .rposition(|event| matches!(event, TurtleEvent::Clear))
-        .map(|index| index + 1)
-        .unwrap_or(0);
-    events[start..].iter().any(|event| match event {
-        TurtleEvent::Line {
-            from,
-            to,
-            color: line_color,
-            width,
-            ..
-        } => *line_color == color && point_near_segment(position, *from, *to, *width / 2.0),
-        _ => false,
-    })
+        .any(|event| match event {
+            TurtleEvent::Line {
+                from,
+                to,
+                color: line_color,
+                width,
+                ..
+            } => *line_color == color && point_near_segment(position, *from, *to, *width / 2.0),
+            _ => false,
+        })
 }
 
 fn point_near_segment(point: Point, a: Point, b: Point, tolerance: f64) -> bool {

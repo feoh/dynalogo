@@ -114,3 +114,58 @@ pub(crate) fn point_from_heading(from: Point, heading: f64, distance: f64) -> Po
         from.y + radians.cos() * distance,
     )
 }
+
+/// Returns the suffix of `events` since the most recent `TurtleEvent::Clear`,
+/// i.e. the events that should still be visible/considered on screen.
+pub fn events_since_clear(events: &[TurtleEvent]) -> &[TurtleEvent] {
+    let start = events
+        .iter()
+        .rposition(|event| matches!(event, TurtleEvent::Clear))
+        .map_or(0, |index| index + 1);
+    &events[start..]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn line(x: f64) -> TurtleEvent {
+        TurtleEvent::Line {
+            from: Point::new(0.0, 0.0),
+            to: Point::new(x, 0.0),
+            color: 0,
+            width: 1.0,
+        }
+    }
+
+    #[test]
+    fn events_since_clear_returns_all_events_when_no_clear_present() {
+        let events = vec![line(1.0), line(2.0)];
+        assert_eq!(events_since_clear(&events), &events[..]);
+    }
+
+    #[test]
+    fn events_since_clear_returns_empty_slice_immediately_after_clear() {
+        let events = vec![line(1.0), TurtleEvent::Clear];
+        assert!(events_since_clear(&events).is_empty());
+    }
+
+    #[test]
+    fn events_since_clear_returns_events_after_most_recent_clear() {
+        let events = vec![
+            line(1.0),
+            TurtleEvent::Clear,
+            line(2.0),
+            TurtleEvent::Clear,
+            line(3.0),
+            line(4.0),
+        ];
+        assert_eq!(events_since_clear(&events), &events[4..]);
+    }
+
+    #[test]
+    fn events_since_clear_on_empty_events_returns_empty() {
+        let events: Vec<TurtleEvent> = Vec::new();
+        assert!(events_since_clear(&events).is_empty());
+    }
+}

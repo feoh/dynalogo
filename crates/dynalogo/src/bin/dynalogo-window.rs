@@ -1,6 +1,6 @@
 use dynalogo_core::dynaturtle::TurtleId;
 use dynalogo_core::graphics::SoftwareCanvas;
-use dynalogo_core::turtle::{Point, TurtleEvent, TurtleState};
+use dynalogo_core::turtle::{events_since_clear, Point, TurtleEvent, TurtleState};
 use dynalogo_core::vm::{ControlFlow, Vm};
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, Sound};
 use macroquad::prelude::*;
@@ -177,12 +177,7 @@ impl App {
         );
 
         let (x_scrunch, y_scrunch) = self.vm.turtles().scrunch();
-        let events = self.vm.turtles().events();
-        let start = events
-            .iter()
-            .rposition(|event| matches!(event, TurtleEvent::Clear))
-            .map_or(0, |index| index + 1);
-        let visible: Vec<TurtleEvent> = events[start..]
+        let visible: Vec<TurtleEvent> = events_since_clear(self.vm.turtles().events())
             .iter()
             .map(|event| scale_event(event, x_scrunch, y_scrunch))
             .collect();
