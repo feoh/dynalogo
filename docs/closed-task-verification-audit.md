@@ -42,7 +42,7 @@ This is not the final verdict; category subtasks must validate each claim in det
 - **Frontend helper tests exist:** `dynalogo-window` has 25 unit tests covering coordinate transforms, heading vectors, sprite selection, custom shape point parsing, input queue behavior, browser-command filtering, and log retention.
 - **Docs/examples artifacts exist:** all expected docs and example programs are present; relative Markdown links in docs/README/examples checked out with zero missing local targets.
 - **Example smoke run:** every `examples/*.lgo` program executed successfully through the CLI with a 15-second timeout.
-- **Validation commands:** after audit fixes, `cargo fmt --check`, `cargo test --workspace -q`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo build -p dynalogo --bin dynalogo-window --target wasm32-unknown-unknown` have been run successfully.
+- **Validation commands:** after audit fixes, `cargo fmt --check`, `cargo test --workspace -q`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo build -p dynalogo --bin dynalogo-window --target wasm32-unknown-unknown` have been run successfully. The workspace now reports 205 core VM tests plus the 25 frontend helper tests.
 
 ### Audit findings that required immediate fixes
 
@@ -52,12 +52,15 @@ This is not the final verdict; category subtasks must validate each claim in det
 2. **Shape-editor/EDSH status wording was stale.** After `PUTSH`/`GETSH`/`SHAPE`, custom rendering, and the browser shape-editor panel landed, docs and the `EDSH` placeholder still said the shape registry/editor work was not implemented.
    - Corrective Witan task: `tk-fix-stale-edsh-and-shape-editor-wording-after-br-361223`
    - Fix commit: `48eefe3`
+3. **Numeric-input error parity was incomplete.** Direct non-arithmetic numeric call sites still had generic `is not a number` behavior or ad hoc range wording.
+   - Corrective Witan task: `tk-finish-documented-remaining-ucblogo-error-parity-770844`
+   - Fix commit: pending in this audit branch
 
 ### Audit findings converted into follow-up tasks
 
 These are not immediate artifact-existence failures, but the closed-task audit found that completion claims were broader than the current evidence/test coverage supports:
 
-- `tk-finish-documented-remaining-ucblogo-error-parity-770844` — the repo still documents remaining UCBLogo error-parity gaps despite the parent parity task being closed.
+- `tk-finish-documented-remaining-ucblogo-error-parity-770844` — **fixed during audit**: all direct numeric-input call sites now use named code-4 handling, `SETITEM` bad-index wording is converted, and docs were updated. Remaining `REDUCE` empty-list wording still awaits live-UCBLogo verification.
 - `tk-add-automated-browser-shape-editor-ui-tests-64f134` — the browser shape-editor artifact exists, but JavaScript/DOM behavior is not directly automated.
 - `tk-decide-and-implement-real-logo-level-edsh-flow-3ce826` — `EDSH` remains a placeholder even though browser-side shape editing exists.
 - `tk-add-workflow-yaml-validation-to-release-artifact-8c618c` — workflow files exist and contain jobs/steps, but local workflow linting/action validation is not installed or automated.

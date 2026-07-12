@@ -1544,7 +1544,7 @@ impl Vm {
 
     fn item(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("item", &args, 2)?;
-        let index = number_input(&args[0], &self.interner)? as usize;
+        let index = number_input_named("item", &args[0], &self.interner)? as usize;
         let value = match &args[1] {
             Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
@@ -2188,8 +2188,8 @@ impl Vm {
 
     fn divisorp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("divisorp", &args, 2)?;
-        let divisor = number_input(&args[0], &self.interner)?;
-        let dividend = number_input(&args[1], &self.interner)?;
+        let divisor = number_input_named("divisorp", &args[0], &self.interner)?;
+        let dividend = number_input_named("divisorp", &args[1], &self.interner)?;
         if divisor == 0.0 {
             return Err(VmError::new("DIVISORP first input must not be zero"));
         }
@@ -2200,7 +2200,7 @@ impl Vm {
 
     fn factorial(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("factorial", &args, 1)?;
-        let number = number_input(&args[0], &self.interner)?;
+        let number = number_input_named("factorial", &args[0], &self.interner)?;
         if number < 0.0 || !LogoNumber::new(number).is_integerish() {
             return Err(VmError::new("FACTORIAL expects a nonnegative integer"));
         }
@@ -2784,7 +2784,7 @@ impl Vm {
 
     fn array(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("array", &args, 1)?;
-        let size = number_input(&args[0], &self.interner)?;
+        let size = number_input_named("array", &args[0], &self.interner)?;
         if size < 0.0 {
             return Err(VmError::new("ARRAY size must be non-negative"));
         }
@@ -2795,12 +2795,12 @@ impl Vm {
 
     fn setitem(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setitem", &args, 3)?;
-        let index = number_input(&args[0], &self.interner)? as isize;
+        let index = number_input_named("setitem", &args[0], &self.interner)? as isize;
         let Value::Array(array) = &args[1] else {
             return Err(VmError::new("SETITEM second input must be an array"));
         };
         if !array.set_item(index, args[2].clone()) {
-            return Err(VmError::new("SETITEM index out of range"));
+            return Err(doesnt_like_as_input("setitem", &args[0], &self.interner));
         }
         Ok(PrimitiveResult::NoValue)
     }
@@ -2823,7 +2823,7 @@ impl Vm {
 
     fn repeat(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("repeat", &args, 2)?;
-        let count = number_input(&args[0], &self.interner)? as usize;
+        let count = number_input_named("repeat", &args[0], &self.interner)? as usize;
         let list = list_input(&args[1], "REPEAT")?;
         for i in 1..=count {
             self.env.define_local("repcount", Value::number(i as f64));
@@ -3354,7 +3354,7 @@ impl Vm {
 
     fn wait(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("wait", &args, 1)?;
-        let sixtieths = number_input(&args[0], &self.interner)?.max(0.0);
+        let sixtieths = number_input_named("wait", &args[0], &self.interner)?.max(0.0);
         thread::sleep(Duration::from_secs_f64(sixtieths / 60.0));
         Ok(PrimitiveResult::NoValue)
     }
@@ -3500,7 +3500,7 @@ impl Vm {
 
     fn turtle_forward(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("forward", &args, 1)?;
-        let distance = number_input(&args[0], &self.interner)?;
+        let distance = number_input_named("forward", &args[0], &self.interner)?;
         for id in self.turtles.active().to_vec() {
             self.turtles.forward(id, distance);
         }
@@ -3509,7 +3509,7 @@ impl Vm {
 
     fn turtle_back(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("back", &args, 1)?;
-        let distance = number_input(&args[0], &self.interner)?;
+        let distance = number_input_named("back", &args[0], &self.interner)?;
         for id in self.turtles.active().to_vec() {
             self.turtles.back(id, distance);
         }
@@ -3518,7 +3518,7 @@ impl Vm {
 
     fn turtle_left(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("left", &args, 1)?;
-        let degrees = number_input(&args[0], &self.interner)?;
+        let degrees = number_input_named("left", &args[0], &self.interner)?;
         for id in self.turtles.active().to_vec() {
             self.turtles.left(id, degrees);
         }
@@ -3527,7 +3527,7 @@ impl Vm {
 
     fn turtle_right(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("right", &args, 1)?;
-        let degrees = number_input(&args[0], &self.interner)?;
+        let degrees = number_input_named("right", &args[0], &self.interner)?;
         for id in self.turtles.active().to_vec() {
             self.turtles.right(id, degrees);
         }
@@ -3536,8 +3536,8 @@ impl Vm {
 
     fn turtle_setxy(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setxy", &args, 2)?;
-        let x = number_input(&args[0], &self.interner)?;
-        let y = number_input(&args[1], &self.interner)?;
+        let x = number_input_named("setxy", &args[0], &self.interner)?;
+        let y = number_input_named("setxy", &args[1], &self.interner)?;
         for id in self.turtles.active().to_vec() {
             self.turtles.set_xy(id, x, y);
         }
@@ -3546,7 +3546,7 @@ impl Vm {
 
     fn turtle_setx(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setx", &args, 1)?;
-        let x = number_input(&args[0], &self.interner)?;
+        let x = number_input_named("setx", &args[0], &self.interner)?;
         for id in self.turtles.active().to_vec() {
             let y = self
                 .turtles
@@ -3561,7 +3561,7 @@ impl Vm {
 
     fn turtle_sety(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("sety", &args, 1)?;
-        let y = number_input(&args[0], &self.interner)?;
+        let y = number_input_named("sety", &args[0], &self.interner)?;
         for id in self.turtles.active().to_vec() {
             let x = self
                 .turtles
@@ -3585,7 +3585,7 @@ impl Vm {
 
     fn turtle_setheading(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setheading", &args, 1)?;
-        let heading = number_input(&args[0], &self.interner)?;
+        let heading = number_input_named("setheading", &args[0], &self.interner)?;
         for id in self.turtles.active().to_vec() {
             self.turtles.set_heading(id, heading);
         }
@@ -3678,7 +3678,7 @@ impl Vm {
     fn turtle_setpencolor(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         match args.as_slice() {
             [color] => {
-                let color = number_input(color, &self.interner)? as u32;
+                let color = number_input_named("setpc", color, &self.interner)? as u32;
                 for id in self.turtles.active().to_vec() {
                     self.turtles.set_pen_color(id, color);
                 }
@@ -3686,7 +3686,7 @@ impl Vm {
             }
             [pen, color] => {
                 let pen = pen_number_input(pen, &self.interner)?;
-                let color = number_input(color, &self.interner)? as u32;
+                let color = number_input_named("setpc", color, &self.interner)? as u32;
                 for id in self.turtles.active().to_vec() {
                     self.turtles.set_pen_n_color(id, pen, color);
                 }
@@ -3701,7 +3701,7 @@ impl Vm {
 
     fn turtle_setpensize(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setpensize", &args, 1)?;
-        let width = number_input(&args[0], &self.interner)?;
+        let width = number_input_named("setpensize", &args[0], &self.interner)?;
         for id in self.turtles.active().to_vec() {
             self.turtles.set_pen_size(id, width);
         }
@@ -3710,8 +3710,8 @@ impl Vm {
 
     fn turtle_setscrunch(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setscrunch", &args, 2)?;
-        let x_scrunch = number_input(&args[0], &self.interner)?;
-        let y_scrunch = number_input(&args[1], &self.interner)?;
+        let x_scrunch = number_input_named("setscrunch", &args[0], &self.interner)?;
+        let y_scrunch = number_input_named("setscrunch", &args[1], &self.interner)?;
         if x_scrunch <= 0.0 || y_scrunch <= 0.0 {
             return Err(VmError::new("SETSCRUNCH inputs must be positive"));
         }
@@ -3721,7 +3721,7 @@ impl Vm {
 
     fn turtle_setlabelheight(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setlabelheight", &args, 1)?;
-        let height = number_input(&args[0], &self.interner)?;
+        let height = number_input_named("setlabelheight", &args[0], &self.interner)?;
         for id in self.turtles.active().to_vec() {
             self.turtles.set_label_height(id, height);
         }
@@ -3752,7 +3752,7 @@ impl Vm {
 
     fn turtle_filled(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("filled", &args, 2)?;
-        let color = number_input(&args[0], &self.interner)? as u32;
+        let color = number_input_named("filled", &args[0], &self.interner)? as u32;
         let body = list_input(&args[1], "FILLED")?.clone();
         self.execute_instruction_list_effect(&body)?;
         for id in self.turtles.active().to_vec() {
@@ -3857,7 +3857,9 @@ impl Vm {
     }
 
     fn turtle_id_from_value(&self, value: &Value) -> Result<TurtleId, VmError> {
-        Ok(TurtleId::new(number_input(value, &self.interner)? as usize))
+        Ok(TurtleId::new(
+            number_input_named("turtle", value, &self.interner)? as usize,
+        ))
     }
 
     fn turtle_ids_input(&self, value: &Value) -> Result<Vec<TurtleId>, VmError> {
@@ -3918,8 +3920,8 @@ impl Vm {
 
     fn dyn_setvelocity(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setvelocity", &args, 2)?;
-        let dx = number_input(&args[0], &self.interner)?;
-        let dy = number_input(&args[1], &self.interner)?;
+        let dx = number_input_named("setvelocity", &args[0], &self.interner)?;
+        let dy = number_input_named("setvelocity", &args[1], &self.interner)?;
         let ids = self.turtles.active().to_vec();
         for id in ids {
             self.turtles.set_velocity(id, Point::new(dx, dy));
@@ -3929,7 +3931,7 @@ impl Vm {
 
     fn dyn_setspeed(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setspeed", &args, 1)?;
-        let speed = number_input(&args[0], &self.interner)?;
+        let speed = number_input_named("setspeed", &args[0], &self.interner)?;
         let ids = self.turtles.active().to_vec();
         for id in ids {
             self.turtles.set_speed(id, speed);
@@ -3940,7 +3942,7 @@ impl Vm {
     fn dyn_setshape(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("setshape", &args, 2)?;
         let name = source_text_input(&args[0], &self.interner);
-        let radius = number_input(&args[1], &self.interner)?;
+        let radius = number_input_named("setshape", &args[1], &self.interner)?;
         let ids = self.turtles.active().to_vec();
         for id in ids {
             self.turtles.set_shape(id, name.clone(), radius);
@@ -4021,7 +4023,7 @@ impl Vm {
 
     fn over(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("over", &args, 1)?;
-        let color = number_input(&args[0], &self.interner)? as u32;
+        let color = number_input_named("over", &args[0], &self.interner)? as u32;
         let over = self
             .turtles
             .active()
@@ -4070,7 +4072,7 @@ impl Vm {
                 self.turtle_id_from_value(&values[1])?,
             ))),
             "over" | "overcolor" if values.len() == 2 => {
-                let color = number_input(&values[1], &self.interner)? as u32;
+                let color = number_input_named("when", &values[1], &self.interner)? as u32;
                 Ok(DemonCondition::OverColor(color))
             }
             other => Err(VmError::new(format!(
@@ -4241,12 +4243,6 @@ fn vm_error_from_parse(error: ParseError) -> VmError {
     }
 }
 
-fn number_input(value: &Value, interner: &Interner) -> Result<f64, VmError> {
-    value
-        .as_number(interner)
-        .ok_or_else(|| VmError::new(format!("{} is not a number", value.show(interner))))
-}
-
 fn number_input_named(primitive: &str, value: &Value, interner: &Interner) -> Result<f64, VmError> {
     value
         .as_number(interner)
@@ -4289,7 +4285,7 @@ fn ranged_byte_input(
     primitive: &str,
     max: u8,
 ) -> Result<u8, VmError> {
-    let number = number_input(value, interner)?;
+    let number = number_input_named(primitive, value, interner)?;
     if !number.is_finite() || number.fract() != 0.0 || number < 0.0 || number > f64::from(max) {
         return Err(VmError::new(format!(
             "{primitive} expected an integer between 0 and {max}, got {}",
@@ -4304,7 +4300,7 @@ fn non_negative_integer_input(
     interner: &Interner,
     name: &str,
 ) -> Result<usize, VmError> {
-    let number = number_input(value, interner)?;
+    let number = number_input_named(name, value, interner)?;
     if number < 0.0 || number.fract() != 0.0 {
         return Err(VmError::new(format!(
             "{name} requires a non-negative integer input"
@@ -4329,7 +4325,7 @@ fn ranged_device_index_input(
 }
 
 fn pen_number_input(value: &Value, interner: &Interner) -> Result<u8, VmError> {
-    let pen = number_input(value, interner)? as i64;
+    let pen = number_input_named("pen", value, interner)? as i64;
     if !(1..=3).contains(&pen) {
         return Err(VmError::new(format!(
             "pen number {pen} must be between 1 and 3"
@@ -4450,8 +4446,8 @@ fn point_input(value: &Value, interner: &Interner) -> Result<Point, VmError> {
         return Err(VmError::new("SETPOS requires a two-number list"));
     }
     Ok(Point::new(
-        number_input(x, interner)?,
-        number_input(y, interner)?,
+        number_input_named("setpos", x, interner)?,
+        number_input_named("setpos", y, interner)?,
     ))
 }
 
@@ -6202,6 +6198,31 @@ path.write_text('make "foo 9\n')
         let mut vm = Vm::new();
         let error = vm.eval_source("random \"oops").unwrap_err();
         assert_eq!(error.message, "random doesn't like oops as input");
+    }
+
+    #[test]
+    fn turtle_motion_with_non_number_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("forward \"oops").unwrap_err();
+        assert_eq!(error.message, "forward doesn't like oops as input");
+    }
+
+    #[test]
+    fn setitem_bad_index_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm
+            .eval_source("make \"arr array 2 setitem 3 :arr \"oops")
+            .unwrap_err();
+        assert_eq!(error.message, "setitem doesn't like 3 as input");
+    }
+
+    #[test]
+    fn setitem_non_number_index_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm
+            .eval_source("make \"arr array 2 setitem \"oops :arr \"value")
+            .unwrap_err();
+        assert_eq!(error.message, "setitem doesn't like oops as input");
     }
 
     #[test]

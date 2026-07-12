@@ -125,8 +125,9 @@ Recent work improved several important semantics:
   `RANPICK`/`ASCII` cases
 
 Still pending is a broader pass to match UCBLogo wording/numbering, plus any
-remaining edge cases surfaced by the compatibility suite and manual audit. In
-particular, the remaining non-arithmetic `number_input` callers and a few
-boundary/range cases such as `SETITEM`/`REDUCE` still need follow-through. See
-`docs/ucblogo-error-audit.md` for the full site-by-site breakdown and the
-prioritized list of remaining wording gaps.
+remaining edge cases surfaced by the compatibility suite and manual audit. The
+shared numeric-input family now threads primitive-name context through its
+callers, and `SETITEM` index failures use the same code-4 wording. Remaining
+boundary wording such as `REDUCE` on an empty list still needs live-UCBLogo
+verification. See `docs/ucblogo-error-audit.md` for the full site-by-site
+breakdown and the prioritized list of remaining wording gaps.

@@ -51,10 +51,10 @@ input` idiom (e.g. `FIRST doesn't like [] as input`), now used by
 still say `Y is not a Z`, which reads differently even though it is the same
 case UCBLogo assigns error code 4:
 
-- `vm.rs:4052` — `"{value} is not a number"` (used by the remaining
-  number-input callers that do not yet thread primitive-name context). A first
-  slice now uses `number_input_named(...)` for arithmetic/unary numeric/random
-  paths, but many other callers still rely on the older generic helper.
+- The former shared `"{value} is not a number"` helper has been removed; VM
+  call sites now thread primitive-name context through `number_input_named(...)`,
+  including arithmetic/unary numeric/random, turtle/dynaturtle, device, array,
+  `SETITEM`, `SETPOS`, and pen helpers.
 - `vm.rs:4058` — `"{value} is not a variable name"`
 - `vm.rs:4071` — `"{value} is not a property-list key"`
 - `vm.rs:4093`, `4108`, `4123`, `4133` — variable-name-list/input-name/
@@ -79,11 +79,11 @@ environment:
 
 - `vm.rs:2904` — `"REDUCE cannot reduce an empty list"`
 
-The empty-word cases for `FIRST`, `RANPICK`, and `ASCII`, plus `ITEM`'s basic
-out-of-range wording, have since been converted to the code-4
-`X doesn't like Y as input` idiom. Remaining boundary wording still needs
-live-UCBLogo verification, especially for the broader numeric-input family and
-adjacent range-sensitive commands like `SETITEM`.
+The empty-word cases for `FIRST`, `RANPICK`, and `ASCII`, `ITEM`'s basic
+out-of-range wording, and `SETITEM`'s bad-index wording have since been
+converted to the code-4 `X doesn't like Y as input` idiom. Remaining boundary
+wording still needs live-UCBLogo verification, especially for cases like
+`REDUCE` on an empty list.
 
 ### 2c. Internal/defensive invariants (likely not user-reachable)
 
