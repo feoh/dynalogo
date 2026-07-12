@@ -228,6 +228,7 @@ impl ArityTable {
             ("SETLABELHEIGHT", 1),
             ("LABEL", 1),
             ("FILL", 0),
+            ("FILLED", 2),
             ("HIDETURTLE", 0),
             ("HT", 0),
             ("INIT.TURTLE", 0),

@@ -1022,6 +1022,7 @@ impl Vm {
             "setlabelheight" => self.turtle_setlabelheight(args),
             "label" => self.turtle_label(args),
             "fill" => self.turtle_fill(args),
+            "filled" => self.turtle_filled(args),
             "hideturtle" | "ht" => self.turtle_hide(args),
             "init.turtle" => self.init_turtle(args),
             "showturtle" | "st" => self.turtle_show(args),
@@ -3579,6 +3580,17 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn turtle_filled(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("filled", &args, 2)?;
+        let color = number_input(&args[0], &self.interner)? as u32;
+        let body = list_input(&args[1], "FILLED")?.clone();
+        self.execute_instruction_list_effect(&body)?;
+        for id in self.turtles.active().to_vec() {
+            self.turtles.fill(id, color);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
     fn turtle_hide(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("hideturtle", &args, 0)?;
         for id in self.turtles.active().to_vec() {
@@ -4599,6 +4611,7 @@ fn primitive_names() -> &'static [&'static str] {
         "setlabelheight",
         "label",
         "fill",
+        "filled",
         "hideturtle",
         "ht",
         "showturtle",
@@ -5343,6 +5356,18 @@ mod tests {
             _ => None,
         });
         assert_eq!(fill, Some((Point::new(-5.0, 8.0), 7)));
+    }
+
+    #[test]
+    fn filled_runs_body_then_emits_fill_event_with_requested_color() {
+        let (_, vm) =
+            run("setpc 3 filled 9 [pu setpos [5 5] pd repeat 4 [fd 10 rt 90] pu setpos [10 10]]")
+                .unwrap();
+        let fill = vm.turtles().events().iter().find_map(|event| match event {
+            TurtleEvent::Fill { at, color } => Some((*at, *color)),
+            _ => None,
+        });
+        assert_eq!(fill, Some((Point::new(10.0, 10.0), 9)));
     }
 
     #[test]

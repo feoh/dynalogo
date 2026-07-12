@@ -95,7 +95,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `HOME`, `CLEARSCREEN`/`CS`, `INIT.TURTLE`
 - `PENUP`/`PU`, `PENDOWN`/`PD`
 - `SETPENCOLOR`/`SETPC`, `SETPENSIZE`
-- `SETLABELHEIGHT`, `LABEL`, `FILL`
+- `SETLABELHEIGHT`, `LABEL`, `FILL`, `FILLED`
 - `HIDETURTLE`/`HT`, `SHOWTURTLE`/`ST`, `SHOWNP`
 - `POS`, `HEADING`, `XCOR`, `YCOR`
 - `TELL`, `ASK`, `EACH`, `WHO`

@@ -77,11 +77,10 @@ found during audit.
 ## Graphics/library gaps remain
 
 Static turtle graphics are usable, and the current integration line now includes
-`LABEL` / `SETLABELHEIGHT` plus a basic `FILL` seed event, but the remaining
-parity/polish bucket still includes:
+`LABEL` / `SETLABELHEIGHT` plus basic `FILL` / `FILLED` seed-event helpers, but
+the remaining parity/polish bucket still includes:
 
-- fuller `FILL` rendering semantics
-- `FILLED`
+- fuller `FILL` / `FILLED` rendering semantics
 - multiple pens and related graphics polish
 
 ## Dynaturtle follow-up surface remains
