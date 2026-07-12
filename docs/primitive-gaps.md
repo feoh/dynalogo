@@ -89,13 +89,12 @@ remaining parity/polish bucket still includes:
 The classic dynaturtle-facing language layer is now exposed with:
 
 - `TELL`, `ASK`, `EACH`, `WHO`
-- `SETSPEED`, `SETVELOCITY`, `SETSHAPE`
+- `SETSPEED`, `SETVELOCITY`, `SETSHAPE`, `SPEED`
+- `BOUNCE`, `WRAP`, `FENCE`, `WINDOW`
 - `TOUCHING`, `WHEN`, `TOOT`
 
 Still missing from the broader dynaturtle roadmap are:
 
-- edge/window modes such as `BOUNCE`, `WRAP`, `FENCE`, `WINDOW`
-- compatibility helpers such as a `SPEED` query primitive
 - any remaining collision/event polish found during manual comparison
 
 ## Error parity remains incomplete

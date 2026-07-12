@@ -69,9 +69,8 @@ The Atari manual organizes features into these areas:
 
 - `ASK`, `TELL`, `EACH`, `WHO`
 - `OVER`, `TOUCHING`, `WHEN`, event/collision table semantics
-- `WINDOW`, `WRAP`
 - `SETSH`/`SETSHAPE`, `SHAPE`, `GETSH`, `PUTSH`, turtle shape editor behavior
-- `SETSP`, `SPEED`
+- `SETSP` (Atari-style alias for `SETSPEED`)
 - multi-pen state: `PEN`, `PE`, `PX`, `PN`, `SETPN`, Atari-style `SETPC pennumber colornumber`
 - background/turtle color split: `SETBG`, `SETC`
 - Atari screen-mode commands such as `FS`, `SS`, `TS`, `CT`
@@ -254,7 +253,7 @@ DynaLOGO:
 4. **Remaining Atari type/text helper audit**
    - verify any adjacent helper surface beyond `REALWORDP`, `RANK`, `RANPICK`, `EVENP`, `DIVISORP`, `FACTORIAL`, `ASCII`, `CHAR`, `LOWERCASE`, and `REV`
 5. **Graphics/screen extras**
-   - `SETBG`, `SETC`, `SETX`, `SETY`, `SHAPE`, `SETSH`, `GETSH`, `PUTSH`, `SETSP`, `SPEED`, `WINDOW`, `WRAP`, multi-pen semantics, `LABEL`, `FILL`
+   - `SETBG`, `SETC`, `SETX`, `SETY`, `SHAPE`, `SETSH`, `GETSH`, `PUTSH`, `SETSP`, multi-pen semantics, `LABEL`, `FILL`
 6. **Remaining Atari outside-world features**
    - any deeper printer/device hooks beyond `KEYP`, joystick/paddle input, `TOOT`, `SETENV`, and cursor/text-screen primitives already integrated
 

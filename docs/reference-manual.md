@@ -323,9 +323,26 @@ Implemented dynaturtle motion primitives:
 
 - `SETVELOCITY`
 - `SETSPEED`
+- `SPEED` — reports the current turtle's speed (velocity magnitude)
 
 These primitives matter most in the native window, because that frontend runs a
 continuous simulation tick.
+
+### Edge modes
+
+Implemented edge-mode primitives:
+
+- `BOUNCE` — turtles reflect their velocity off the configured world bounds
+- `WRAP` — turtles reappear on the opposite edge, classic Logo-style
+- `FENCE` — turtles are clamped at the bounds and stop moving on the blocked axis
+- `WINDOW` — turtles may move freely past the bounds (the default mode)
+
+Each is a zero-input command that sets the edge mode used by the next
+`dynaturtle_tick`. Edge modes only take effect once world bounds are
+configured (via `Vm::set_collision_config`'s `CollisionConfig.bounds`); with no
+bounds configured, turtles move freely regardless of mode. The mechanics
+themselves (`TurtleStore::apply_edge_mode`) predate these primitives and are
+shared with edge-contact detection used by `WHEN [edge ...]`.
 
 ### Shapes
 

@@ -99,13 +99,13 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `HIDETURTLE`/`HT`, `SHOWTURTLE`/`ST`, `SHOWNP`
 - `POS`, `HEADING`, `XCOR`, `YCOR`
 - `TELL`, `ASK`, `EACH`, `WHO`
-- `SETVELOCITY`, `SETSPEED`, `SETSHAPE`
+- `SETVELOCITY`, `SETSPEED`, `SPEED`, `SETSHAPE`
+- `BOUNCE`, `WRAP`, `FENCE`, `WINDOW`
 - `TOUCHING`, `WHEN`, `TOOT`
 
 ## Notes
 
 Not yet implemented from nearby roadmap/workspace tasks include remaining
-workspace-management pieces such as `NODES`/`RECYCLE`, richer graphics
-primitives like `FILL`, and dynaturtle follow-ups such as edge/window modes
-and additional compatibility polish. See also
-[primitive-gaps.md](primitive-gaps.md) for the current gap list.
+workspace-management pieces such as `NODES`/`RECYCLE` and additional
+compatibility polish. See also [primitive-gaps.md](primitive-gaps.md) for the
+current gap list.

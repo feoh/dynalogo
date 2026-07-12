@@ -21,7 +21,7 @@ use crate::bytecode::{
 };
 use crate::collision::{self, detect_collisions, CollisionConfig};
 use crate::demon::{DemonCondition, DemonEvent, DemonScheduler};
-use crate::dynaturtle::{TurtleId, TurtleStore};
+use crate::dynaturtle::{EdgeMode, TurtleId, TurtleStore, WorldBounds};
 use crate::lexer::{lex, InfixOp, TokenKind};
 use crate::parser::{parse_source, Arity, ArityTable, ParseError};
 use crate::turtle::{Point, TurtleEvent};
@@ -330,6 +330,7 @@ pub struct Vm {
     turtles: TurtleStore,
     demons: DemonScheduler,
     collision_config: CollisionConfig,
+    edge_mode: EdgeMode,
     demon_fuel: usize,
     read_stream: Option<InputStream>,
     current_read_managed: bool,
@@ -407,6 +408,7 @@ impl Default for Vm {
             turtles: TurtleStore::new(),
             demons: DemonScheduler::new(),
             collision_config: CollisionConfig::default(),
+            edge_mode: EdgeMode::Window,
             demon_fuel: 256,
             read_stream: None,
             current_read_managed: false,
@@ -626,6 +628,12 @@ impl Vm {
     /// a burst of events cannot stall a tick).
     pub fn dynaturtle_tick(&mut self, dt_seconds: f64) -> Result<ControlFlow, VmError> {
         self.turtles.integrate(dt_seconds);
+        if let Some(bounds) = self.collision_config.bounds {
+            self.turtles.apply_edge_mode(
+                WorldBounds::new(bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y),
+                self.edge_mode,
+            );
+        }
         let report = detect_collisions(&self.turtles, self.collision_config);
         self.demons
             .push_collision_report(report.turtle_pairs, report.edge_contacts);
@@ -1040,7 +1048,12 @@ impl Vm {
             "who" => self.dyn_who(args),
             "setvelocity" => self.dyn_setvelocity(args),
             "setspeed" => self.dyn_setspeed(args),
+            "speed" => self.dyn_speed(args),
             "setshape" => self.dyn_setshape(args),
+            "bounce" => self.dyn_bounce(args),
+            "wrap" => self.dyn_wrap(args),
+            "fence" => self.dyn_fence(args),
+            "window" => self.dyn_window(args),
             "touching" => self.dyn_touching(args),
             "over" => self.over(args),
             "when" => self.dyn_when(args),
@@ -3822,6 +3835,37 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn dyn_speed(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("speed", &args, 0)?;
+        let id = self.current_turtle();
+        let speed = self.turtles.speed(id).unwrap_or(0.0);
+        Ok(PrimitiveResult::Value(Value::number(speed)))
+    }
+
+    fn dyn_bounce(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("bounce", &args, 0)?;
+        self.edge_mode = EdgeMode::Bounce;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn dyn_wrap(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("wrap", &args, 0)?;
+        self.edge_mode = EdgeMode::Wrap;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn dyn_fence(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("fence", &args, 0)?;
+        self.edge_mode = EdgeMode::Fence;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn dyn_window(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("window", &args, 0)?;
+        self.edge_mode = EdgeMode::Window;
+        Ok(PrimitiveResult::NoValue)
+    }
+
     fn dyn_touching(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("touching", &args, 2)?;
         let a = self.turtle_id_from_value(&args[0])?;
@@ -4686,7 +4730,12 @@ fn primitive_names() -> &'static [&'static str] {
         "who",
         "setvelocity",
         "setspeed",
+        "speed",
         "setshape",
+        "bounce",
+        "wrap",
+        "fence",
+        "window",
         "touching",
         "over",
         "when",
@@ -5904,6 +5953,69 @@ mod tests {
         assert_eq!(
             vm.turtles().velocity(TurtleId::new(0)),
             Some(Point::new(0.0, 20.0))
+        );
+    }
+
+    #[test]
+    fn speed_reports_current_turtle_velocity_magnitude() {
+        let (result, _) = run("tell 0 setspeed 20 print speed").unwrap();
+        assert_eq!(result.output, "20\n");
+    }
+
+    #[test]
+    fn bounce_wrap_fence_window_set_edge_mode_for_dynaturtle_tick() {
+        let mut vm = Vm::new();
+        vm.set_collision_config(CollisionConfig {
+            bounds: Some(collision::Bounds::new(-100.0, -100.0, 100.0, 100.0)),
+            ..CollisionConfig::default()
+        });
+        vm.eval_source("bounce").unwrap();
+        vm.turtles_mut()
+            .set_position(TurtleId::new(0), Point::new(105.0, 0.0));
+        vm.turtles_mut()
+            .set_velocity(TurtleId::new(0), Point::new(4.0, 0.0));
+        vm.dynaturtle_tick(0.0).unwrap();
+        assert_eq!(
+            vm.turtles().velocity(TurtleId::new(0)),
+            Some(Point::new(-4.0, 0.0))
+        );
+
+        vm.eval_source("wrap").unwrap();
+        vm.turtles_mut()
+            .set_position(TurtleId::new(0), Point::new(110.0, 0.0));
+        vm.dynaturtle_tick(0.0).unwrap();
+        assert_eq!(vm.turtles().positions()[TurtleId::new(0).index()].x, -108.0);
+
+        vm.eval_source("fence").unwrap();
+        vm.turtles_mut()
+            .set_position(TurtleId::new(0), Point::new(0.0, -120.0));
+        vm.turtles_mut()
+            .set_velocity(TurtleId::new(0), Point::new(3.0, -7.0));
+        vm.dynaturtle_tick(0.0).unwrap();
+        assert_eq!(
+            vm.turtles().velocity(TurtleId::new(0)),
+            Some(Point::new(3.0, 0.0))
+        );
+
+        vm.eval_source("window").unwrap();
+        vm.turtles_mut()
+            .set_position(TurtleId::new(0), Point::new(500.0, 500.0));
+        vm.dynaturtle_tick(0.0).unwrap();
+        assert_eq!(
+            vm.turtles().positions()[TurtleId::new(0).index()],
+            Point::new(500.0, 500.0)
+        );
+    }
+
+    #[test]
+    fn edge_mode_defaults_to_window_without_configuration() {
+        let mut vm = Vm::new();
+        vm.turtles_mut()
+            .set_position(TurtleId::new(0), Point::new(500.0, 500.0));
+        vm.dynaturtle_tick(0.0).unwrap();
+        assert_eq!(
+            vm.turtles().positions()[TurtleId::new(0).index()],
+            Point::new(500.0, 500.0)
         );
     }
 
