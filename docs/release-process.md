@@ -16,6 +16,16 @@ The workflow can also be run manually via `workflow_dispatch` to sanity-check
 the build matrix without publishing a release (the publish job only runs on
 tag pushes).
 
+Before trusting a workflow change, run the lightweight local workflow validator:
+
+```bash
+ruby scripts/validate_workflows.rb
+```
+
+The same check runs in CI before the Rust formatting, clippy, and test steps.
+It validates YAML parsing plus basic GitHub Actions structure for every file in
+`.github/workflows/`.
+
 ## Known limitations
 
 - **No Intel macOS build.** Only `aarch64-apple-darwin` is built, matching

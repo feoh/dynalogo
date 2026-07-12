@@ -42,7 +42,7 @@ This is not the final verdict; category subtasks must validate each claim in det
 - **Frontend helper tests exist:** `dynalogo-window` has 25 unit tests covering coordinate transforms, heading vectors, sprite selection, custom shape point parsing, input queue behavior, browser-command filtering, and log retention. `web/shape_editor_test.js` now adds direct coverage for the browser shape-editor JavaScript.
 - **Docs/examples artifacts exist:** all expected docs and example programs are present; relative Markdown links in docs/README/examples checked out with zero missing local targets.
 - **Example smoke run:** every `examples/*.lgo` program executed successfully through the CLI with a 15-second timeout.
-- **Validation commands:** after audit fixes, `cargo fmt --check`, `cargo test --workspace -q`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo build -p dynalogo --bin dynalogo-window --target wasm32-unknown-unknown` have been run successfully. The workspace now reports 205 core VM tests plus the 25 frontend helper tests.
+- **Validation commands:** after audit fixes, `ruby scripts/validate_workflows.rb`, `node web/shape_editor_test.js`, `cargo fmt --check`, `cargo test --workspace -q`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo build -p dynalogo --bin dynalogo-window --target wasm32-unknown-unknown` have been run successfully. The workspace now reports 205 core VM tests plus the 25 frontend helper tests.
 
 ### Audit findings that required immediate fixes
 
@@ -66,13 +66,13 @@ These are not immediate artifact-existence failures, but the closed-task audit f
 - `tk-finish-documented-remaining-ucblogo-error-parity-770844` — **fixed during audit**: all direct numeric-input call sites now use named code-4 handling, `SETITEM` bad-index wording is converted, and docs were updated. Remaining `REDUCE` empty-list wording still awaits live-UCBLogo verification.
 - `tk-add-automated-browser-shape-editor-ui-tests-64f134` — **fixed during audit**: added `web/shape_editor_test.js`, a dependency-free Node test that extracts the actual inline shape-editor functions and verifies sample loading plus queued `PUTSH`/`SETSHAPE` commands.
 - `tk-decide-and-implement-real-logo-level-edsh-flow-3ce826` — **fixed during audit**: `EDSH` now opens the existing editor flow on shape definitions rendered as `PUTSH` commands, with regression coverage.
-- `tk-add-workflow-yaml-validation-to-release-artifact-8c618c` — workflow files exist and contain jobs/steps, but local workflow linting/action validation is not installed or automated.
+- `tk-add-workflow-yaml-validation-to-release-artifact-8c618c` — **fixed during audit**: added `scripts/validate_workflows.rb`, documented it, and wired it into CI for basic workflow YAML/structure validation.
 
 ### Limitations of this audit pass
 
 - Live UCBLogo comparison could not be executed because no `ucblogo`/`logo` binary is available in this environment. The committed compatibility fixtures are still valuable, but they are not a fresh live oracle run.
 - Native GUI/audio behavior can be smoke-built and partially unit-tested through extracted pure helpers, but this environment does not perform visual/audio snapshot testing.
-- GitHub Actions workflows were checked for existence and structural markers and exercised indirectly through local cargo commands, but not executed on GitHub in this audit worktree.
+- GitHub Actions workflows are now checked by `scripts/validate_workflows.rb` for local YAML parsing and basic workflow/job/step structure, but they still have not been executed on GitHub in this audit worktree.
 
 ## Closed task inventory
 

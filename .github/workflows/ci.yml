@@ -19,6 +19,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Validate workflow YAML
+        run: ruby scripts/validate_workflows.rb
+
       - name: Install Rust components
         run: rustup component add rustfmt clippy
 
