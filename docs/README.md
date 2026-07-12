@@ -22,3 +22,5 @@ Start here for user-facing documentation inside the repository.
 - [`ucblogo-compatibility.md`](ucblogo-compatibility.md) — compatibility test
   corpus and intentional divergence notes
 - [`versioning.md`](versioning.md) — versioning policy and changelog process
+- [`release-process.md`](release-process.md) — how native release artifacts
+  are built and published, and known packaging limitations

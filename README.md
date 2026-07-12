@@ -156,6 +156,14 @@ Dynaturtle examples:
 - `orbit_simulation.lgo` — orbit-style multi-body trails
 - `pong_demons.lgo` — a small collision-demon pong sketch
 
+## Releases
+
+Tagged pushes (`v*.*.*`) trigger a GitHub Actions workflow that builds native
+`dynalogo`/`dynalogo-window` binaries for Linux, macOS (arm64), and Windows
+and attaches them to a GitHub Release. See
+[docs/release-process.md](docs/release-process.md) for the build matrix and
+known limitations (no code signing/notarization, no installers).
+
 ## Status
 
 Early development, but the current REPL and window frontend are already useful

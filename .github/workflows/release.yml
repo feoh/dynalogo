@@ -1,0 +1,94 @@
+---
+name: Release artifacts
+
+"on":
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: zip
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release binaries
+        run: >-
+          cargo build --release -p dynalogo --bins --target ${{ matrix.target }}
+
+      - name: Stage package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="dynalogo-${{ matrix.target }}"
+          mkdir -p "$stage"
+          cp "target/${{ matrix.target }}/release/dynalogo" "$stage/"
+          cp "target/${{ matrix.target }}/release/dynalogo-window" "$stage/"
+          cp README.md LICENSE "$stage/"
+          cp -r examples "$stage/examples"
+          tar czf "$stage.tar.gz" "$stage"
+
+      - name: Stage package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stage = "dynalogo-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          $bin = "target/${{ matrix.target }}/release"
+          Copy-Item "$bin/dynalogo.exe" "$stage/"
+          Copy-Item "$bin/dynalogo-window.exe" "$stage/"
+          Copy-Item README.md,LICENSE "$stage/"
+          Copy-Item -Recurse examples "$stage/examples"
+          Compress-Archive -Path $stage -DestinationPath "$stage.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynalogo-${{ matrix.target }}
+          path: dynalogo-${{ matrix.target }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
