@@ -51,11 +51,10 @@ input` idiom (e.g. `FIRST doesn't like [] as input`), now used by
 still say `Y is not a Z`, which reads differently even though it is the same
 case UCBLogo assigns error code 4:
 
-- `vm.rs:4052` — `"{value} is not a number"` (used by all arithmetic/number
-  inputs, e.g. `number_input`) — deferred because this helper is shared by
-  ~60 call sites with no primitive-name parameter; converting it requires
-  threading the calling primitive's name through every caller, which is a
-  larger, riskier follow-up than this pass.
+- `vm.rs:4052` — `"{value} is not a number"` (used by the remaining
+  number-input callers that do not yet thread primitive-name context). A first
+  slice now uses `number_input_named(...)` for arithmetic/unary numeric/random
+  paths, but many other callers still rely on the older generic helper.
 - `vm.rs:4058` — `"{value} is not a variable name"`
 - `vm.rs:4071` — `"{value} is not a property-list key"`
 - `vm.rs:4093`, `4108`, `4123`, `4133` — variable-name-list/input-name/

@@ -873,11 +873,11 @@ impl Vm {
         let name = self.interner.canonical_spelling(callee).to_string();
         self.call_stack.push(name.clone());
         let result = match name.as_str() {
-            "sum" | "+" => self.number_binop(args, |a, b| a + b),
-            "difference" | "-" => self.number_binop(args, |a, b| a - b),
-            "product" | "*" => self.number_binop(args, |a, b| a * b),
-            "quotient" | "/" => self.number_binop(args, |a, b| a / b),
-            "remainder" => self.number_binop(args, |a, b| a % b),
+            "sum" | "+" => self.number_binop(&name, args, |a, b| a + b),
+            "difference" | "-" => self.number_binop(&name, args, |a, b| a - b),
+            "product" | "*" => self.number_binop(&name, args, |a, b| a * b),
+            "quotient" | "/" => self.number_binop(&name, args, |a, b| a / b),
+            "remainder" => self.number_binop(&name, args, |a, b| a % b),
             "abs" => self.abs(args),
             "int" => self.int(args),
             "round" => self.round(args),
@@ -1192,15 +1192,15 @@ impl Vm {
     fn eval_infix(&mut self, op: InfixOp, left: Value, right: Value) -> Result<Value, VmError> {
         let args = vec![left, right];
         match op {
-            InfixOp::Plus => self.number_binop(args, |a, b| a + b),
-            InfixOp::Minus => self.number_binop(args, |a, b| a - b),
-            InfixOp::Star => self.number_binop(args, |a, b| a * b),
-            InfixOp::Slash => self.number_binop(args, |a, b| a / b),
+            InfixOp::Plus => self.number_binop("+", args, |a, b| a + b),
+            InfixOp::Minus => self.number_binop("-", args, |a, b| a - b),
+            InfixOp::Star => self.number_binop("*", args, |a, b| a * b),
+            InfixOp::Slash => self.number_binop("/", args, |a, b| a / b),
             InfixOp::Equal => self.equalp(args),
-            InfixOp::Less => self.number_compare(args, |a, b| a < b),
-            InfixOp::Greater => self.number_compare(args, |a, b| a > b),
-            InfixOp::LessEq => self.number_compare(args, |a, b| a <= b),
-            InfixOp::GreaterEq => self.number_compare(args, |a, b| a >= b),
+            InfixOp::Less => self.number_compare("<", args, |a, b| a < b),
+            InfixOp::Greater => self.number_compare(">", args, |a, b| a > b),
+            InfixOp::LessEq => self.number_compare("<=", args, |a, b| a <= b),
+            InfixOp::GreaterEq => self.number_compare(">=", args, |a, b| a >= b),
             InfixOp::NotEq => self.not_equalp(args),
         }
         .map(|result| match result {
@@ -1213,12 +1213,13 @@ impl Vm {
 
     fn number_binop(
         &mut self,
+        name: &str,
         args: Vec<Value>,
         op: impl FnOnce(f64, f64) -> f64,
     ) -> Result<PrimitiveResult, VmError> {
-        expect_arity("number operation", &args, 2)?;
-        let a = number_input(&args[0], &self.interner)?;
-        let b = number_input(&args[1], &self.interner)?;
+        expect_arity(name, &args, 2)?;
+        let a = number_input_named(name, &args[0], &self.interner)?;
+        let b = number_input_named(name, &args[1], &self.interner)?;
         Ok(PrimitiveResult::Value(Value::Number(LogoNumber::new(op(
             a, b,
         )))))
@@ -1226,12 +1227,13 @@ impl Vm {
 
     fn number_compare(
         &mut self,
+        name: &str,
         args: Vec<Value>,
         op: impl FnOnce(f64, f64) -> bool,
     ) -> Result<PrimitiveResult, VmError> {
-        expect_arity("number comparison", &args, 2)?;
-        let a = number_input(&args[0], &self.interner)?;
-        let b = number_input(&args[1], &self.interner)?;
+        expect_arity(name, &args, 2)?;
+        let a = number_input_named(name, &args[0], &self.interner)?;
+        let b = number_input_named(name, &args[1], &self.interner)?;
         Ok(PrimitiveResult::Value(self.logo_bool(op(a, b))))
     }
 
@@ -1242,7 +1244,7 @@ impl Vm {
         op: impl FnOnce(f64) -> f64,
     ) -> Result<PrimitiveResult, VmError> {
         expect_arity(name, &args, 1)?;
-        let value = number_input(&args[0], &self.interner)?;
+        let value = number_input_named(name, &args[0], &self.interner)?;
         Ok(PrimitiveResult::Value(Value::number(op(value))))
     }
 
@@ -1276,7 +1278,7 @@ impl Vm {
 
     fn random(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("random", &args, 1)?;
-        let upper = number_input(&args[0], &self.interner)?;
+        let upper = number_input_named("random", &args[0], &self.interner)?;
         if upper <= 0.0 {
             return Err(VmError::new("RANDOM input must be positive"));
         }
@@ -4242,6 +4244,12 @@ fn number_input(value: &Value, interner: &Interner) -> Result<f64, VmError> {
         .ok_or_else(|| VmError::new(format!("{} is not a number", value.show(interner))))
 }
 
+fn number_input_named(primitive: &str, value: &Value, interner: &Interner) -> Result<f64, VmError> {
+    value
+        .as_number(interner)
+        .ok_or_else(|| doesnt_like_as_input(primitive, value, interner))
+}
+
 fn variable_name_input(value: &Value, interner: &Interner) -> Result<String, VmError> {
     match value {
         Value::Word(symbol) | Value::BareWord(symbol) => Ok(interner.spelling(*symbol).to_string()),
@@ -6180,6 +6188,20 @@ path.write_text('make "foo 9\n')
     }
 
     #[test]
+    fn sum_with_non_number_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("sum \"oops 2").unwrap_err();
+        assert_eq!(error.message, "sum doesn't like oops as input");
+    }
+
+    #[test]
+    fn random_with_non_number_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("random \"oops").unwrap_err();
+        assert_eq!(error.message, "random doesn't like oops as input");
+    }
+
+    #[test]
     fn catch_error_records_item_bad_input_code_and_context() {
         let mut vm = Vm::new();
         vm.eval_source("catch \"error [item 0 [a b]]").unwrap();
@@ -6206,6 +6228,21 @@ path.write_text('make "foo 9\n')
             list.item(2).unwrap().show(vm.interner()),
             "first doesn't like \"\" as input"
         );
+    }
+
+    #[test]
+    fn catch_error_records_numeric_bad_input_code_and_context() {
+        let mut vm = Vm::new();
+        vm.eval_source("catch \"error [sum \"oops 2]").unwrap();
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "4");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "sum doesn't like oops as input"
+        );
+        assert_eq!(list.item(3).unwrap().show(vm.interner()), "sum");
     }
 
     #[test]
