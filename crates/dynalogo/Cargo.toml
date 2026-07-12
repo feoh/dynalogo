@@ -8,10 +8,15 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-dynalogo-core = { path = "../dynalogo-core" }
+dynalogo-core = { workspace = true }
 macroquad = "0.4"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3"
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["Document", "Element", "HtmlTextAreaElement", "Window"] }
+web-sys = { version = "0.3", features = [
+  "Document",
+  "Element",
+  "HtmlTextAreaElement",
+  "Window",
+] }

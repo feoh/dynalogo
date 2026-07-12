@@ -9,7 +9,12 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- A `Publish crates` GitHub Actions workflow that publishes `dynalogo-core`
+  and `dynalogo` to crates.io on a `vX.Y.Z` tag push. See
+  [docs/releasing.md](docs/releasing.md) for the manual tag step and the
+  required `CARGO_REGISTRY_TOKEN` secret.
 
 ## [0.1.0] - Unreleased
 
