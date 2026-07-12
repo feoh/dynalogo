@@ -63,6 +63,16 @@ You can also type directly into the canvas prompt as you would in the native
 window, but the canvas needs focus first — click it once before typing, or
 keystrokes may not reach the app.
 
+The shape-editor panel has a dependency-free regression test:
+
+```bash
+node web/shape_editor_test.js
+```
+
+That test extracts the actual inline shape-editor functions from
+`web/index.html`, runs them against a fake DOM, and verifies the queued `PUTSH`
+/ `SETSHAPE` commands.
+
 ## What's different from the native window
 
 The browser build shares the same `dynalogo-window` source and VM core as the
