@@ -78,11 +78,12 @@ correct UCBLogo wording for an empty *word* input (as opposed to an empty
 list/array) could not be verified against a live interpreter in this
 environment:
 
-- `vm.rs:4732`/`4740` — `"FIRST of empty word"` / `"LAST of empty word"`
-- `vm.rs:4241` — `"RANPICK of empty word"`
 - `vm.rs:1522`/`1525`/`4740`/`4745` — `"ITEM index out of range"`
-- `vm.rs:1691` — `"ASCII of empty word"`
 - `vm.rs:2904` — `"REDUCE cannot reduce an empty list"`
+
+The empty-word cases for `FIRST`, `RANPICK`, and `ASCII` have since been
+converted to the code-4 `X doesn't like Y as input` idiom, but the remaining
+index-range and boundary wording still needs live-UCBLogo verification.
 
 ### 2c. Internal/defensive invariants (likely not user-reachable)
 

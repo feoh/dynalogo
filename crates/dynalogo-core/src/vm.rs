@@ -1362,6 +1362,9 @@ impl Vm {
         let value = match &args[0] {
             Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
+                if text.is_empty() {
+                    return Err(doesnt_like_as_input("first", &args[0], &self.interner));
+                }
                 first_char_value(&mut self.interner, &text)?
             }
             Value::Number(number) => {
@@ -1411,6 +1414,9 @@ impl Vm {
         let value = match &args[0] {
             Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
+                if text.is_empty() {
+                    return Err(doesnt_like_as_input("last", &args[0], &self.interner));
+                }
                 last_char_value(&mut self.interner, &text)?
             }
             Value::Number(number) => {
@@ -1596,6 +1602,9 @@ impl Vm {
             }
             Value::Word(symbol) | Value::BareWord(symbol) => {
                 let text = self.interner.spelling(*symbol).to_string();
+                if text.is_empty() {
+                    return Err(doesnt_like_as_input("ranpick", &args[0], &self.interner));
+                }
                 let random = self.next_random_u64();
                 ranpick_text(&text, &mut self.interner, random)
             }
@@ -1709,7 +1718,7 @@ impl Vm {
         expect_arity("ascii", &args, 1)?;
         let text = source_text_input(&args[0], &self.interner);
         let Some(ch) = text.chars().next() else {
-            return Err(VmError::new("ASCII of empty word"));
+            return Err(doesnt_like_as_input("ascii", &args[0], &self.interner));
         };
         let code = u32::from(ch);
         if code > 255 {
@@ -4148,10 +4157,13 @@ fn output_target_name(target: &OutputTarget, interner: &Interner) -> String {
 }
 
 fn doesnt_like_as_input(primitive: &str, value: &Value, interner: &Interner) -> VmError {
-    VmError::new(format!(
-        "{primitive} doesn't like {} as input",
-        value.show(interner)
-    ))
+    let rendered = match value {
+        Value::Word(symbol) | Value::BareWord(symbol) if interner.spelling(*symbol).is_empty() => {
+            "\"\"".to_string()
+        }
+        _ => value.show(interner),
+    };
+    VmError::new(format!("{primitive} doesn't like {rendered} as input"))
 }
 
 fn infer_error_info(message: &str) -> Option<ErrorInfo> {
@@ -5753,10 +5765,8 @@ mod tests {
         vm.eval_source("make \"foo 7 make \"bar 8 bury [bar]")
             .unwrap();
 
-        let script_path = std::env::temp_dir().join(format!(
-            "dynalogo-edns-{}.py",
-            std::process::id()
-        ));
+        let script_path =
+            std::env::temp_dir().join(format!("dynalogo-edns-{}.py", std::process::id()));
         std::fs::write(
             &script_path,
             r#"import pathlib, sys
@@ -6067,6 +6077,13 @@ path.write_text('make "foo 9\n')
     }
 
     #[test]
+    fn first_of_empty_word_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("first bf \"a").unwrap_err();
+        assert_eq!(error.message, "first doesn't like \"\" as input");
+    }
+
+    #[test]
     fn last_of_empty_array_reports_ucblogo_style_message() {
         let mut vm = Vm::new();
         let error = vm.eval_source("last array 0").unwrap_err();
@@ -6081,6 +6098,20 @@ path.write_text('make "foo 9\n')
     }
 
     #[test]
+    fn ranpick_of_empty_word_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("ranpick bf \"a").unwrap_err();
+        assert_eq!(error.message, "ranpick doesn't like \"\" as input");
+    }
+
+    #[test]
+    fn ascii_of_empty_word_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("ascii bf \"a").unwrap_err();
+        assert_eq!(error.message, "ascii doesn't like \"\" as input");
+    }
+
+    #[test]
     fn fput_with_non_list_second_input_reports_ucblogo_style_message() {
         let mut vm = Vm::new();
         let error = vm.eval_source("fput 1 2").unwrap_err();
@@ -6092,6 +6123,20 @@ path.write_text('make "foo 9\n')
         let mut vm = Vm::new();
         let error = vm.eval_source("lput 1 2").unwrap_err();
         assert_eq!(error.message, "lput doesn't like 2 as input");
+    }
+
+    #[test]
+    fn catch_error_records_empty_word_bad_input_code_and_context() {
+        let mut vm = Vm::new();
+        vm.eval_source("catch \"error [first bf \"a]").unwrap();
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "4");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "first doesn't like \"\" as input"
+        );
     }
 
     #[test]
