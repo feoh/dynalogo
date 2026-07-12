@@ -246,10 +246,10 @@ no-op — there is no manual reclaim step for it to perform.
 
 `EDIT`/`ED` keep their current contents-list-driven behavior through `$EDITOR`.
 `EDNS` uses the same editor session machinery, but seeds the buffer from the
-currently visible global variables instead of a contents list. `EDSH` is
-present only as an honest placeholder today: it reports that it is not
-interactive yet and points users to `PUTSH`/`GETSH` or the browser shape editor
-rather than faking an Atari-style shape editor.
+currently visible global variables instead of a contents list. `EDSH` uses that
+same editor session machinery for shape definitions: it renders current shapes
+as editable `PUTSH` commands and evaluates the edited buffer when the editor
+exits. Browser users can also use the web shape-editor panel.
 
 ## 7. Console I/O
 

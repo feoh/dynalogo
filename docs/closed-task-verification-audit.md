@@ -52,7 +52,10 @@ This is not the final verdict; category subtasks must validate each claim in det
 2. **Shape-editor/EDSH status wording was stale.** After `PUTSH`/`GETSH`/`SHAPE`, custom rendering, and the browser shape-editor panel landed, docs and the `EDSH` placeholder still said the shape registry/editor work was not implemented.
    - Corrective Witan task: `tk-fix-stale-edsh-and-shape-editor-wording-after-br-361223`
    - Fix commit: `48eefe3`
-3. **Numeric-input error parity was incomplete.** Direct non-arithmetic numeric call sites still had generic `is not a number` behavior or ad hoc range wording.
+3. **Logo-level EDSH was still a placeholder.** The audit follow-up replaced it with a real `$EDITOR`-backed shape-definition editor.
+   - Corrective Witan task: `tk-decide-and-implement-real-logo-level-edsh-flow-3ce826`
+   - Fix commit: pending in this audit branch
+4. **Numeric-input error parity was incomplete.** Direct non-arithmetic numeric call sites still had generic `is not a number` behavior or ad hoc range wording.
    - Corrective Witan task: `tk-finish-documented-remaining-ucblogo-error-parity-770844`
    - Fix commit: pending in this audit branch
 
@@ -62,7 +65,7 @@ These are not immediate artifact-existence failures, but the closed-task audit f
 
 - `tk-finish-documented-remaining-ucblogo-error-parity-770844` — **fixed during audit**: all direct numeric-input call sites now use named code-4 handling, `SETITEM` bad-index wording is converted, and docs were updated. Remaining `REDUCE` empty-list wording still awaits live-UCBLogo verification.
 - `tk-add-automated-browser-shape-editor-ui-tests-64f134` — **fixed during audit**: added `web/shape_editor_test.js`, a dependency-free Node test that extracts the actual inline shape-editor functions and verifies sample loading plus queued `PUTSH`/`SETSHAPE` commands.
-- `tk-decide-and-implement-real-logo-level-edsh-flow-3ce826` — `EDSH` remains a placeholder even though browser-side shape editing exists.
+- `tk-decide-and-implement-real-logo-level-edsh-flow-3ce826` — **fixed during audit**: `EDSH` now opens the existing editor flow on shape definitions rendered as `PUTSH` commands, with regression coverage.
 - `tk-add-workflow-yaml-validation-to-release-artifact-8c618c` — workflow files exist and contain jobs/steps, but local workflow linting/action validation is not installed or automated.
 
 ### Limitations of this audit pass

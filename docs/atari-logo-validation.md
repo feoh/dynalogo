@@ -161,8 +161,9 @@ The Atari manual organizes features into these areas:
 
 - `EDIT`/`ED` and `EDNS` are available through the current `$EDITOR`-driven
   text-edit flow
-- `PUTSH`/`GETSH`/`SHAPE` provide a shape registry, and the browser demo has a
-  shape-editor panel; `EDSH` itself still reports a non-interactive placeholder
+- `PUTSH`/`GETSH`/`SHAPE` provide a shape registry, the browser demo has a
+  shape-editor panel, and `EDSH` opens the existing `$EDITOR` flow on shape
+  definitions rendered as `PUTSH` commands
 - Atari editor/screen behavior itself is still not reproduced
 
 ### 6. Flow of control and conditionals

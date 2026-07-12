@@ -357,6 +357,7 @@ struct EditContents {
     procedures: Vec<String>,
     variables: Vec<String>,
     plists: Vec<String>,
+    shapes: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2545,6 +2546,7 @@ impl Vm {
             procedures: Vec::new(),
             variables: self.visible_variable_names(),
             plists: Vec::new(),
+            shapes: Vec::new(),
         };
         let buffer_text = self.render_edit_buffer(&contents)?;
         self.edit_session(contents, buffer_text)
@@ -2552,9 +2554,14 @@ impl Vm {
 
     fn edsh(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("edsh", &args, 0)?;
-        Err(VmError::new(
-            "EDSH is not interactive yet; use PUTSH/GETSH or the browser shape editor",
-        ))
+        let contents = EditContents {
+            procedures: Vec::new(),
+            variables: Vec::new(),
+            plists: Vec::new(),
+            shapes: self.visible_shape_names(),
+        };
+        let buffer_text = self.render_edit_buffer(&contents)?;
+        self.edit_session(contents, buffer_text)
     }
 
     fn edit_session(
@@ -2628,6 +2635,16 @@ impl Vm {
                 }
             }
         }
+        for name in &contents.shapes {
+            let key = name.to_ascii_lowercase();
+            if let Some(shape) = self.shape_registry.get(&key) {
+                buffer.push_str("putsh \"");
+                buffer.push_str(name);
+                buffer.push(' ');
+                buffer.push_str(&value_source_literal(shape, &self.interner));
+                buffer.push('\n');
+            }
+        }
         Ok(buffer)
     }
 
@@ -2663,6 +2680,12 @@ impl Vm {
             .filter(|name| !self.buried_names.contains(*name))
             .cloned()
             .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    fn visible_shape_names(&self) -> Vec<String> {
+        let mut names = self.shape_registry.keys().cloned().collect::<Vec<_>>();
         names.sort();
         names
     }
@@ -4607,6 +4630,7 @@ fn contentslist_input(value: &Value, interner: &Interner) -> Result<EditContents
                 procedures: local_names(parts[0], interner)?,
                 variables: local_names(parts[1], interner)?,
                 plists: local_names(parts[2], interner)?,
+                shapes: Vec::new(),
             });
         }
     }
@@ -4614,6 +4638,7 @@ fn contentslist_input(value: &Value, interner: &Interner) -> Result<EditContents
         procedures: local_names(value, interner)?,
         variables: Vec::new(),
         plists: Vec::new(),
+        shapes: Vec::new(),
     })
 }
 
@@ -5834,13 +5859,34 @@ path.write_text('make "foo 9\n')
     }
 
     #[test]
-    fn edsh_reports_missing_interactive_editor_support() {
+    fn edsh_edits_shape_registry_via_existing_editor_flow() {
         let mut vm = Vm::new();
-        let error = vm.eval_source("edsh").unwrap_err();
+        vm.eval_source("putsh \"diamond [[0 12] [8 0] [0 -12] [-8 0]]")
+            .unwrap();
+
+        let script_path =
+            std::env::temp_dir().join(format!("dynalogo-edsh-{}.py", std::process::id()));
+        std::fs::write(
+            &script_path,
+            r#"import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+assert 'putsh "diamond [[0 12] [8 0] [0 -12] [-8 0]]' in text
+path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle [[0 10] [10 -10] [-10 -10]]\n')
+"#,
+        )
+        .unwrap();
+        vm.set_editor_command(format!("python3 {}", script_path.display()));
+
+        vm.eval_source("edsh").unwrap();
+        let result = vm
+            .eval_source("print getsh \"diamond print getsh \"triangle")
+            .unwrap();
         assert_eq!(
-            error.message,
-            "EDSH is not interactive yet; use PUTSH/GETSH or the browser shape editor"
+            result.output,
+            "[[0 20] [12 0] [0 -20] [-12 0]]\n[[0 10] [10 -10] [-10 -10]]\n"
         );
+        let _ = std::fs::remove_file(script_path);
     }
 
     #[test]

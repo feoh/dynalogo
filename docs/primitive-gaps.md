@@ -20,12 +20,10 @@ Implemented today:
   no fixed node pool; `RECYCLE` is a documented no-op since Rust reclaims
   memory automatically and there is nothing for it to manually free)
 
-Still missing from the nearby workspace roadmap bucket:
-
-- a real interactive `EDSH` command. Shape data itself is implemented through
-  `PUTSH`/`GETSH`/`SHAPE`, and the browser demo has a shape-editor panel, but
-  invoking `EDSH` from Logo still reports an honest placeholder instead of
-  opening an Atari-style shape editor.
+The nearby workspace roadmap bucket is now mostly covered. Shape data is
+implemented through `PUTSH`/`GETSH`/`SHAPE`, the browser demo has a shape-editor
+panel, and `EDSH` opens the existing `$EDITOR` flow on shape definitions by
+rendering them as editable `PUTSH` commands.
 
 ## File and stream follow-up gaps
 
@@ -107,9 +105,6 @@ The classic dynaturtle-facing language layer is now exposed with:
 
 Still missing from the broader dynaturtle roadmap are:
 
-- a real Logo-level interactive `EDSH` flow; browser users can use the web
-  shape-editor panel, and native/browser rendering can draw registry-backed
-  polygon outlines
 - any remaining collision/event polish found during manual comparison
 
 ## Error parity remains incomplete
