@@ -21,3 +21,4 @@ Start here for user-facing documentation inside the repository.
   compatibility notes
 - [`ucblogo-compatibility.md`](ucblogo-compatibility.md) — compatibility test
   corpus and intentional divergence notes
+- [`versioning.md`](versioning.md) — versioning policy and changelog process

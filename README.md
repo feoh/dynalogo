@@ -52,6 +52,8 @@ END
   compatibility corpus, live-UCBLogo harness notes, and intentional
   divergences
 - [`docs/README.md`](docs/README.md) — documentation index
+- [`docs/versioning.md`](docs/versioning.md) — versioning policy and
+  changelog process
 
 ## Running DynaLOGO
 
@@ -162,6 +164,11 @@ dynaturtle programs. See [ROADMAP.md](ROADMAP.md) for the version plan,
 [docs/getting-started.md](docs/getting-started.md) for onboarding, and
 [docs/primitive-inventory.md](docs/primitive-inventory.md) for a snapshot of
 the currently implemented primitive surface.
+
+## Versioning
+
+See [docs/versioning.md](docs/versioning.md) for the version policy and
+changelog process, and [CHANGELOG.md](CHANGELOG.md) for what's changed.
 
 ## License
 
