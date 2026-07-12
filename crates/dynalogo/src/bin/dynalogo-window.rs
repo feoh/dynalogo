@@ -1,5 +1,6 @@
 use dynalogo_core::dynaturtle::TurtleId;
-use dynalogo_core::turtle::{PenMode, Point, TurtleEvent, TurtleState};
+use dynalogo_core::graphics::SoftwareCanvas;
+use dynalogo_core::turtle::{Point, TurtleEvent, TurtleState};
 use dynalogo_core::vm::{ControlFlow, Vm};
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, Sound};
 use macroquad::prelude::*;
@@ -184,48 +185,51 @@ impl App {
             .iter()
             .rposition(|event| matches!(event, TurtleEvent::Clear))
             .map_or(0, |index| index + 1);
+        let visible: Vec<TurtleEvent> = events[start..]
+            .iter()
+            .map(|event| scale_event(event, x_scrunch, y_scrunch))
+            .collect();
 
-        for event in &events[start..] {
-            match event {
-                TurtleEvent::Line {
-                    from,
-                    to,
-                    color,
-                    width,
-                    mode,
-                } => {
-                    let from =
-                        logo_to_screen(scale_point(*from, x_scrunch, y_scrunch), canvas_height);
-                    let to = logo_to_screen(scale_point(*to, x_scrunch, y_scrunch), canvas_height);
-                    // PX (Reverse) has no true per-pixel XOR compositing in this
-                    // vector event-replay renderer, so it paints like PD; see the
-                    // TurtleEvent::Line doc comment for why.
-                    let paint = match mode {
-                        PenMode::Erase => CANVAS_BACKGROUND,
-                        PenMode::Down | PenMode::Reverse | PenMode::Up => logo_color(*color),
-                    };
-                    draw_line(from.x, from.y, to.x, to.y, (*width).max(1.0) as f32, paint);
+        let mut canvas =
+            SoftwareCanvas::new(screen_width() as usize, canvas_height.max(1.0) as usize);
+        canvas.rasterize_events(&visible);
+        for y in 0..canvas.height() {
+            let mut x = 0;
+            while x < canvas.width() {
+                let Some(color) = canvas.pixel(x, y) else {
+                    x += 1;
+                    continue;
+                };
+                let start_x = x;
+                while x < canvas.width() && canvas.pixel(x, y) == Some(color) {
+                    x += 1;
                 }
-                TurtleEvent::Label {
-                    at,
+                draw_rectangle(
+                    start_x as f32,
+                    y as f32,
+                    (x - start_x) as f32,
+                    1.0,
+                    logo_color(color),
+                );
+            }
+        }
+
+        for event in &visible {
+            if let TurtleEvent::Label {
+                at,
+                text,
+                color,
+                height,
+            } = event
+            {
+                let at = logo_to_screen(*at, canvas_height);
+                draw_text(
                     text,
-                    color,
-                    height,
-                } => {
-                    let at = logo_to_screen(scale_point(*at, x_scrunch, y_scrunch), canvas_height);
-                    draw_text(
-                        text,
-                        at.x,
-                        at.y,
-                        (*height).max(1.0) as f32,
-                        logo_color(*color),
-                    );
-                }
-                TurtleEvent::Fill { at, color } => {
-                    let at = logo_to_screen(scale_point(*at, x_scrunch, y_scrunch), canvas_height);
-                    draw_circle(at.x, at.y, 4.0, logo_color(*color));
-                }
-                TurtleEvent::Clear | TurtleEvent::State(_) => {}
+                    at.x,
+                    at.y,
+                    (*height).max(1.0) as f32,
+                    logo_color(*color),
+                );
             }
         }
 
@@ -443,6 +447,41 @@ fn draw_ship_sprite(center: Vec2, forward: Vec2, right: Vec2, phase: f32) {
 
 fn scale_point(point: Point, x_scrunch: f64, y_scrunch: f64) -> Point {
     Point::new(point.x * x_scrunch, point.y * y_scrunch)
+}
+
+fn scale_event(event: &TurtleEvent, x_scrunch: f64, y_scrunch: f64) -> TurtleEvent {
+    match event {
+        TurtleEvent::Clear => TurtleEvent::Clear,
+        TurtleEvent::Line {
+            from,
+            to,
+            color,
+            width,
+            mode,
+        } => TurtleEvent::Line {
+            from: scale_point(*from, x_scrunch, y_scrunch),
+            to: scale_point(*to, x_scrunch, y_scrunch),
+            color: *color,
+            width: *width,
+            mode: *mode,
+        },
+        TurtleEvent::Label {
+            at,
+            text,
+            color,
+            height,
+        } => TurtleEvent::Label {
+            at: scale_point(*at, x_scrunch, y_scrunch),
+            text: text.clone(),
+            color: *color,
+            height: *height,
+        },
+        TurtleEvent::Fill { at, color } => TurtleEvent::Fill {
+            at: scale_point(*at, x_scrunch, y_scrunch),
+            color: *color,
+        },
+        TurtleEvent::State(state) => TurtleEvent::State(*state),
+    }
 }
 
 fn logo_to_screen(point: Point, canvas_height: f32) -> Vec2 {
