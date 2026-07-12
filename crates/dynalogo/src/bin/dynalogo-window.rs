@@ -161,11 +161,12 @@ impl App {
 
     fn draw_canvas(&self) {
         let canvas_height = screen_height() - PROMPT_HEIGHT;
-        draw_rectangle_lines(0.0, 0.0, screen_width(), canvas_height, 2.0, GRAY);
+        let screen_w = screen_width();
+        draw_rectangle_lines(0.0, 0.0, screen_w, canvas_height, 2.0, GRAY);
         draw_line(
-            screen_width() / 2.0,
+            screen_w / 2.0,
             0.0,
-            screen_width() / 2.0,
+            screen_w / 2.0,
             canvas_height,
             1.0,
             Color::from_rgba(55, 60, 70, 255),
@@ -173,7 +174,7 @@ impl App {
         draw_line(
             0.0,
             canvas_height / 2.0,
-            screen_width(),
+            screen_w,
             canvas_height / 2.0,
             1.0,
             Color::from_rgba(55, 60, 70, 255),
@@ -190,8 +191,7 @@ impl App {
             .map(|event| scale_event(event, x_scrunch, y_scrunch))
             .collect();
 
-        let mut canvas =
-            SoftwareCanvas::new(screen_width() as usize, canvas_height.max(1.0) as usize);
+        let mut canvas = SoftwareCanvas::new(screen_w as usize, canvas_height.max(1.0) as usize);
         canvas.rasterize_events(&visible);
         for y in 0..canvas.height() {
             let mut x = 0;
@@ -222,7 +222,7 @@ impl App {
                 height,
             } = event
             {
-                let at = logo_to_screen(*at, canvas_height);
+                let at = logo_to_screen(*at, screen_w, canvas_height);
                 draw_text(
                     text,
                     at.x,
@@ -237,6 +237,7 @@ impl App {
             self.draw_turtle(
                 TurtleId::new(index),
                 state,
+                screen_w,
                 canvas_height,
                 x_scrunch,
                 y_scrunch,
@@ -252,6 +253,7 @@ impl App {
         &self,
         id: TurtleId,
         state: TurtleState,
+        screen_w: f32,
         canvas_height: f32,
         x_scrunch: f64,
         y_scrunch: f64,
@@ -262,20 +264,19 @@ impl App {
 
         let center = logo_to_screen(
             scale_point(state.position, x_scrunch, y_scrunch),
+            screen_w,
             canvas_height,
         );
-        let heading = state.heading.to_radians() as f32;
-        let forward = Vec2::new(heading.sin(), -heading.cos());
-        let right = Vec2::new(forward.y, -forward.x);
+        let (forward, right) = heading_to_vectors(state.heading);
         let shape = self.vm.turtles().shape(id).unwrap_or("turtle");
         let phase = (get_time() as f32 * 8.0).sin();
 
-        if shape.eq_ignore_ascii_case("dog") {
-            draw_dog_sprite(center, forward, right, phase);
-        } else if shape.eq_ignore_ascii_case("ship") || shape.eq_ignore_ascii_case("rocket") {
-            draw_ship_sprite(center, forward, right, phase);
-        } else {
-            draw_turtle_sprite(center, forward, right, phase, logo_color(state.pen_color));
+        match sprite_kind_for_shape(shape) {
+            SpriteKind::Dog => draw_dog_sprite(center, forward, right, phase),
+            SpriteKind::Ship => draw_ship_sprite(center, forward, right, phase),
+            SpriteKind::Turtle => {
+                draw_turtle_sprite(center, forward, right, phase, logo_color(state.pen_color))
+            }
         }
     }
 
@@ -484,11 +485,37 @@ fn scale_event(event: &TurtleEvent, x_scrunch: f64, y_scrunch: f64) -> TurtleEve
     }
 }
 
-fn logo_to_screen(point: Point, canvas_height: f32) -> Vec2 {
+fn logo_to_screen(point: Point, screen_width: f32, canvas_height: f32) -> Vec2 {
     Vec2::new(
-        screen_width() / 2.0 + point.x as f32,
+        screen_width / 2.0 + point.x as f32,
         canvas_height / 2.0 - point.y as f32,
     )
+}
+
+/// Forward/right unit vectors for a turtle heading, in Logo's convention
+/// (0 degrees points north/up, increasing clockwise).
+fn heading_to_vectors(heading_deg: f64) -> (Vec2, Vec2) {
+    let heading = heading_deg.to_radians() as f32;
+    let forward = Vec2::new(heading.sin(), -heading.cos());
+    let right = Vec2::new(forward.y, -forward.x);
+    (forward, right)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SpriteKind {
+    Turtle,
+    Dog,
+    Ship,
+}
+
+fn sprite_kind_for_shape(shape: &str) -> SpriteKind {
+    if shape.eq_ignore_ascii_case("dog") {
+        SpriteKind::Dog
+    } else if shape.eq_ignore_ascii_case("ship") || shape.eq_ignore_ascii_case("rocket") {
+        SpriteKind::Ship
+    } else {
+        SpriteKind::Turtle
+    }
 }
 
 fn logo_color(color: u32) -> Color {
@@ -586,4 +613,116 @@ fn generate_bark_wav() -> Vec<u8> {
     wav.extend_from_slice(&data_len.to_le_bytes());
     wav.extend_from_slice(&pcm);
     wav
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_vec2_close(actual: Vec2, expected: Vec2) {
+        assert!(
+            (actual.x - expected.x).abs() < 1e-4 && (actual.y - expected.y).abs() < 1e-4,
+            "expected {expected:?}, got {actual:?}"
+        );
+    }
+
+    #[test]
+    fn logo_to_screen_maps_origin_to_center() {
+        let screen = logo_to_screen(Point::new(0.0, 0.0), 1024.0, 768.0);
+        assert_vec2_close(screen, Vec2::new(512.0, 384.0));
+    }
+
+    #[test]
+    fn logo_to_screen_x_increases_rightward() {
+        let screen = logo_to_screen(Point::new(100.0, 0.0), 1024.0, 768.0);
+        assert_vec2_close(screen, Vec2::new(612.0, 384.0));
+    }
+
+    #[test]
+    fn logo_to_screen_y_increases_upward() {
+        let screen = logo_to_screen(Point::new(0.0, 100.0), 1024.0, 768.0);
+        assert_vec2_close(screen, Vec2::new(512.0, 284.0));
+    }
+
+    #[test]
+    fn logo_to_screen_negative_coordinates() {
+        let screen = logo_to_screen(Point::new(-50.0, -25.0), 1024.0, 768.0);
+        assert_vec2_close(screen, Vec2::new(462.0, 409.0));
+    }
+
+    #[test]
+    fn heading_zero_points_up() {
+        let (forward, right) = heading_to_vectors(0.0);
+        assert_vec2_close(forward, Vec2::new(0.0, -1.0));
+        assert_vec2_close(right, Vec2::new(-1.0, 0.0));
+    }
+
+    #[test]
+    fn heading_ninety_points_right() {
+        let (forward, right) = heading_to_vectors(90.0);
+        assert_vec2_close(forward, Vec2::new(1.0, 0.0));
+        assert_vec2_close(right, Vec2::new(0.0, -1.0));
+    }
+
+    #[test]
+    fn heading_one_eighty_points_down() {
+        let (forward, right) = heading_to_vectors(180.0);
+        assert_vec2_close(forward, Vec2::new(0.0, 1.0));
+        assert_vec2_close(right, Vec2::new(1.0, 0.0));
+    }
+
+    #[test]
+    fn heading_two_seventy_points_left() {
+        let (forward, right) = heading_to_vectors(270.0);
+        assert_vec2_close(forward, Vec2::new(-1.0, 0.0));
+        assert_vec2_close(right, Vec2::new(0.0, 1.0));
+    }
+
+    #[test]
+    fn heading_wraps_beyond_full_circle() {
+        let (forward, _) = heading_to_vectors(360.0 + 90.0);
+        assert_vec2_close(forward, Vec2::new(1.0, 0.0));
+    }
+
+    #[test]
+    fn sprite_kind_selects_dog_case_insensitively() {
+        assert_eq!(sprite_kind_for_shape("dog"), SpriteKind::Dog);
+        assert_eq!(sprite_kind_for_shape("Dog"), SpriteKind::Dog);
+        assert_eq!(sprite_kind_for_shape("DOG"), SpriteKind::Dog);
+    }
+
+    #[test]
+    fn sprite_kind_selects_ship_or_rocket() {
+        assert_eq!(sprite_kind_for_shape("ship"), SpriteKind::Ship);
+        assert_eq!(sprite_kind_for_shape("Rocket"), SpriteKind::Ship);
+        assert_eq!(sprite_kind_for_shape("ROCKET"), SpriteKind::Ship);
+    }
+
+    #[test]
+    fn sprite_kind_defaults_to_turtle() {
+        assert_eq!(sprite_kind_for_shape("turtle"), SpriteKind::Turtle);
+        assert_eq!(sprite_kind_for_shape("unknown"), SpriteKind::Turtle);
+        assert_eq!(sprite_kind_for_shape(""), SpriteKind::Turtle);
+    }
+
+    #[test]
+    fn logo_color_unpacks_rgb_channels() {
+        let color = logo_color(0xff8040);
+        assert!((color.r - 1.0).abs() < 1e-3);
+        assert!((color.g - (0x80 as f32 / 255.0)).abs() < 1e-3);
+        assert!((color.b - (0x40 as f32 / 255.0)).abs() < 1e-3);
+        assert!((color.a - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn logo_color_black_and_white() {
+        let black = logo_color(0x000000);
+        assert_vec2_close(Vec2::new(black.r, black.g), Vec2::new(0.0, 0.0));
+        assert!((black.b).abs() < 1e-3);
+
+        let white = logo_color(0xffffff);
+        assert!((white.r - 1.0).abs() < 1e-3);
+        assert!((white.g - 1.0).abs() < 1e-3);
+        assert!((white.b - 1.0).abs() < 1e-3);
+    }
 }
