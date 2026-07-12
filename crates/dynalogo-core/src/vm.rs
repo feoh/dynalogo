@@ -326,6 +326,7 @@ pub struct Vm {
     arities: ArityTable,
     procedures: HashMap<String, Procedure>,
     property_lists: HashMap<String, HashMap<String, Value>>,
+    shape_registry: HashMap<String, Value>,
     buried_names: HashSet<String>,
     turtles: TurtleStore,
     demons: DemonScheduler,
@@ -404,6 +405,7 @@ impl Default for Vm {
             arities: ArityTable::default(),
             procedures: HashMap::new(),
             property_lists: HashMap::new(),
+            shape_registry: HashMap::new(),
             buried_names: HashSet::new(),
             turtles: TurtleStore::new(),
             demons: DemonScheduler::new(),
@@ -1058,6 +1060,9 @@ impl Vm {
             "setspeed" => self.dyn_setspeed(args),
             "speed" => self.dyn_speed(args),
             "setshape" => self.dyn_setshape(args),
+            "shape" => self.dyn_shape(args),
+            "putsh" => self.dyn_putsh(args),
+            "getsh" => self.dyn_getsh(args),
             "bounce" => self.dyn_bounce(args),
             "wrap" => self.dyn_wrap(args),
             "fence" => self.dyn_fence(args),
@@ -3937,6 +3942,31 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn dyn_shape(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("shape", &args, 0)?;
+        let id = self.current_turtle();
+        let shape = self.turtles.shape(id).unwrap_or("turtle").to_string();
+        Ok(PrimitiveResult::Value(Value::word(&mut self.interner, shape)))
+    }
+
+    fn dyn_putsh(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("putsh", &args, 2)?;
+        let name = property_key_input(&args[0], &self.interner)?;
+        self.shape_registry.insert(name, args[1].clone());
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn dyn_getsh(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("getsh", &args, 1)?;
+        let name = property_key_input(&args[0], &self.interner)?;
+        let value = self
+            .shape_registry
+            .get(&name)
+            .cloned()
+            .unwrap_or_else(|| Value::List(List::empty()));
+        Ok(PrimitiveResult::Value(value))
+    }
+
     fn dyn_speed(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("speed", &args, 0)?;
         let id = self.current_turtle();
@@ -4853,6 +4883,9 @@ fn primitive_names() -> &'static [&'static str] {
         "setspeed",
         "speed",
         "setshape",
+        "shape",
+        "putsh",
+        "getsh",
         "bounce",
         "wrap",
         "fence",
@@ -6446,6 +6479,24 @@ path.write_text('make "foo 9\n')
         let (_, vm) = run("tell 1 setshape \"ship 20").unwrap();
         assert_eq!(vm.turtles().shape(TurtleId::new(1)), Some("ship"));
         assert_eq!(vm.turtles().collision_radius(TurtleId::new(1)), Some(20.0));
+    }
+
+    #[test]
+    fn shape_reports_current_turtle_shape_name() {
+        let (result, _) = run("tell 1 setshape \"dog 12 print shape").unwrap();
+        assert_eq!(result.output, "dog\n");
+    }
+
+    #[test]
+    fn putsh_and_getsh_store_shape_data_in_registry() {
+        let (result, _) = run("putsh \"badge [triangle blue] print getsh \"badge").unwrap();
+        assert_eq!(result.output, "[triangle blue]\n");
+    }
+
+    #[test]
+    fn getsh_of_unknown_shape_returns_empty_list() {
+        let (result, _) = run("print getsh \"missing").unwrap();
+        assert_eq!(result.output, "[]\n");
     }
 
     #[test]

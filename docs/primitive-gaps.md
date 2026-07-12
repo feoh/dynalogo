@@ -98,12 +98,15 @@ remaining parity/polish bucket still includes:
 The classic dynaturtle-facing language layer is now exposed with:
 
 - `TELL`, `ASK`, `EACH`, `WHO`
-- `SETSPEED`, `SETVELOCITY`, `SETSHAPE`, `SPEED`
+- `SETSPEED`, `SETVELOCITY`, `SETSHAPE`, `SPEED`, `SHAPE`
+- `PUTSH`, `GETSH` as an initial shape registry layer
 - `BOUNCE`, `WRAP`, `FENCE`, `WINDOW`
 - `TOUCHING`, `WHEN`, `TOOT`
 
 Still missing from the broader dynaturtle roadmap are:
 
+- custom shape rendering in the native/browser frontends
+- interactive shape-editor UI / real `EDSH`
 - any remaining collision/event polish found during manual comparison
 
 ## Error parity remains incomplete

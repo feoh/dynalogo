@@ -101,13 +101,16 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `HIDETURTLE`/`HT`, `SHOWTURTLE`/`ST`, `SHOWNP`
 - `POS`, `HEADING`, `XCOR`, `YCOR`
 - `TELL`, `ASK`, `EACH`, `WHO`
-- `SETVELOCITY`, `SETSPEED`, `SPEED`, `SETSHAPE`
+- `SETVELOCITY`, `SETSPEED`, `SPEED`, `SETSHAPE`, `SHAPE`, `PUTSH`, `GETSH`
 - `BOUNCE`, `WRAP`, `FENCE`, `WINDOW`
 - `TOUCHING`, `WHEN`, `TOOT`
 
 ## Notes
 
 `EDNS` is implemented as an editor-driven variable session using the same
-underlying flow as `EDIT`/`ED`; `EDSH` currently reports that the shape
-registry/editor work is not implemented yet rather than pretending support.
-See also [primitive-gaps.md](primitive-gaps.md) for the current gap list.
+underlying flow as `EDIT`/`ED`; `EDSH` currently reports that the shape editor
+UI is not implemented yet. The current shape-registry primitives (`PUTSH`,
+`GETSH`, `SHAPE`) store/query shape data and the active turtle's shape name,
+but native/browser rendering still uses the built-in sprite set until the
+follow-on rendering task lands. See also [primitive-gaps.md](primitive-gaps.md)
+for the current gap list.

@@ -72,7 +72,7 @@ The Atari manual organizes features into these areas:
 
 - `ASK`, `TELL`, `EACH`, `WHO`
 - `OVER`, `TOUCHING`, `WHEN`, event/collision table semantics
-- `SETSH`/`SETSHAPE`, `SHAPE`, `GETSH`, `PUTSH`, turtle shape editor behavior
+- turtle shape editor behavior beyond the current `SETSHAPE`/`SHAPE`/`GETSH`/`PUTSH` registry layer
 - `SETSP` (Atari-style alias for `SETSPEED`)
 - `SPEED`
 - background/turtle color split: `SETBG`, `SETC`

@@ -372,9 +372,11 @@ shared with edge-contact detection used by `WHEN [edge ...]`.
 
 ### Shapes
 
-Implemented shape primitive:
+Implemented shape primitives:
 
 - `SETSHAPE`
+- `SHAPE` — reports the current turtle's active shape name
+- `PUTSH`, `GETSH` — store/query shape data in DynaLOGO's current shape registry
 
 Current user-facing rendered shapes in the native window include:
 
@@ -385,6 +387,11 @@ Current user-facing rendered shapes in the native window include:
 
 The window frontend animates these shapes with simple sprite-like motion such
 as flipper motion, leg swing, tail wagging, or thruster flicker.
+
+Today, `PUTSH`/`GETSH` provide an honest registry layer for custom shape data,
+but the native/browser frontends still render only the built-in sprite set.
+That follow-through belongs to the custom-shape rendering task rather than this
+registry/reporter slice.
 
 ### Collisions and predicates
 
