@@ -144,6 +144,7 @@ pub fn interpolate_turtle(a: TurtleState, b: TurtleState, alpha: f64) -> TurtleS
         pen_down: b.pen_down,
         pen_color: b.pen_color,
         pen_size: b.pen_size,
+        label_height: b.label_height,
         visible: b.visible,
     }
 }

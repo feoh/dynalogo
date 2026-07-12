@@ -641,7 +641,8 @@ impl Vm {
             for index in 0..self.turtles.len() {
                 let id = TurtleId::new(index);
                 if turtle_over_color(self.turtles.events(), &self.turtles, id, color) {
-                    self.demons.push_event(DemonEvent::OverColor { turtle: id, color });
+                    self.demons
+                        .push_event(DemonEvent::OverColor { turtle: id, color });
                 }
             }
         }
@@ -1018,6 +1019,8 @@ impl Vm {
             "pendown" | "pd" => self.turtle_pendown(args),
             "setpencolor" | "setpc" => self.turtle_setpencolor(args),
             "setpensize" => self.turtle_setpensize(args),
+            "setlabelheight" => self.turtle_setlabelheight(args),
+            "label" => self.turtle_label(args),
             "hideturtle" | "ht" => self.turtle_hide(args),
             "init.turtle" => self.init_turtle(args),
             "showturtle" | "st" => self.turtle_show(args),
@@ -1128,15 +1131,17 @@ impl Vm {
                 }
                 ControlFlow::Continue => Ok(PrimitiveResult::Control(ControlFlow::Continue)),
                 ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
-                ControlFlow::Stop => {
-                    Err(VmError::new(format!("{name} expansion stopped without output")))
-                }
+                ControlFlow::Stop => Err(VmError::new(format!(
+                    "{name} expansion stopped without output"
+                ))),
                 ControlFlow::None => result
                     .stack
                     .last()
                     .cloned()
                     .map(PrimitiveResult::Value)
-                    .ok_or_else(|| VmError::new(format!("{name} expansion did not output a value"))),
+                    .ok_or_else(|| {
+                        VmError::new(format!("{name} expansion did not output a value"))
+                    }),
             }
         } else {
             let chunk = compiler
@@ -3542,6 +3547,24 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn turtle_setlabelheight(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setlabelheight", &args, 1)?;
+        let height = number_input(&args[0], &self.interner)?;
+        for id in self.turtles.active().to_vec() {
+            self.turtles.set_label_height(id, height);
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn turtle_label(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("label", &args, 1)?;
+        let text = args[0].show(&self.interner);
+        for id in self.turtles.active().to_vec() {
+            self.turtles.label(id, text.clone());
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
     fn turtle_hide(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("hideturtle", &args, 0)?;
         for id in self.turtles.active().to_vec() {
@@ -3802,7 +3825,12 @@ impl Vm {
     }
 }
 
-fn turtle_over_color(events: &[TurtleEvent], store: &TurtleStore, turtle: TurtleId, color: u32) -> bool {
+fn turtle_over_color(
+    events: &[TurtleEvent],
+    store: &TurtleStore,
+    turtle: TurtleId,
+    color: u32,
+) -> bool {
     let Some(position) = store.state(turtle).map(|state| state.position) else {
         return false;
     };
@@ -4022,7 +4050,9 @@ fn ranged_device_index_input(
 ) -> Result<usize, VmError> {
     let index = non_negative_integer_input(value, interner, name)?;
     if index >= device_count {
-        return Err(VmError::new(format!("{name} index {index} is out of range")));
+        return Err(VmError::new(format!(
+            "{name} index {index} is out of range"
+        )));
     }
     Ok(index)
 }
@@ -4552,6 +4582,8 @@ fn primitive_names() -> &'static [&'static str] {
         "setpencolor",
         "setpc",
         "setpensize",
+        "setlabelheight",
+        "label",
         "hideturtle",
         "ht",
         "showturtle",
@@ -4673,7 +4705,10 @@ fn macro_list_to_source(list: &List, interner: &Interner, arities: &ArityTable) 
             Value::List(inner) => format!("[{}]", macro_list_to_source(inner, interner, arities)),
             Value::Word(symbol) => {
                 let spelling = interner.spelling(*symbol);
-                if spelling.starts_with(':') || arities.get(spelling).is_some() || is_operator_word(spelling) {
+                if spelling.starts_with(':')
+                    || arities.get(spelling).is_some()
+                    || is_operator_word(spelling)
+                {
                     spelling.to_string()
                 } else {
                     format!("\"{spelling}")
@@ -5262,18 +5297,36 @@ mod tests {
 
     #[test]
     fn over_reporter_detects_pen_contact() {
-        let (result, _) = run(
-            "tell 0 setpc 3 fd 10 pu setxy 20 20 tell 1 setxy 0 5 print over 3",
-        )
-        .unwrap();
+        let (result, _) =
+            run("tell 0 setpc 3 fd 10 pu setxy 20 20 tell 1 setxy 0 5 print over 3").unwrap();
         assert_eq!(result.output, "true\n");
+    }
+
+    #[test]
+    fn label_emits_a_headless_label_event() {
+        let (_, vm) = run("setxy 10 20 setpc 5 setlabelheight 24 label [hello logo]").unwrap();
+        let label = vm.turtles().events().iter().find_map(|event| match event {
+            TurtleEvent::Label {
+                at,
+                text,
+                color,
+                height,
+            } => Some((*at, text.clone(), *color, *height)),
+            _ => None,
+        });
+        assert_eq!(
+            label,
+            Some((Point::new(10.0, 20.0), "[hello logo]".to_string(), 5, 24.0))
+        );
     }
 
     #[test]
     fn when_over_fires_during_dynaturtle_tick() {
         let mut vm = Vm::new();
-        vm.eval_source("tell 0 setpc 3 fd 10 pu setxy 20 20 tell 1 setxy 0 5 when [over 3] [print \"hit]")
-            .unwrap();
+        vm.eval_source(
+            "tell 0 setpc 3 fd 10 pu setxy 20 20 tell 1 setxy 0 5 when [over 3] [print \"hit]",
+        )
+        .unwrap();
         vm.clear_output();
         vm.dynaturtle_tick(0.0).unwrap();
         assert_eq!(vm.output(), "hit\n");

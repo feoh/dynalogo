@@ -76,12 +76,12 @@ found during audit.
 
 ## Graphics/library gaps remain
 
-Static turtle graphics are usable, but the remaining parity/polish bucket still
+Static turtle graphics are usable, and the current integration line now includes
+`LABEL` / `SETLABELHEIGHT`, but the remaining parity/polish bucket still
 includes:
 
-- `LABEL`
-- `SETLABELHEIGHT`
 - `FILL`
+- `FILLED`
 - multiple pens and related graphics polish
 
 ## Dynaturtle follow-up surface remains

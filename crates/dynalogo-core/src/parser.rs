@@ -225,6 +225,8 @@ impl ArityTable {
             ("SETPENCOLOR", 1),
             ("SETPC", 1),
             ("SETPENSIZE", 1),
+            ("SETLABELHEIGHT", 1),
+            ("LABEL", 1),
             ("HIDETURTLE", 0),
             ("HT", 0),
             ("INIT.TURTLE", 0),

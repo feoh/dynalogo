@@ -24,6 +24,12 @@ pub enum TurtleEvent {
         color: u32,
         width: f64,
     },
+    Label {
+        at: Point,
+        text: String,
+        color: u32,
+        height: f64,
+    },
     State(TurtleState),
 }
 
@@ -35,6 +41,7 @@ pub struct TurtleState {
     pub pen_down: bool,
     pub pen_color: u32,
     pub pen_size: f64,
+    pub label_height: f64,
     pub visible: bool,
 }
 
@@ -46,6 +53,7 @@ impl Default for TurtleState {
             pen_down: true,
             pen_color: 0x00ff_ffff,
             pen_size: 1.0,
+            label_height: 12.0,
             visible: true,
         }
     }

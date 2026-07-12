@@ -54,6 +54,7 @@ pub struct TurtleStore {
     pen_down: Vec<bool>,
     pen_color: Vec<u32>,
     pen_size: Vec<f64>,
+    label_height: Vec<f64>,
     visible: Vec<bool>,
     shape: Vec<String>,
     collision_radius: Vec<f64>,
@@ -70,6 +71,7 @@ impl TurtleStore {
             pen_down: Vec::new(),
             pen_color: Vec::new(),
             pen_size: Vec::new(),
+            label_height: Vec::new(),
             visible: Vec::new(),
             shape: Vec::new(),
             collision_radius: Vec::new(),
@@ -101,6 +103,7 @@ impl TurtleStore {
         self.pen_down.push(state.pen_down);
         self.pen_color.push(state.pen_color);
         self.pen_size.push(state.pen_size);
+        self.label_height.push(state.label_height);
         self.visible.push(state.visible);
         self.shape.push("turtle".to_string());
         self.collision_radius.push(8.0);
@@ -121,6 +124,7 @@ impl TurtleStore {
             pen_down: *self.pen_down.get(i)?,
             pen_color: *self.pen_color.get(i)?,
             pen_size: *self.pen_size.get(i)?,
+            label_height: *self.label_height.get(i)?,
             visible: *self.visible.get(i)?,
         })
     }
@@ -133,6 +137,7 @@ impl TurtleStore {
         self.pen_down[i] = state.pen_down;
         self.pen_color[i] = state.pen_color;
         self.pen_size[i] = state.pen_size;
+        self.label_height[i] = state.label_height;
         self.visible[i] = state.visible;
     }
 
@@ -265,6 +270,22 @@ impl TurtleStore {
     pub fn set_pen_size(&mut self, id: TurtleId, size: f64) {
         self.ensure(id);
         self.pen_size[id.index()] = size;
+    }
+
+    pub fn set_label_height(&mut self, id: TurtleId, height: f64) {
+        self.ensure(id);
+        self.label_height[id.index()] = height;
+    }
+
+    pub fn label(&mut self, id: TurtleId, text: String) {
+        self.ensure(id);
+        let i = id.index();
+        self.events.push(TurtleEvent::Label {
+            at: self.positions[i],
+            text,
+            color: self.pen_color[i],
+            height: self.label_height[i],
+        });
     }
 
     pub fn set_visible(&mut self, id: TurtleId, visible: bool) {

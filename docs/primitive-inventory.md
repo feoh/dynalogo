@@ -95,6 +95,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `HOME`, `CLEARSCREEN`/`CS`, `INIT.TURTLE`
 - `PENUP`/`PU`, `PENDOWN`/`PD`
 - `SETPENCOLOR`/`SETPC`, `SETPENSIZE`
+- `SETLABELHEIGHT`, `LABEL`
 - `HIDETURTLE`/`HT`, `SHOWTURTLE`/`ST`, `SHOWNP`
 - `POS`, `HEADING`, `XCOR`, `YCOR`
 - `TELL`, `ASK`, `EACH`, `WHO`
@@ -105,6 +106,6 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 
 Not yet implemented from nearby roadmap/workspace tasks include remaining
 workspace-management pieces such as `NODES`/`RECYCLE`, richer graphics
-primitives like `LABEL`/`FILL`, and dynaturtle follow-ups such as edge/window
-modes and additional compatibility polish. See also
+primitives like `FILL`, and dynaturtle follow-ups such as edge/window modes
+and additional compatibility polish. See also
 [primitive-gaps.md](primitive-gaps.md) for the current gap list.

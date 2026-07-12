@@ -184,23 +184,40 @@ impl App {
             .map_or(0, |index| index + 1);
 
         for event in &events[start..] {
-            if let TurtleEvent::Line {
-                from,
-                to,
-                color,
-                width,
-            } = event
-            {
-                let from = logo_to_screen(*from, canvas_height);
-                let to = logo_to_screen(*to, canvas_height);
-                draw_line(
-                    from.x,
-                    from.y,
-                    to.x,
-                    to.y,
-                    (*width).max(1.0) as f32,
-                    logo_color(*color),
-                );
+            match event {
+                TurtleEvent::Line {
+                    from,
+                    to,
+                    color,
+                    width,
+                } => {
+                    let from = logo_to_screen(*from, canvas_height);
+                    let to = logo_to_screen(*to, canvas_height);
+                    draw_line(
+                        from.x,
+                        from.y,
+                        to.x,
+                        to.y,
+                        (*width).max(1.0) as f32,
+                        logo_color(*color),
+                    );
+                }
+                TurtleEvent::Label {
+                    at,
+                    text,
+                    color,
+                    height,
+                } => {
+                    let at = logo_to_screen(*at, canvas_height);
+                    draw_text(
+                        text,
+                        at.x,
+                        at.y,
+                        (*height).max(1.0) as f32,
+                        logo_color(*color),
+                    );
+                }
+                TurtleEvent::Clear | TurtleEvent::State(_) => {}
             }
         }
 
