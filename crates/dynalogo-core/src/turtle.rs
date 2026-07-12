@@ -135,6 +135,7 @@ mod tests {
             to: Point::new(x, 0.0),
             color: 0,
             width: 1.0,
+            mode: PenMode::Down,
         }
     }
 
