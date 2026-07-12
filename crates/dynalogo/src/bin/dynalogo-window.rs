@@ -286,13 +286,7 @@ impl App {
                         )
                     }
                 } else {
-                    draw_turtle_sprite(
-                        center,
-                        forward,
-                        right,
-                        phase,
-                        logo_color(state.pen_color),
-                    )
+                    draw_turtle_sprite(center, forward, right, phase, logo_color(state.pen_color))
                 }
             }
         }

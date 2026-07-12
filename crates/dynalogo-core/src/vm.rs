@@ -3952,7 +3952,10 @@ impl Vm {
         expect_arity("shape", &args, 0)?;
         let id = self.current_turtle();
         let shape = self.turtles.shape(id).unwrap_or("turtle").to_string();
-        Ok(PrimitiveResult::Value(Value::word(&mut self.interner, shape)))
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            shape,
+        )))
     }
 
     fn dyn_putsh(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
