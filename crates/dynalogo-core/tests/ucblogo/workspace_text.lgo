@@ -1,0 +1,5 @@
+to square :size
+output product :size :size
+end
+print square 5
+print text "square

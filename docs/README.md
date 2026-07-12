@@ -16,3 +16,5 @@ Start here for user-facing documentation inside the repository.
 - [`primitive-gaps.md`](primitive-gaps.md) — known gaps and partial areas
 - [`atari-logo-validation.md`](atari-logo-validation.md) — Atari LOGO manual
   compatibility notes
+- [`ucblogo-compatibility.md`](ucblogo-compatibility.md) — compatibility test
+  corpus and intentional divergence notes

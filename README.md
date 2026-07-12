@@ -46,6 +46,9 @@ END
   begin if you are new to DynaLOGO
 - [`docs/reference-manual.md`](docs/reference-manual.md) — user reference for
   the currently implemented language and dynaturtle surface
+- [`docs/ucblogo-compatibility.md`](docs/ucblogo-compatibility.md) —
+  compatibility corpus, live-UCBLogo harness notes, and intentional
+  divergences
 - [`docs/README.md`](docs/README.md) — documentation index
 
 ## Running DynaLOGO

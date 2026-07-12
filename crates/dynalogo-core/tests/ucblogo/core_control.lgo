@@ -1,0 +1,6 @@
+print sum 2 3
+test equalp 4 4
+iftrue [print "yes]
+iffalse [print "no]
+repeat 3 [print repcount]
+print runresult [sum 10 20]
