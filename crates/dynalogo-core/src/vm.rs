@@ -1551,10 +1551,10 @@ impl Vm {
             Value::List(list) => list
                 .item(index)
                 .cloned()
-                .ok_or_else(|| VmError::new("ITEM index out of range"))?,
+                .ok_or_else(|| doesnt_like_as_input("item", &args[0], &self.interner))?,
             Value::Array(array) => array
                 .item(index as isize)
-                .ok_or_else(|| VmError::new("ITEM index out of range"))?,
+                .ok_or_else(|| doesnt_like_as_input("item", &args[0], &self.interner))?,
         };
         Ok(PrimitiveResult::Value(value))
     }
@@ -4940,12 +4940,15 @@ fn nth_char_value(
     one_based_index: usize,
 ) -> Result<Value, VmError> {
     if one_based_index == 0 {
-        return Err(VmError::new("ITEM index out of range"));
+        return Err(doesnt_like_as_input(
+            "item",
+            &Value::number(one_based_index as f64),
+            interner,
+        ));
     }
-    let ch = text
-        .chars()
-        .nth(one_based_index - 1)
-        .ok_or_else(|| VmError::new("ITEM index out of range"))?;
+    let ch = text.chars().nth(one_based_index - 1).ok_or_else(|| {
+        doesnt_like_as_input("item", &Value::number(one_based_index as f64), interner)
+    })?;
     Ok(Value::word(interner, ch.to_string()))
 }
 
@@ -6156,6 +6159,35 @@ path.write_text('make "foo 9\n')
         let mut vm = Vm::new();
         let error = vm.eval_source("lput 1 2").unwrap_err();
         assert_eq!(error.message, "lput doesn't like 2 as input");
+    }
+
+    #[test]
+    fn item_zero_index_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("item 0 [a b]").unwrap_err();
+        assert_eq!(error.message, "item doesn't like 0 as input");
+    }
+
+    #[test]
+    fn item_out_of_range_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("item 3 [a b]").unwrap_err();
+        assert_eq!(error.message, "item doesn't like 3 as input");
+    }
+
+    #[test]
+    fn catch_error_records_item_bad_input_code_and_context() {
+        let mut vm = Vm::new();
+        vm.eval_source("catch \"error [item 0 [a b]]").unwrap();
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "4");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "item doesn't like 0 as input"
+        );
+        assert_eq!(list.item(3).unwrap().show(vm.interner()), "item");
     }
 
     #[test]
