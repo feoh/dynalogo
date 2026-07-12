@@ -36,9 +36,9 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 
 - `FIRST`, `BUTFIRST`/`BF`, `LAST`, `BUTLAST`/`BL`
 - `FPUT`, `LPUT`, `SENTENCE`/`SE`, `LIST`, `WORD`
-- `COUNT`, `ITEM`, `WHICH`, `EMPTYP`/`EMPTY?`, `EQUALP`/`EQUAL?`, `MEMBERP`/`MEMBER?`
-- `BEFORE`, `INSERT`, `SORT`, `SUPERSORT`
-- `WORDP`, `LISTP`, `NUMBERP`, `INTP`, `DECIMALP`
+- `COUNT`, `ITEM`, `RANK`, `RANPICK`, `WHICH`, `EMPTYP`/`EMPTY?`, `EQUALP`/`EQUAL?`, `MEMBERP`/`MEMBER?`
+- `BEFORE`, `INSERT`, `SORT`, `SUPERSORT`, `ASCII`, `CHAR`, `LOWERCASE`, `REV`
+- `WORDP`, `REALWORDP`, `LISTP`, `NUMBERP`, `INTP`, `DECIMALP`, `EVENP`, `DIVISORP`
 - `ARRAY`, `SETITEM`, `LISTTOARRAY`, `ARRAYTOLIST`
 - `PPROP`, `GPROP`, `REMPROP`, `PLIST`
 
@@ -56,7 +56,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Arithmetic, comparison, and logic
 
 - `SUM`, `DIFFERENCE`, `PRODUCT`, `QUOTIENT`, `REMAINDER`
-- `ABS`, `INT`, `ROUND`, `SQRT`, `SIN`, `COS`, `TAN`, `RANDOM`, `RERANDOM`
+- `ABS`, `INT`, `ROUND`, `SQRT`, `SIN`, `COS`, `TAN`, `RANDOM`, `RERANDOM`, `FACTORIAL`
 - Infix operators: `+`, `-`, `*`, `/`, `<`, `>`, `=`, `<=`, `>=`, `<>`
 - `AND`, `OR`, `NOT`
 

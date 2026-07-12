@@ -87,12 +87,12 @@ The Atari manual organizes features into these areas:
 
 **Implemented now**
 
-- `LISTP`, `WORDP`
+- `LISTP`, `WORDP`, `REALWORDP`
+- `RANK`, `RANPICK`
+- text/character helpers visible in Atari vocabulary such as `ASCII`, `CHAR`, `LOWERCASE`, `REV`
 
 **Missing from Atari vocabulary**
 
-- `RANK`, `RANPICK`
-- text/character helpers visible in Atari vocabulary such as `ASCII`, `CHAR`, `LOWERCASE`, `REV`, `REALWORDP`
 - assorted Atari examples/helpers referenced in the glossary that are not yet audited individually
 
 ### 2b. Atari Useful Tools appendix
@@ -140,10 +140,11 @@ The Atari manual organizes features into these areas:
 - `ABS`, `INT`, `ROUND`, `SQRT`, `RANDOM`, `RERANDOM`
 - `SIN`, `COS`, `TAN`
 - `INTP`, `DECIMALP`, `NUMBERP`
+- `EVENP`, `DIVISORP`, `FACTORIAL`
 
 **Missing from Atari vocabulary**
 
-- `EVENP`, `DIVISORP`, `FACTORIAL`, and the remaining Atari numeric helpers
+- any remaining Atari numeric helpers beyond the core predicate/math surface above
 
 ### 5. Defining and editing procedures
 
@@ -181,9 +182,9 @@ The Atari manual organizes features into these areas:
 - `AND`, `OR`, `NOT`
 - `TRUE`, `FALSE` semantics through words/truthiness
 
-**Missing from Atari vocabulary**
+**Implemented now**
 
-- additional type predicates not yet present, especially `REALWORDP`
+- additional type predicates including `REALWORDP`
 
 ### 8. The outside world
 
@@ -244,8 +245,8 @@ DynaLOGO:
    - `NODES`, `RECYCLE`, bury/unbury behavior, and editor integration
 3. **File and device I/O**
    - `LOAD`, `SAVE`, `SETREAD`, `SETWRITE`, `RC`, `RL`
-4. **Remaining Atari type and math helpers**
-   - `REALWORDP`, `RANK`, `RANPICK`, `EVENP`, `DIVISORP`, `FACTORIAL`, and adjacent helper surface
+4. **Remaining Atari type/text helper audit**
+   - verify any adjacent helper surface beyond `REALWORDP`, `RANK`, `RANPICK`, `EVENP`, `DIVISORP`, `FACTORIAL`, `ASCII`, `CHAR`, `LOWERCASE`, and `REV`
 5. **Graphics/screen extras**
    - `SETBG`, `SETC`, `SETX`, `SETY`, `SHAPE`, `SETSH`, `GETSH`, `PUTSH`, `SETSP`, `SPEED`, `WINDOW`, `WRAP`, multi-pen semantics, `LABEL`, `FILL`
 6. **Atari outside-world features**

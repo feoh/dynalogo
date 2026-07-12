@@ -646,6 +646,8 @@ impl Vm {
             "word" => self.word(args),
             "count" => self.count(args),
             "item" => self.item(args),
+            "rank" => self.rank(args),
+            "ranpick" => self.ranpick(args),
             "which" => self.which(args),
             "dot" => self.dot(args),
             "before" => self.before(args),
@@ -655,16 +657,24 @@ impl Vm {
             "print" | "pr" => self.print(args),
             "show" => self.show(args),
             "type" => self.r#type(args),
+            "ascii" => self.ascii(args),
+            "char" => self.char_(args),
+            "lowercase" => self.lowercase(args),
+            "rev" => self.rev(args),
             "readlist" | "rl" => self.readlist(args),
             "make" | "name" => self.make(args),
             "thing" => self.thing(args),
             "local" => self.local(args),
             "namep" => self.namep(args),
             "wordp" => self.wordp(args),
+            "realwordp" => self.realwordp(args),
             "listp" => self.listp(args),
             "numberp" => self.numberp(args),
             "intp" => self.intp(args),
             "decimalp" => self.decimalp(args),
+            "evenp" => self.evenp(args),
+            "divisorp" => self.divisorp(args),
+            "factorial" => self.factorial(args),
             "definedp" | "defined?" => self.definedp(args),
             "primitivep" | "primitive?" => self.primitivep(args),
             "text" => self.text(args),
@@ -1168,6 +1178,45 @@ impl Vm {
         Ok(PrimitiveResult::Value(Value::number(position)))
     }
 
+    fn rank(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("rank", &args, 1)?;
+        Ok(PrimitiveResult::Value(Value::number(
+            rank_value(&args[0]) as f64
+        )))
+    }
+
+    fn ranpick(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("ranpick", &args, 1)?;
+        match &args[0] {
+            Value::List(list) => {
+                let values = list_values(list);
+                if values.is_empty() {
+                    return Err(VmError::new("RANPICK of empty list"));
+                }
+                let index = (self.next_random_u64() as usize) % values.len();
+                Ok(PrimitiveResult::Value(values[index].clone()))
+            }
+            Value::Array(array) => {
+                let values = list_values(&array.to_list());
+                if values.is_empty() {
+                    return Err(VmError::new("RANPICK of empty array"));
+                }
+                let index = (self.next_random_u64() as usize) % values.len();
+                Ok(PrimitiveResult::Value(values[index].clone()))
+            }
+            Value::Word(symbol) => {
+                let text = self.interner.spelling(*symbol).to_string();
+                let random = self.next_random_u64();
+                ranpick_text(&text, &mut self.interner, random)
+            }
+            Value::Number(number) => {
+                let text = Value::Number(*number).show(&self.interner);
+                let random = self.next_random_u64();
+                ranpick_text(&text, &mut self.interner, random)
+            }
+        }
+    }
+
     fn dot(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("dot", &args, 1)?;
         let target = point_input(&args[0], &self.interner)?;
@@ -1240,6 +1289,71 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn ascii(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("ascii", &args, 1)?;
+        let text = source_text_input(&args[0], &self.interner);
+        let Some(ch) = text.chars().next() else {
+            return Err(VmError::new("ASCII of empty word"));
+        };
+        let code = u32::from(ch);
+        if code > 255 {
+            return Err(VmError::new("ASCII input must be a Latin-1 character"));
+        }
+        Ok(PrimitiveResult::Value(Value::number(code as f64)))
+    }
+
+    fn char_(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("char", &args, 1)?;
+        let code = ranged_byte_input(&args[0], &self.interner, "CHAR", 255)?;
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            char::from(code).to_string(),
+        )))
+    }
+
+    fn lowercase(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("lowercase", &args, 1)?;
+        let text = source_text_input(&args[0], &self.interner);
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            text.to_ascii_lowercase(),
+        )))
+    }
+
+    fn rev(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("rev", &args, 1)?;
+        let value = match &args[0] {
+            Value::List(list) => {
+                let mut values = list.iter().cloned().collect::<Vec<_>>();
+                values.reverse();
+                Value::List(List::from_values(values))
+            }
+            Value::Array(array) => {
+                let mut values = array.to_list().iter().cloned().collect::<Vec<_>>();
+                values.reverse();
+                Value::List(List::from_values(values))
+            }
+            Value::Word(symbol) => {
+                let reversed = self
+                    .interner
+                    .spelling(*symbol)
+                    .chars()
+                    .rev()
+                    .collect::<String>();
+                Value::word(&mut self.interner, reversed)
+            }
+            Value::Number(number) => {
+                let reversed = Value::Number(*number)
+                    .show(&self.interner)
+                    .chars()
+                    .rev()
+                    .collect::<String>();
+                Value::word(&mut self.interner, reversed)
+            }
+        };
+        Ok(PrimitiveResult::Value(value))
+    }
+
     fn readlist(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("readlist", &args, 0)?;
         Err(VmError::new(
@@ -1290,6 +1404,13 @@ impl Vm {
         ))))
     }
 
+    fn realwordp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("realwordp", &args, 1)?;
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(matches!(args[0], Value::Word(_))),
+        ))
+    }
+
     fn listp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("listp", &args, 1)?;
         Ok(PrimitiveResult::Value(
@@ -1322,6 +1443,41 @@ impl Vm {
         Ok(PrimitiveResult::Value(
             self.logo_bool(number.is_finite() && number.fract() != 0.0),
         ))
+    }
+
+    fn evenp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("evenp", &args, 1)?;
+        let Some(number) = args[0].as_number(&self.interner) else {
+            return Ok(PrimitiveResult::Value(self.logo_bool(false)));
+        };
+        Ok(PrimitiveResult::Value(self.logo_bool(
+            LogoNumber::new(number).is_integerish() && (number as i64) % 2 == 0,
+        )))
+    }
+
+    fn divisorp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("divisorp", &args, 2)?;
+        let divisor = number_input(&args[0], &self.interner)?;
+        let dividend = number_input(&args[1], &self.interner)?;
+        if divisor == 0.0 {
+            return Err(VmError::new("DIVISORP first input must not be zero"));
+        }
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(dividend.rem_euclid(divisor) == 0.0),
+        ))
+    }
+
+    fn factorial(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("factorial", &args, 1)?;
+        let number = number_input(&args[0], &self.interner)?;
+        if number < 0.0 || !LogoNumber::new(number).is_integerish() {
+            return Err(VmError::new("FACTORIAL expects a nonnegative integer"));
+        }
+        let mut product = 1.0;
+        for value in 1..=(number as u64) {
+            product *= value as f64;
+        }
+        Ok(PrimitiveResult::Value(Value::number(product)))
     }
 
     fn definedp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2751,6 +2907,30 @@ fn result_value(result: RunResult) -> Result<Value, VmError> {
     }
 }
 
+fn rank_value(value: &Value) -> usize {
+    match value {
+        Value::List(list) => 1 + list.iter().map(rank_value).max().unwrap_or(0),
+        Value::Array(array) => 1 + array.to_list().iter().map(rank_value).max().unwrap_or(0),
+        Value::Word(_) | Value::Number(_) => 0,
+    }
+}
+
+fn ranpick_text(
+    text: &str,
+    interner: &mut Interner,
+    random: u64,
+) -> Result<PrimitiveResult, VmError> {
+    let chars = text.chars().collect::<Vec<_>>();
+    if chars.is_empty() {
+        return Err(VmError::new("RANPICK of empty word"));
+    }
+    let ch = chars[(random as usize) % chars.len()];
+    Ok(PrimitiveResult::Value(Value::word(
+        interner,
+        ch.to_string(),
+    )))
+}
+
 fn point_input(value: &Value, interner: &Interner) -> Result<Point, VmError> {
     let list = list_input(value, "SETPOS")?;
     let x = list
@@ -2954,11 +3134,21 @@ fn primitive_names() -> &'static [&'static str] {
         "word",
         "count",
         "item",
+        "rank",
+        "ranpick",
+        "ascii",
+        "char",
+        "lowercase",
+        "rev",
         "wordp",
+        "realwordp",
         "listp",
         "numberp",
         "intp",
         "decimalp",
+        "evenp",
+        "divisorp",
+        "factorial",
         "print",
         "pr",
         "show",
@@ -3618,6 +3808,40 @@ mod tests {
         assert_eq!(lines[4], "0.49999999999999994");
         assert_eq!(lines[5], "0.5000000000000001");
         assert_eq!(lines[6], lines[7]);
+    }
+
+    #[test]
+    fn atari_word_and_number_helper_primitives_work() {
+        let (result, _) = run("print rank [a b [c]]
+             print ascii \"A
+             print char 66
+             print lowercase \"HeLLo
+             print rev [a b c]
+             print rev \"stressed
+             print realwordp \"hello
+             print realwordp 7
+             print evenp 6
+             print divisorp 3 12
+             print factorial 5
+             rerandom
+             print ranpick [a b c]
+             rerandom
+             print ranpick [a b c]")
+        .unwrap();
+        let lines = result.output.lines().collect::<Vec<_>>();
+        assert_eq!(lines[0], "2");
+        assert_eq!(lines[1], "65");
+        assert_eq!(lines[2], "B");
+        assert_eq!(lines[3], "hello");
+        assert_eq!(lines[4], "[c b a]");
+        assert_eq!(lines[5], "desserts");
+        assert_eq!(lines[6], "true");
+        assert_eq!(lines[7], "false");
+        assert_eq!(lines[8], "true");
+        assert_eq!(lines[9], "true");
+        assert_eq!(lines[10], "120");
+        assert_eq!(lines[11], lines[12]);
+        assert!(matches!(lines[11], "a" | "b" | "c"));
     }
 
     #[test]
