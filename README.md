@@ -88,7 +88,10 @@ cargo build -p dynalogo --bin dynalogo-window --target wasm32-unknown-unknown
 
 The committed demo shell lives in `web/index.html`, and the Pages workflow
 copies that shell, the compiled `dynalogo-window.wasm`, and the example `.lgo`
-files into the published site artifact.
+files into the published site artifact. The shell includes a grouped example
+gallery dropdown covering every program in `examples/`, plus a Starter
+snippet; picking one and pressing "Load Example" fills the REPL textarea for
+"Run in Demo".
 
 ### WASM/core status
 
