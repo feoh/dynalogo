@@ -1369,10 +1369,10 @@ impl Vm {
             Value::List(list) => list
                 .first()
                 .cloned()
-                .ok_or_else(|| VmError::new("FIRST of empty list"))?,
+                .ok_or_else(|| doesnt_like_as_input("first", &args[0], &self.interner))?,
             Value::Array(array) => array
                 .item(array.origin())
-                .ok_or_else(|| VmError::new("FIRST of empty array"))?,
+                .ok_or_else(|| doesnt_like_as_input("first", &args[0], &self.interner))?,
         };
         Ok(PrimitiveResult::Value(value))
     }
@@ -1419,13 +1419,13 @@ impl Vm {
                 .iter()
                 .last()
                 .cloned()
-                .ok_or_else(|| VmError::new("LAST of empty list"))?,
+                .ok_or_else(|| doesnt_like_as_input("last", &args[0], &self.interner))?,
             Value::Array(array) => array
                 .to_list()
                 .iter()
                 .last()
                 .cloned()
-                .ok_or_else(|| VmError::new("LAST of empty array"))?,
+                .ok_or_else(|| doesnt_like_as_input("last", &args[0], &self.interner))?,
         };
         Ok(PrimitiveResult::Value(value))
     }
@@ -1462,7 +1462,7 @@ impl Vm {
     fn fput(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("fput", &args, 2)?;
         let Value::List(list) = &args[1] else {
-            return Err(VmError::new("FPUT second input must be a list"));
+            return Err(doesnt_like_as_input("fput", &args[1], &self.interner));
         };
         Ok(PrimitiveResult::Value(Value::List(List::cons(
             args[0].clone(),
@@ -1473,7 +1473,7 @@ impl Vm {
     fn lput(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("lput", &args, 2)?;
         let Value::List(list) = &args[1] else {
-            return Err(VmError::new("LPUT second input must be a list"));
+            return Err(doesnt_like_as_input("lput", &args[1], &self.interner));
         };
         let mut values: Vec<Value> = list.iter().cloned().collect();
         values.push(args[0].clone());
@@ -1579,7 +1579,7 @@ impl Vm {
             Value::List(list) => {
                 let values = list_values(list);
                 if values.is_empty() {
-                    return Err(VmError::new("RANPICK of empty list"));
+                    return Err(doesnt_like_as_input("ranpick", &args[0], &self.interner));
                 }
                 let index = (self.next_random_u64() as usize) % values.len();
                 Ok(PrimitiveResult::Value(values[index].clone()))
@@ -1587,7 +1587,7 @@ impl Vm {
             Value::Array(array) => {
                 let values = list_values(&array.to_list());
                 if values.is_empty() {
-                    return Err(VmError::new("RANPICK of empty array"));
+                    return Err(doesnt_like_as_input("ranpick", &args[0], &self.interner));
                 }
                 let index = (self.next_random_u64() as usize) % values.len();
                 Ok(PrimitiveResult::Value(values[index].clone()))
@@ -4114,9 +4114,19 @@ fn output_target_name(target: &OutputTarget, interner: &Interner) -> String {
     }
 }
 
+fn doesnt_like_as_input(primitive: &str, value: &Value, interner: &Interner) -> VmError {
+    VmError::new(format!(
+        "{primitive} doesn't like {} as input",
+        value.show(interner)
+    ))
+}
+
 fn infer_error_info(message: &str) -> Option<ErrorInfo> {
     if message.contains(" didn't output to ") || message.contains(" didn't output a value") {
         return Some(ErrorInfo::new(5, message));
+    }
+    if message.contains(" doesn't like ") && message.ends_with(" as input") {
+        return Some(ErrorInfo::new(4, message));
     }
     if let Some(name) = message.strip_prefix("not enough inputs to ") {
         return Some(ErrorInfo::new(6, format!("not enough inputs to {name}")));
@@ -5958,6 +5968,56 @@ mod tests {
             list.item(2).unwrap().show(vm.interner()),
             "[something broke]"
         );
+    }
+
+    #[test]
+    fn catch_error_records_bad_input_code_and_context() {
+        let mut vm = Vm::new();
+        vm.eval_source("catch \"error [first []]\n").unwrap();
+        let PrimitiveResult::Value(Value::List(list)) = vm.error(vec![]).unwrap() else {
+            panic!("ERROR should output a list");
+        };
+        assert_eq!(list.item(1).unwrap().show(vm.interner()), "4");
+        assert_eq!(
+            list.item(2).unwrap().show(vm.interner()),
+            "first doesn't like [] as input"
+        );
+        assert_eq!(list.item(3).unwrap().show(vm.interner()), "first");
+    }
+
+    #[test]
+    fn first_of_empty_list_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("first []").unwrap_err();
+        assert_eq!(error.message, "first doesn't like [] as input");
+    }
+
+    #[test]
+    fn last_of_empty_array_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("last array 0").unwrap_err();
+        assert_eq!(error.message, "last doesn't like {} as input");
+    }
+
+    #[test]
+    fn ranpick_of_empty_list_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("ranpick []").unwrap_err();
+        assert_eq!(error.message, "ranpick doesn't like [] as input");
+    }
+
+    #[test]
+    fn fput_with_non_list_second_input_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("fput 1 2").unwrap_err();
+        assert_eq!(error.message, "fput doesn't like 2 as input");
+    }
+
+    #[test]
+    fn lput_with_non_list_second_input_reports_ucblogo_style_message() {
+        let mut vm = Vm::new();
+        let error = vm.eval_source("lput 1 2").unwrap_err();
+        assert_eq!(error.message, "lput doesn't like 2 as input");
     }
 
     #[test]

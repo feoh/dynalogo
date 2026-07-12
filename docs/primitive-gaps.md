@@ -113,9 +113,10 @@ Recent work improved several important semantics:
 - `You don't say what to do with X`
 - `CATCH "ERROR`
 - last-error reporting through `ERROR`
+- `X doesn't like Y as input` (error code 4) for `FIRST`/`LAST`/`FPUT`/`LPUT`/
+  `RANPICK` wrong-type and empty-collection inputs
 
 Still pending is a broader pass to match UCBLogo wording/numbering, plus any
 remaining edge cases surfaced by the compatibility suite and manual audit. See
-`docs/ucblogo-error-audit.md` for a full site-by-site audit of current error
-wording versus the UCBLogo error-code map, and for the prioritized list of
-remaining wording gaps.
+`docs/ucblogo-error-audit.md` for the full site-by-site breakdown and the
+prioritized list of remaining wording gaps.
