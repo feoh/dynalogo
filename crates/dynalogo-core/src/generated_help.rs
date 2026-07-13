@@ -18,6 +18,26 @@ pub struct GeneratedHelpTopic {
 
 pub static HELP_TOPICS: &[GeneratedHelpTopic] = &[
     GeneratedHelpTopic {
+        id: r#"apropos"#,
+        title: r#"APROPOS"#,
+        kind: r#"primitive"#,
+        category: r#"help"#,
+        names: &[r#"APROPOS"#],
+        signature: Some(r#"APROPOS keyword"#),
+        aliases: &[],
+        summary: r#"Search help topic IDs, names, aliases, summaries, categories, and tags."#,
+        tags: &[r#"help"#, r#"search"#, r#"documentation"#],
+        see_also: &[r#"help"#],
+        status: r#"implemented"#,
+        body: r#"`APROPOS` searches the embedded help index for a word or phrase and prints
+matching topic IDs with short summaries.
+
+```logo
+apropos "turtle
+apropos "window
+```"#,
+    },
+    GeneratedHelpTopic {
         id: r#"browser-filesystem"#,
         title: r#"Browser filesystem limits"#,
         kind: r#"compatibility"#,
@@ -76,6 +96,28 @@ pen is down, DynaLOGO draws a line as the turtle moves.
 fd 100
 forward 50
 repeat 4 [fd 80 rt 90]
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"help"#,
+        title: r#"HELP / HELPON"#,
+        kind: r#"primitive"#,
+        category: r#"help"#,
+        names: &[r#"HELP"#, r#"HELPON"#],
+        signature: Some(r#"HELP [topic]"#),
+        aliases: &[r#"HELPON"#],
+        summary: r#"Show interactive help topics from DynaLOGO's embedded help index."#,
+        tags: &[r#"help"#, r#"documentation"#, r#"topics"#],
+        see_also: &[r#"apropos"#],
+        status: r#"implemented"#,
+        body: r#"`HELP` with no input lists available help categories and starter examples.
+`HELP` with a topic word prints that topic. `HELPON` is an exact-topic form
+that requires one input.
+
+```logo
+help
+help "fd
+helpon "lists
 ```"#,
     },
     GeneratedHelpTopic {

@@ -126,7 +126,27 @@ end
 
 DynaLOGO currently uses **dynamic scope** in the classic Logo style.
 
-## 4. Evaluation and control
+## 4. Interactive help
+
+DynaLOGO includes an embedded help index generated from the canonical topic
+files under [`help/topics/`](help/topics/). The generated reference is
+[`help-reference.md`](help-reference.md).
+
+Use `HELP` with no input for category overview, `HELP` or `HELPON` with a topic
+word for exact help, and `APROPOS` for keyword search:
+
+```logo
+help
+help "fd
+helpon "lists
+apropos "window
+```
+
+The help text is embedded at compile time, so it works in terminal, native
+window, release-package, and browser/WASM builds without reading documentation
+files at runtime.
+
+## 5. Evaluation and control
 
 ### Basic control primitives
 
@@ -159,7 +179,7 @@ can inspect or mutate local state before continuing. Entering `OUTPUT`, `STOP`,
 or `THROW` while paused resumes the enclosing computation with that control
 flow.
 
-## 5. Data, arithmetic, and predicates
+## 6. Data, arithmetic, and predicates
 
 ### Arithmetic and numeric utilities
 
@@ -196,7 +216,7 @@ Implemented array/template surface includes:
 Template support is usable, but full UCBLogo parity still has open edges and
 follow-up work.
 
-## 6. Variables, workspace, and property lists
+## 7. Variables, workspace, and property lists
 
 ### Variables
 
@@ -251,7 +271,7 @@ same editor session machinery for shape definitions: it renders current shapes
 as editable `PUTSH` commands and evaluates the edited buffer when the editor
 exits. Browser users can also use the web shape-editor panel.
 
-## 7. Console I/O
+## 8. Console I/O
 
 Implemented console-oriented commands:
 
@@ -263,7 +283,7 @@ Implemented console-oriented commands:
 `PRINT` adds a newline. `TYPE` writes output without forcing the same printed
 representation style as `SHOW`.
 
-## 8. Classic turtle graphics
+## 9. Classic turtle graphics
 
 Classic single-turtle-style commands are implemented and now operate through the
 same TurtleStore-backed engine used by dynaturtles.
@@ -314,7 +334,7 @@ same TurtleStore-backed engine used by dynaturtles.
 
 The native window frontend renders line events and turtle state visually.
 
-## 9. Dynaturtles
+## 10. Dynaturtles
 
 Dynaturtles are the main extension that differentiates DynaLOGO from a purely
 classic Logo implementation.
@@ -431,7 +451,7 @@ Implemented sound event primitive:
 `TOOT` records a 4-byte sound event in the VM. The native window frontend uses
 this to play a short bark-like sound and display a visible `TOOT!` flash.
 
-## 10. Examples and demo gallery
+## 11. Examples and demo gallery
 
 See [`../examples/README.md`](../examples/README.md).
 
@@ -448,7 +468,7 @@ Current notable examples include:
 - `shape_parade.lgo` — a simple shape-rendering showcase
 - `dogs_in_the_park.lgo` — collision-driven barking with `WHEN` and `TOOT`
 
-## 11. Known differences, limits, and honesty notes
+## 12. Known differences, limits, and honesty notes
 
 This manual describes what is implemented now. Important current limitations
 include:
@@ -501,7 +521,7 @@ same. The real differences are:
   commands into the same evaluator the in-canvas prompt uses; the native
   window only has the in-canvas prompt.
 
-## 12. Suggested reading order
+## 13. Suggested reading order
 
 If you are new to the project, read in this order:
 

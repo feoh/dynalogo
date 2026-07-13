@@ -14,6 +14,9 @@ editing this file directly.
   - [`lists`](#lists) — Lists are bracketed sequences used for data and instruction lists.
 - **frontends**
   - [`window-input`](#window-input) — The native window prompt supports editing, history, exit commands, and text scaling.
+- **help**
+  - [`apropos`](#apropos) — Search help topic IDs, names, aliases, summaries, categories, and tags.
+  - [`help`](#help) — Show interactive help topics from DynaLOGO's embedded help index.
 - **syntax**
   - [`expressions`](#expressions) — Logo expressions are parsed by command arity, inputs, and infix operators.
 - **turtle-graphics**
@@ -85,6 +88,51 @@ Editing controls:
 
 ```logo
 repeat 36 [fd 120 rt 170]
+```
+
+## help
+
+### apropos
+
+**APROPOS**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/apropos.md`
+- Names: `APROPOS`
+- Signature: `APROPOS keyword`
+- Tags: `help`, `search`, `documentation`
+- See also: `help`
+
+`APROPOS` searches the embedded help index for a word or phrase and prints
+matching topic IDs with short summaries.
+
+```logo
+apropos "turtle
+apropos "window
+```
+
+### help
+
+**HELP / HELPON**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/help.md`
+- Names: `HELP`, `HELPON`
+- Signature: `HELP [topic]`
+- Aliases: `HELPON`
+- Tags: `help`, `documentation`, `topics`
+- See also: `apropos`
+
+`HELP` with no input lists available help categories and starter examples.
+`HELP` with a topic word prints that topic. `HELPON` is an exact-topic form
+that requires one input.
+
+```logo
+help
+help "fd
+helpon "lists
 ```
 
 ## syntax

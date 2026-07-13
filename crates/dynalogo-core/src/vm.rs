@@ -915,6 +915,8 @@ impl Vm {
             "supersort" => self.supersort(args),
             "print" | "pr" => self.print(args),
             "show" => self.show(args),
+            "help" | "helpon" => self.help(args),
+            "apropos" => self.apropos(args),
             "type" => self.r#type(args),
             "load" => self.load(args),
             "save" => self.save(args),
@@ -1685,6 +1687,31 @@ impl Vm {
     fn r#type(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("type", &args, 1)?;
         self.write_output_fragment(&args[0].show(&self.interner))?;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn help(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        if args.len() > 1 {
+            return Err(VmError::new("too many inputs to HELP"));
+        }
+        let output = if let Some(topic) = args.first() {
+            let query = source_text_input(topic, &self.interner);
+            match crate::help::topic(&query) {
+                Some(topic) => crate::help::format_topic(topic),
+                None => crate::help::format_unknown(&query),
+            }
+        } else {
+            crate::help::overview()
+        };
+        self.write_output_line(&output)?;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn apropos(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("apropos", &args, 1)?;
+        let query = source_text_input(&args[0], &self.interner);
+        let topics = crate::help::search(&query);
+        self.write_output_line(&crate::help::format_search(&query, &topics))?;
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -4751,6 +4778,9 @@ fn primitive_names() -> &'static [&'static str] {
         "pr",
         "show",
         "type",
+        "help",
+        "helpon",
+        "apropos",
         "load",
         "save",
         "setread",
@@ -5224,6 +5254,43 @@ mod tests {
     fn runs_infix_precedence() {
         let (result, _) = run("print 2+3*4").unwrap();
         assert_eq!(result.output, "14\n");
+    }
+
+    #[test]
+    fn help_without_topic_lists_categories() {
+        let (result, _) = run("help").unwrap();
+        assert!(result.output.contains("DynaLOGO help topics"));
+        assert!(result.output.contains("Try: HELP \"fd"));
+    }
+
+    #[test]
+    fn help_topic_lookup_accepts_id_name_and_alias() {
+        let (result, _) = run("help \"fd").unwrap();
+        assert!(result.output.contains("FORWARD / FD"));
+        assert!(result.output.contains("Signature: FORWARD distance"));
+
+        let (result, _) = run("helpon \"FORWARD").unwrap();
+        assert!(result.output.contains("Move the selected turtle"));
+    }
+
+    #[test]
+    fn apropos_searches_generated_help_index() {
+        let (result, _) = run("apropos \"window").unwrap();
+        assert!(result.output.contains("window-input"));
+        assert!(result.output.contains("native window prompt"));
+    }
+
+    #[test]
+    fn unknown_help_topic_suggests_close_matches() {
+        let (result, _) = run("help \"fdd").unwrap();
+        assert!(result.output.contains("No help topic named"));
+        assert!(result.output.contains("fd"));
+    }
+
+    #[test]
+    fn primitivep_reports_help_primitives() {
+        let (result, _) = run("print primitivep \"help print primitivep \"apropos").unwrap();
+        assert_eq!(result.output, "true\ntrue\n");
     }
 
     #[test]

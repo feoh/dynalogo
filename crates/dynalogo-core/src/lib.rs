@@ -4,6 +4,7 @@ pub mod demon;
 pub mod dynaturtle;
 pub mod generated_help;
 pub mod graphics;
+pub mod help;
 pub mod lexer;
 pub mod parser;
 pub mod runtime;

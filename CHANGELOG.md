@@ -22,6 +22,8 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
   topics for future runtime `HELP` / `APROPOS` content.
 - Added a help-topic generator that emits `docs/help-reference.md` and embedded
   Rust help data from the canonical topic files, with CI drift checking.
+- Added core `HELP`/`HELPON` and `APROPOS` primitives backed by the generated
+  embedded help index.
 
 ### Fixed
 

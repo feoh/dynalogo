@@ -15,6 +15,7 @@ use crate::value::{parse_logo_number, Interner, List, Symbol, Value};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Arity {
     Exact(usize),
+    Between { min: usize, max: usize },
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +36,8 @@ impl ArityTable {
             ("OUTPUT", 1),
             ("OP", 1),
             ("STOP", 0),
+            ("HELPON", 1),
+            ("APROPOS", 1),
             ("REPEAT", 2),
             ("FOREVER", 1),
             ("IF", 2),
@@ -270,6 +273,7 @@ impl ArityTable {
         ] {
             table.insert(name, Arity::Exact(arity));
         }
+        table.insert("HELP", Arity::Between { min: 0, max: 1 });
         table
     }
 
@@ -439,9 +443,20 @@ impl<'a> Parser<'a> {
 
         let callee = self.interner.intern(&word);
         match self.arities.get(&word) {
-            Some(Arity::Exact(arity)) => {
-                let mut args = Vec::with_capacity(arity);
-                for _ in 0..arity {
+            Some(arity) => {
+                let (min, max) = match arity {
+                    Arity::Exact(arity) => (arity, arity),
+                    Arity::Between { min, max } => (min, max),
+                };
+                let optional = min < max;
+                let mut args = Vec::with_capacity(max);
+                for _ in 0..max {
+                    if args.len() >= min
+                        && (self.is_at_end()
+                            || optional && self.peek().is_some_and(|token| token.line > line))
+                    {
+                        break;
+                    }
                     match self.parse_expression(0) {
                         Ok(arg) => args.push(arg),
                         Err(error)
@@ -449,6 +464,9 @@ impl<'a> Parser<'a> {
                                 || error.message == "unexpected delimiter"
                                 || error.message == "unexpected closing delimiter" =>
                         {
+                            if args.len() >= min {
+                                break;
+                            }
                             return Err(ParseError {
                                 message: format!("not enough inputs to {word}"),
                                 line,
@@ -709,6 +727,41 @@ mod tests {
         };
         assert_eq!(sym_name(&interner, *callee), "sum");
         assert_eq!(args.len(), 2);
+    }
+
+    #[test]
+    fn parses_help_with_optional_topic_input() {
+        let (program, interner) = parse("help");
+        let Expr::Call { callee, args, .. } = &program.expressions()[0] else {
+            panic!("expected HELP");
+        };
+        assert_eq!(sym_name(&interner, *callee), "help");
+        assert!(args.is_empty());
+
+        let (program, interner) = parse("help \"fd");
+        let Expr::Call { callee, args, .. } = &program.expressions()[0] else {
+            panic!("expected HELP");
+        };
+        assert_eq!(sym_name(&interner, *callee), "help");
+        assert_eq!(args.len(), 1);
+    }
+
+    #[test]
+    fn optional_help_topic_does_not_consume_next_line() {
+        let (program, interner) = parse("help\nprint \"ok");
+        assert_eq!(program.expressions().len(), 2);
+
+        let Expr::Call { callee, args, .. } = &program.expressions()[0] else {
+            panic!("expected HELP");
+        };
+        assert_eq!(sym_name(&interner, *callee), "help");
+        assert!(args.is_empty());
+
+        let Expr::Call { callee, args, .. } = &program.expressions()[1] else {
+            panic!("expected PRINT");
+        };
+        assert_eq!(sym_name(&interner, *callee), "print");
+        assert_eq!(args.len(), 1);
     }
 
     #[test]

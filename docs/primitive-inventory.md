@@ -72,6 +72,11 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - Infix operators: `+`, `-`, `*`, `/`, `<`, `>`, `=`, `<=`, `>=`, `<>`
 - `AND`, `OR`, `NOT`
 
+## Interactive help
+
+- `HELP`/`HELPON`
+- `APROPOS`
+
 ## Console I/O and outside-world helpers
 
 - `PRINT`/`PR`
