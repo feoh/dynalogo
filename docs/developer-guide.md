@@ -105,6 +105,12 @@ Collision/event flow is roughly:
 4. demon scheduling (`WHEN`)
 5. instruction-list execution for triggered demons
 
+`collision::SpatialHash` is the broad phase for turtle/turtle collisions. It
+sorts occupied cells for deterministic traversal, emits same-cell pairs and only
+forward neighboring-cell pairs so each candidate is produced once, then sorts
+`CollisionPair` output by turtle id. Keep this duplicate-free invariant intact
+when changing collision performance.
+
 If you are changing dynaturtle semantics, inspect `dynaturtle.rs`, `demon.rs`,
 and the `Vm::dynaturtle_tick` path together.
 
@@ -119,6 +125,24 @@ They are mainly responsible for:
 - drawing from `TurtleEvent` streams and turtle snapshots
 - advancing dynaturtle ticks in the window/browser path
 - handling frontend-only concerns like browser command queues or sound output
+
+The macroquad window keeps UI responsiveness separate from Logo semantics:
+
+- The turtle trail is cached by `graphics::RasterCache`, which incrementally
+  applies newly appended drawing events and writes transparent RGBA bytes for a
+  persistent macroquad `Texture2D`. The cache rebuilds when the event log is
+  truncated, the window texture size changes, or `SETSCRUNCH` changes. Labels
+  and live turtle sprites remain vector/frontend draws on top of the cached
+  trail.
+- Native command evaluation is queued and run on an `EvalWorker` thread using a
+  cloned `Vm`. The frame loop continues accepting input and rendering while the
+  worker runs, then swaps in the returned VM/result. Simulation ticks pause
+  during a native eval so foreground and worker VM state cannot diverge.
+- Browser/WASM command evaluation uses the same queue shape but remains
+  synchronous because browser worker/thread integration is not enabled.
+- Dynaturtle simulation in `dynalogo-window` advances through `FixedTimestep`
+  using measured frame deltas rather than assuming exactly one rendered frame
+  per 1/60-second simulation tick.
 
 When behavior differs between native and browser builds, prefer documenting the
 limitation rather than forking language semantics.
@@ -155,6 +179,25 @@ repo uses:
 cargo fmt --check
 cargo test --workspace -q
 cargo clippy --workspace --all-targets -- -D warnings
+ruby scripts/validate_workflows.rb
+node web/shape_editor_test.js
+```
+
+For window/browser-facing changes, also smoke-build the WASM target when
+possible:
+
+```bash
+cargo build -p dynalogo --bin dynalogo-window --target wasm32-unknown-unknown
+```
+
+For performance-sensitive changes, at least compile the affected Criterion
+bench target in test mode, and run full benchmarks when comparing before/after
+numbers:
+
+```bash
+cargo bench -p dynalogo-core --bench collision_bench -- --test
+cargo bench -p dynalogo-core --bench dynaturtle_tick_bench -- --test
+cargo bench -p dynalogo-core --bench vm_bench -- --test
 ```
 
 ## Practical contributor advice

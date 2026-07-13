@@ -134,6 +134,12 @@ For performance-sensitive work:
 - prefer the native frontend or direct tests/benches over browser impressions
 - look for repeated instruction-list execution, high turtle counts, or heavy
   collision setups
+- remember that the native window caches the turtle trail in an incremental
+  texture layer; if trails look stale, check `RasterCache` invalidation for
+  resize, event-log truncation, and `SETSCRUNCH`
+- remember that native command evaluation runs on a background worker and pauses
+  simulation while it is in flight; browser/WASM command evaluation is still
+  synchronous
 - use the existing benchmark/perf work as precedent before changing core loops
 
 If you are changing runtime performance, validate with normal correctness checks
