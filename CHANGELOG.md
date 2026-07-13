@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD024 -->
+
 # Changelog
 
 All notable user-facing changes to DynaLOGO are documented here.
@@ -10,6 +12,34 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 ## [Unreleased]
 
 No changes yet.
+
+## [0.1.2] - 2026-07-13
+
+### Added
+
+- Added `graphics_bench` to compare full turtle-trail replay with incremental
+  `RasterCache` updates at 100- and 1,000-event scales.
+- Documented the performance architecture and validation workflow for trail
+  rendering, fixed timestep simulation, native command evaluation, and
+  collision benchmarks.
+
+### Changed
+
+- Replaced native window per-frame full turtle-trail raster replay with a
+  persistent `RasterCache` and `Texture2D` trail layer that incrementally
+  applies newly appended drawing events.
+- Advanced native window dynaturtle simulation through `FixedTimestep` using
+  measured frame deltas instead of assuming one 1/60-second tick per rendered
+  frame.
+- Queued native window commands and evaluated them on a background worker so
+  text entry and rendering can remain responsive while longer Logo commands run.
+- Optimized spatial-hash collision candidate generation to avoid `HashSet`
+  deduplication while preserving deterministic candidate ordering.
+
+### Fixed
+
+- Prevented high-refresh or overloaded native windows from changing simulation
+  speed by coupling dynaturtle ticks to elapsed time instead of frame count.
 
 ## [0.1.1] - 2026-07-12
 
@@ -44,6 +74,7 @@ Logo interpreter, native frontends, browser demo, and compatibility surface.
 - Browser/WASM demo published via GitHub Pages.
 - CI workflow running `cargo fmt`, `cargo clippy`, and `cargo test`.
 
-[Unreleased]: https://github.com/feoh/dynalogo/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/feoh/dynalogo/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/feoh/dynalogo/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/feoh/dynalogo/releases/tag/v0.1.1
 [0.1.0]: https://github.com/feoh/dynalogo/releases/tag/v0.1.0
