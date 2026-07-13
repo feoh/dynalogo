@@ -62,7 +62,7 @@ END
 - [`docs/README.md`](docs/README.md) — documentation index
 - [`docs/versioning.md`](docs/versioning.md) — versioning policy and
   changelog process
-- [`docs/releasing.md`](docs/releasing.md) — how crates.io releases are cut
+- [`docs/releasing.md`](docs/releasing.md) — how GitHub releases are cut
 
 ## Running DynaLOGO
 

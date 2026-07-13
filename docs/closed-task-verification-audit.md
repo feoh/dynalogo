@@ -29,7 +29,7 @@ At inventory time, these claimed artifact classes are present on the integrated 
   retired after its remaining actionable wording gaps were covered by
   code/tests.
 - Examples: `examples/dogs_in_the_park.lgo`, `examples/shape_parade.lgo`, `examples/spaceship_thrust.lgo`, `examples/bouncing_ball.lgo`, `examples/orbit_simulation.lgo`, `examples/pong_demons.lgo`, plus v0.1 examples.
-- Workflows: `.github/workflows/ci.yml`, `pages.yml`, `publish.yml`, `release.yml`, `changelog.yml`
+- Workflows: `.github/workflows/ci.yml`, `pages.yml`, `release.yml`, `changelog.yml`
 - Web artifacts: `web/index.html`, `web/mq_js_bundle.js`
 - UCBLogo fixtures: `crates/dynalogo-core/tests/ucblogo/*.lgo`, `*.out`, and `ucblogo_compatibility.rs`
 - Core fixtures: `crates/dynalogo-core/tests/fixtures/` contains arithmetic, control, templates, macros, negative_literals, catch_error, and unused-value cases.

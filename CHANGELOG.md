@@ -10,6 +10,12 @@ and the project follows [Semantic Versioning](https://semver.org/); see
 
 ## [Unreleased]
 
+### Removed
+
+- Removed the crates.io publishing workflow and related release instructions;
+  DynaLOGO releases are distributed as GitHub Release archives unless a concrete
+  external Rust-library consumer appears.
+
 ## [1.0.0] - 2026-07-13
 
 ### Added

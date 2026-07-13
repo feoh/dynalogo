@@ -38,8 +38,7 @@ tell whether the entry is meaningful — use judgment.
 ## Cutting a release
 
 Release automation is provided by the tag-triggered
-[`release.yml`](../.github/workflows/release.yml) and
-[`publish.yml`](../.github/workflows/publish.yml) workflows. Cutting a release
+[`release.yml`](../.github/workflows/release.yml) workflow. Cutting a release
 still requires a deliberate version/changelog commit:
 
 1. Move the `## [Unreleased]` entries into a new `## [x.y.z] - YYYY-MM-DD`
@@ -48,6 +47,5 @@ still requires a deliberate version/changelog commit:
    `dynalogo-core` workspace dependency version when starting `x.y.z`.
 3. Run the local validation and package checks, commit the release metadata,
    and push the commit to `main`.
-4. Create and push tag `vx.y.z`. The release workflow builds platform archives;
-   the publish workflow publishes the two crates when the configured
-   `CARGO_REGISTRY_TOKEN` secret/environment is available.
+4. Create and push tag `vx.y.z`. The release workflow builds platform archives
+   and publishes them as GitHub Release assets.
