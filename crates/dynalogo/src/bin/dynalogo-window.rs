@@ -24,7 +24,10 @@ use web_sys::HtmlTextAreaElement;
 const PROMPT_HEIGHT: f32 = 156.0;
 const LOG_LINES: usize = 5;
 const LOG_FONT_SIZE: f32 = 18.0;
-const INPUT_FONT_SIZE: f32 = 22.0;
+const DEFAULT_INPUT_FONT_SIZE: f32 = 22.0;
+const MIN_INPUT_FONT_SIZE: f32 = 14.0;
+const MAX_INPUT_FONT_SIZE: f32 = 42.0;
+const INPUT_FONT_SIZE_STEP: f32 = 2.0;
 const LOG_LINE_HEIGHT: f32 = 20.0;
 const PROMPT_TOP_PADDING: f32 = 12.0;
 const INPUT_BASELINE_OFFSET: f32 = 14.0;
@@ -73,6 +76,7 @@ struct App {
     command_queue: VecDeque<String>,
     eval_worker: EvalWorker,
     should_quit: bool,
+    input_font_size: f32,
 }
 
 impl App {
@@ -92,6 +96,7 @@ impl App {
             command_queue: VecDeque::new(),
             eval_worker: EvalWorker::idle(),
             should_quit: false,
+            input_font_size: DEFAULT_INPUT_FONT_SIZE,
         };
         sync_browser_log(&app.log);
         app
@@ -99,8 +104,9 @@ impl App {
 
     fn handle_input(&mut self) {
         let mut events = Vec::new();
+        let ctrl_down = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
         while let Some(ch) = get_char_pressed() {
-            if !ch.is_control() {
+            if !ctrl_down && !ch.is_control() {
                 events.push(InputEvent::Char(ch));
             }
         }
@@ -119,10 +125,14 @@ impl App {
         if is_key_pressed(KeyCode::Down) {
             events.push(InputEvent::HistoryNext);
         }
-        if is_key_down(KeyCode::LeftControl) && is_key_pressed(KeyCode::Q)
-            || is_key_down(KeyCode::RightControl) && is_key_pressed(KeyCode::Q)
-        {
+        if ctrl_down && is_key_pressed(KeyCode::Q) {
             self.request_quit();
+        }
+        if ctrl_down && (is_key_pressed(KeyCode::Equal) || is_key_pressed(KeyCode::KpAdd)) {
+            self.adjust_input_font_size(INPUT_FONT_SIZE_STEP);
+        }
+        if ctrl_down && (is_key_pressed(KeyCode::Minus) || is_key_pressed(KeyCode::KpSubtract)) {
+            self.adjust_input_font_size(-INPUT_FONT_SIZE_STEP);
         }
 
         for command in process_input_state_events(&mut self.input, events) {
@@ -153,6 +163,10 @@ impl App {
 
     fn request_quit(&mut self) {
         self.should_quit = true;
+    }
+
+    fn adjust_input_font_size(&mut self, delta: f32) {
+        self.input_font_size = adjust_input_font_size(self.input_font_size, delta);
     }
 
     fn poll_eval(&mut self) {
@@ -358,7 +372,12 @@ impl App {
     }
 
     fn draw_prompt(&self) {
-        let layout = prompt_layout(screen_height(), PROMPT_HEIGHT, LOG_LINES);
+        let layout = prompt_layout(
+            screen_height(),
+            PROMPT_HEIGHT,
+            LOG_LINES,
+            self.input_font_size,
+        );
         draw_rectangle(
             0.0,
             layout.top,
@@ -383,7 +402,7 @@ impl App {
             format!("? {}{cursor}", self.input.line()),
             12.0,
             layout.input_baseline,
-            INPUT_FONT_SIZE,
+            self.input_font_size,
             WHITE,
         );
     }
@@ -674,11 +693,12 @@ fn prompt_layout(
     screen_height: f32,
     prompt_height: f32,
     requested_log_lines: usize,
+    input_font_size: f32,
 ) -> PromptLayout {
     let top = (screen_height - prompt_height).max(0.0);
     let input_baseline = (screen_height - INPUT_BASELINE_OFFSET).max(0.0);
     let log_start_y = top + PROMPT_TOP_PADDING + LOG_FONT_SIZE;
-    let last_log_baseline = input_baseline - INPUT_FONT_SIZE - LOG_INPUT_GAP;
+    let last_log_baseline = input_baseline - input_font_size - LOG_INPUT_GAP;
     let available_height = (last_log_baseline - log_start_y).max(0.0);
     let available_lines = if log_start_y <= last_log_baseline {
         (available_height / LOG_LINE_HEIGHT).floor() as usize + 1
@@ -693,6 +713,10 @@ fn prompt_layout(
         log_lines: requested_log_lines.min(available_lines),
         input_baseline,
     }
+}
+
+fn adjust_input_font_size(current: f32, delta: f32) -> f32 {
+    (current + delta).clamp(MIN_INPUT_FONT_SIZE, MAX_INPUT_FONT_SIZE)
 }
 
 fn append_log_line(log: &mut Vec<String>, line: String, max_visible_lines: usize) {
@@ -1340,21 +1364,50 @@ mod tests {
 
     #[test]
     fn prompt_layout_keeps_five_history_lines_above_input() {
-        let layout = prompt_layout(768.0, PROMPT_HEIGHT, LOG_LINES);
+        let layout = prompt_layout(768.0, PROMPT_HEIGHT, LOG_LINES, DEFAULT_INPUT_FONT_SIZE);
         assert_eq!(layout.log_lines, LOG_LINES);
         assert!(layout.log_line_height >= LOG_FONT_SIZE);
 
         let last_log_baseline =
             layout.log_start_y + (layout.log_lines - 1) as f32 * layout.log_line_height;
-        assert!(last_log_baseline + INPUT_FONT_SIZE + LOG_INPUT_GAP <= layout.input_baseline);
+        assert!(
+            last_log_baseline + DEFAULT_INPUT_FONT_SIZE + LOG_INPUT_GAP <= layout.input_baseline
+        );
     }
 
     #[test]
     fn prompt_layout_reduces_history_capacity_for_compact_windows() {
-        let layout = prompt_layout(120.0, PROMPT_HEIGHT, LOG_LINES);
+        let layout = prompt_layout(120.0, PROMPT_HEIGHT, LOG_LINES, DEFAULT_INPUT_FONT_SIZE);
         assert!(layout.log_lines < LOG_LINES);
         assert!(layout.top >= 0.0);
         assert!(layout.input_baseline >= layout.top);
+    }
+
+    #[test]
+    fn prompt_layout_accounts_for_larger_input_font() {
+        let normal = prompt_layout(768.0, PROMPT_HEIGHT, LOG_LINES, DEFAULT_INPUT_FONT_SIZE);
+        let large = prompt_layout(768.0, PROMPT_HEIGHT, LOG_LINES, MAX_INPUT_FONT_SIZE);
+        assert!(large.log_lines <= normal.log_lines);
+
+        let last_log_baseline =
+            large.log_start_y + large.log_lines.saturating_sub(1) as f32 * large.log_line_height;
+        assert!(last_log_baseline + MAX_INPUT_FONT_SIZE + LOG_INPUT_GAP <= large.input_baseline);
+    }
+
+    #[test]
+    fn adjust_input_font_size_clamps_to_supported_range() {
+        assert_eq!(
+            adjust_input_font_size(DEFAULT_INPUT_FONT_SIZE, INPUT_FONT_SIZE_STEP),
+            DEFAULT_INPUT_FONT_SIZE + INPUT_FONT_SIZE_STEP
+        );
+        assert_eq!(
+            adjust_input_font_size(MAX_INPUT_FONT_SIZE, INPUT_FONT_SIZE_STEP),
+            MAX_INPUT_FONT_SIZE
+        );
+        assert_eq!(
+            adjust_input_font_size(MIN_INPUT_FONT_SIZE, -INPUT_FONT_SIZE_STEP),
+            MIN_INPUT_FONT_SIZE
+        );
     }
 
     #[test]
