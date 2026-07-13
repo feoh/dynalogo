@@ -4,13 +4,28 @@
 //! semantics rather than a stub marker, so this renders onto a pixel buffer
 //! that frontends can blit.
 
-use crate::turtle::{PenMode, Point, TurtleEvent};
+use crate::turtle::{events_since_clear, PenMode, Point, TurtleEvent};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SoftwareCanvas {
     width: usize,
     height: usize,
     pixels: Vec<Option<u32>>,
+}
+
+/// Incremental raster cache for a turtle-event trail.
+///
+/// Frontends can keep one of these alive across frames, call `update` with the
+/// complete event log, and upload the RGBA bytes only when the return value is
+/// `true`. The cache falls back to a full replay when the event log is truncated
+/// or `SETSCRUNCH` changes, but otherwise applies only newly appended drawing
+/// events.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RasterCache {
+    canvas: SoftwareCanvas,
+    event_cursor: usize,
+    x_scrunch: f64,
+    y_scrunch: f64,
 }
 
 impl SoftwareCanvas {
@@ -38,6 +53,25 @@ impl SoftwareCanvas {
 
     pub fn pixel(&self, x: usize, y: usize) -> Option<u32> {
         self.pixels[y * self.width + x]
+    }
+
+    pub fn write_rgba_bytes(&self, bytes: &mut Vec<u8>) {
+        let required_len = self.width * self.height * 4;
+        bytes.resize(required_len, 0);
+        for (index, pixel) in self.pixels.iter().enumerate() {
+            let offset = index * 4;
+            if let Some(color) = pixel {
+                bytes[offset] = ((color >> 16) & 0xff) as u8;
+                bytes[offset + 1] = ((color >> 8) & 0xff) as u8;
+                bytes[offset + 2] = (color & 0xff) as u8;
+                bytes[offset + 3] = 255;
+            } else {
+                bytes[offset] = 0;
+                bytes[offset + 1] = 0;
+                bytes[offset + 2] = 0;
+                bytes[offset + 3] = 0;
+            }
+        }
     }
 
     pub fn color_at_logo_point(&self, point: Point) -> Option<u32> {
@@ -165,6 +199,122 @@ impl SoftwareCanvas {
         let y = (self.height as f64 / 2.0 - point.y).round() as i32;
         (x, y)
     }
+}
+
+impl RasterCache {
+    pub fn new(width: usize, height: usize) -> Self {
+        Self {
+            canvas: SoftwareCanvas::new(width, height),
+            event_cursor: 0,
+            x_scrunch: 1.0,
+            y_scrunch: 1.0,
+        }
+    }
+
+    pub fn width(&self) -> usize {
+        self.canvas.width()
+    }
+
+    pub fn height(&self) -> usize {
+        self.canvas.height()
+    }
+
+    pub fn canvas(&self) -> &SoftwareCanvas {
+        &self.canvas
+    }
+
+    pub fn event_cursor(&self) -> usize {
+        self.event_cursor
+    }
+
+    pub fn write_rgba_bytes(&self, bytes: &mut Vec<u8>) {
+        self.canvas.write_rgba_bytes(bytes);
+    }
+
+    pub fn update(&mut self, events: &[TurtleEvent], x_scrunch: f64, y_scrunch: f64) -> bool {
+        if self.event_cursor > events.len()
+            || self.x_scrunch != x_scrunch
+            || self.y_scrunch != y_scrunch
+        {
+            self.rebuild(events, x_scrunch, y_scrunch);
+            return true;
+        }
+
+        let mut dirty = false;
+        for event in &events[self.event_cursor..] {
+            let event = scale_event(event, x_scrunch, y_scrunch);
+            if event_affects_pixels(&event) {
+                dirty = true;
+            }
+            self.canvas.apply_event(&event);
+        }
+        self.event_cursor = events.len();
+        dirty
+    }
+
+    pub fn rebuild(&mut self, events: &[TurtleEvent], x_scrunch: f64, y_scrunch: f64) {
+        self.canvas.clear();
+        self.x_scrunch = x_scrunch;
+        self.y_scrunch = y_scrunch;
+        for event in events_since_clear(events) {
+            self.canvas
+                .apply_event(&scale_event(event, x_scrunch, y_scrunch));
+        }
+        self.event_cursor = events.len();
+    }
+}
+
+pub fn scale_event(event: &TurtleEvent, x_scrunch: f64, y_scrunch: f64) -> TurtleEvent {
+    match event {
+        TurtleEvent::Line {
+            from,
+            to,
+            color,
+            width,
+            mode,
+        } => TurtleEvent::Line {
+            from: scale_point(*from, x_scrunch, y_scrunch),
+            to: scale_point(*to, x_scrunch, y_scrunch),
+            color: *color,
+            width: *width,
+            mode: *mode,
+        },
+        TurtleEvent::Label {
+            at,
+            text,
+            color,
+            height,
+        } => TurtleEvent::Label {
+            at: scale_point(*at, x_scrunch, y_scrunch),
+            text: text.clone(),
+            color: *color,
+            height: *height,
+        },
+        TurtleEvent::Fill { at, color } => TurtleEvent::Fill {
+            at: scale_point(*at, x_scrunch, y_scrunch),
+            color: *color,
+        },
+        TurtleEvent::State(state) => {
+            let mut state = *state;
+            state.position = scale_point(state.position, x_scrunch, y_scrunch);
+            TurtleEvent::State(state)
+        }
+        TurtleEvent::Clear => TurtleEvent::Clear,
+    }
+}
+
+pub fn scale_point(point: Point, x_scrunch: f64, y_scrunch: f64) -> Point {
+    Point {
+        x: point.x * x_scrunch,
+        y: point.y * y_scrunch,
+    }
+}
+
+fn event_affects_pixels(event: &TurtleEvent) -> bool {
+    matches!(
+        event,
+        TurtleEvent::Clear | TurtleEvent::Line { .. } | TurtleEvent::Fill { .. }
+    )
 }
 
 #[cfg(test)]
@@ -355,5 +505,113 @@ mod tests {
         }]);
 
         assert_eq!(canvas.color_at_logo_point(Point::new(0.0, 0.0)), None);
+    }
+
+    #[test]
+    fn canvas_writes_transparent_rgba_for_empty_pixels() {
+        let mut canvas = SoftwareCanvas::new(3, 3);
+        canvas.rasterize_events(&[TurtleEvent::Line {
+            from: Point::new(0.0, 0.0),
+            to: Point::new(0.0, 0.0),
+            color: 0x12_34_56,
+            width: 1.0,
+            mode: PenMode::Down,
+        }]);
+
+        let mut bytes = Vec::new();
+        canvas.write_rgba_bytes(&mut bytes);
+
+        assert!(bytes
+            .chunks_exact(4)
+            .any(|pixel| pixel == [0x12, 0x34, 0x56, 255]));
+        assert_eq!(&bytes[0..4], &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn raster_cache_applies_only_new_events() {
+        let line_a = TurtleEvent::Line {
+            from: Point::new(0.0, 0.0),
+            to: Point::new(1.0, 0.0),
+            color: 1,
+            width: 1.0,
+            mode: PenMode::Down,
+        };
+        let line_b = TurtleEvent::Line {
+            from: Point::new(0.0, 1.0),
+            to: Point::new(1.0, 1.0),
+            color: 2,
+            width: 1.0,
+            mode: PenMode::Down,
+        };
+        let mut cache = RasterCache::new(21, 21);
+        assert!(cache.update(std::slice::from_ref(&line_a), 1.0, 1.0));
+        assert_eq!(cache.event_cursor(), 1);
+        assert!(!cache.update(std::slice::from_ref(&line_a), 1.0, 1.0));
+
+        assert!(cache.update(&[line_a, line_b], 1.0, 1.0));
+        assert_eq!(cache.event_cursor(), 2);
+        assert_eq!(
+            cache.canvas().color_at_logo_point(Point::new(0.0, 0.0)),
+            Some(1)
+        );
+        assert_eq!(
+            cache.canvas().color_at_logo_point(Point::new(0.0, 1.0)),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn raster_cache_rebuilds_from_visible_suffix_after_clear() {
+        let old_line = TurtleEvent::Line {
+            from: Point::new(-3.0, 0.0),
+            to: Point::new(-3.0, 0.0),
+            color: 1,
+            width: 1.0,
+            mode: PenMode::Down,
+        };
+        let new_line = TurtleEvent::Line {
+            from: Point::new(3.0, 0.0),
+            to: Point::new(3.0, 0.0),
+            color: 2,
+            width: 1.0,
+            mode: PenMode::Down,
+        };
+        let events = vec![old_line, TurtleEvent::Clear, new_line];
+
+        let mut cache = RasterCache::new(21, 21);
+        cache.rebuild(&events, 1.0, 1.0);
+
+        assert_eq!(
+            cache.canvas().color_at_logo_point(Point::new(-3.0, 0.0)),
+            None
+        );
+        assert_eq!(
+            cache.canvas().color_at_logo_point(Point::new(3.0, 0.0)),
+            Some(2)
+        );
+        assert_eq!(cache.event_cursor(), events.len());
+    }
+
+    #[test]
+    fn raster_cache_rebuilds_when_scrunch_changes() {
+        let events = vec![TurtleEvent::Line {
+            from: Point::new(2.0, 0.0),
+            to: Point::new(2.0, 0.0),
+            color: 9,
+            width: 1.0,
+            mode: PenMode::Down,
+        }];
+        let mut cache = RasterCache::new(21, 21);
+        cache.update(&events, 1.0, 1.0);
+
+        assert!(cache.update(&events, 2.0, 1.0));
+        assert_eq!(
+            cache.canvas().color_at_logo_point(Point::new(2.0, 0.0)),
+            None
+        );
+        assert_eq!(
+            cache.canvas().color_at_logo_point(Point::new(4.0, 0.0)),
+            Some(9)
+        );
     }
 }

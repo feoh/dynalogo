@@ -1,5 +1,8 @@
+use std::time::Duration;
+
 use dynalogo_core::dynaturtle::TurtleId;
-use dynalogo_core::graphics::SoftwareCanvas;
+use dynalogo_core::graphics::{scale_event, scale_point, RasterCache};
+use dynalogo_core::sim::{FixedTimestep, SimConfig};
 use dynalogo_core::turtle::{events_since_clear, Point, TurtleEvent, TurtleState};
 use dynalogo_core::value::{List, Value};
 use dynalogo_core::vm::{ControlFlow, Vm};
@@ -21,7 +24,6 @@ const LOG_LINE_HEIGHT: f32 = 20.0;
 const PROMPT_TOP_PADDING: f32 = 12.0;
 const INPUT_BASELINE_OFFSET: f32 = 14.0;
 const LOG_INPUT_GAP: f32 = 8.0;
-const SIM_DT: f64 = 1.0 / 60.0;
 const CANVAS_BACKGROUND: Color = Color::new(18.0 / 255.0, 20.0 / 255.0, 26.0 / 255.0, 1.0);
 
 #[macroquad::main(window_conf)]
@@ -56,6 +58,8 @@ struct App {
     bark_sound: Option<Sound>,
     last_toot: Option<[u8; 4]>,
     bark_flash_until: f64,
+    timestep: FixedTimestep,
+    trail_texture: TrailTexture,
 }
 
 impl App {
@@ -70,6 +74,8 @@ impl App {
             bark_sound: load_sound_from_bytes(&generate_bark_wav()).await.ok(),
             last_toot: None,
             bark_flash_until: 0.0,
+            timestep: FixedTimestep::new(SimConfig::default()),
+            trail_texture: TrailTexture::new(1, 1),
         };
         sync_browser_log(&app.log);
         app
@@ -121,7 +127,15 @@ impl App {
     }
 
     fn update_sim(&mut self) {
-        match self.vm.dynaturtle_tick(SIM_DT) {
+        let elapsed = Duration::from_secs_f32(get_frame_time().max(0.0));
+        let mut timestep = std::mem::take(&mut self.timestep);
+        let tick_seconds = timestep.config().tick.as_secs_f64();
+        timestep.advance(elapsed, |_| self.run_sim_tick(tick_seconds));
+        self.timestep = timestep;
+    }
+
+    fn run_sim_tick(&mut self, tick_seconds: f64) {
+        match self.vm.dynaturtle_tick(tick_seconds) {
             Ok(ControlFlow::None | ControlFlow::Stop) => {}
             Ok(ControlFlow::Output(value)) => self.push_log(value.show(self.vm.interner())),
             Ok(ControlFlow::Continue) => {
@@ -157,12 +171,12 @@ impl App {
         }
     }
 
-    fn draw(&self) {
+    fn draw(&mut self) {
         self.draw_canvas();
         self.draw_prompt();
     }
 
-    fn draw_canvas(&self) {
+    fn draw_canvas(&mut self) {
         let canvas_height = screen_height() - PROMPT_HEIGHT;
         let screen_w = screen_width();
         draw_rectangle_lines(0.0, 0.0, screen_w, canvas_height, 2.0, GRAY);
@@ -184,35 +198,19 @@ impl App {
         );
 
         let (x_scrunch, y_scrunch) = self.vm.turtles().scrunch();
-        let visible: Vec<TurtleEvent> = events_since_clear(self.vm.turtles().events())
+        let events = self.vm.turtles().events();
+        self.trail_texture.draw(
+            events,
+            screen_w as usize,
+            canvas_height.max(1.0) as usize,
+            x_scrunch,
+            y_scrunch,
+        );
+
+        for event in events_since_clear(events)
             .iter()
             .map(|event| scale_event(event, x_scrunch, y_scrunch))
-            .collect();
-
-        let mut canvas = SoftwareCanvas::new(screen_w as usize, canvas_height.max(1.0) as usize);
-        canvas.rasterize_events(&visible);
-        for y in 0..canvas.height() {
-            let mut x = 0;
-            while x < canvas.width() {
-                let Some(color) = canvas.pixel(x, y) else {
-                    x += 1;
-                    continue;
-                };
-                let start_x = x;
-                while x < canvas.width() && canvas.pixel(x, y) == Some(color) {
-                    x += 1;
-                }
-                draw_rectangle(
-                    start_x as f32,
-                    y as f32,
-                    (x - start_x) as f32,
-                    1.0,
-                    logo_color(color),
-                );
-            }
-        }
-
-        for event in &visible {
+        {
             if let TurtleEvent::Label {
                 at,
                 text,
@@ -220,14 +218,8 @@ impl App {
                 height,
             } = event
             {
-                let at = logo_to_screen(*at, screen_w, canvas_height);
-                draw_text(
-                    text,
-                    at.x,
-                    at.y,
-                    (*height).max(1.0) as f32,
-                    logo_color(*color),
-                );
+                let at = logo_to_screen(at, screen_w, canvas_height);
+                draw_text(&text, at.x, at.y, height.max(1.0) as f32, logo_color(color));
             }
         }
 
@@ -332,6 +324,75 @@ impl App {
     fn push_log(&mut self, line: String) {
         append_log_line(&mut self.log, line, LOG_LINES);
         sync_browser_log(&self.log);
+    }
+}
+
+struct TrailTexture {
+    cache: RasterCache,
+    image: Image,
+    texture: Option<Texture2D>,
+}
+
+impl TrailTexture {
+    fn new(width: usize, height: usize) -> Self {
+        let (width, height) = texture_dimensions(width, height);
+        Self {
+            cache: RasterCache::new(width as usize, height as usize),
+            image: blank_image(width, height),
+            texture: None,
+        }
+    }
+
+    fn draw(
+        &mut self,
+        events: &[TurtleEvent],
+        width: usize,
+        height: usize,
+        x_scrunch: f64,
+        y_scrunch: f64,
+    ) {
+        let resized = self.resize_if_needed(width, height);
+        let dirty = self.cache.update(events, x_scrunch, y_scrunch);
+        if resized || dirty || self.texture.is_none() {
+            self.cache.write_rgba_bytes(&mut self.image.bytes);
+            match &self.texture {
+                Some(texture) => texture.update(&self.image),
+                None => {
+                    let texture = Texture2D::from_image(&self.image);
+                    texture.set_filter(FilterMode::Nearest);
+                    self.texture = Some(texture);
+                }
+            }
+        }
+
+        if let Some(texture) = &self.texture {
+            draw_texture(texture, 0.0, 0.0, WHITE);
+        }
+    }
+
+    fn resize_if_needed(&mut self, width: usize, height: usize) -> bool {
+        let (width, height) = texture_dimensions(width, height);
+        if self.cache.width() == width as usize && self.cache.height() == height as usize {
+            return false;
+        }
+        self.cache = RasterCache::new(width as usize, height as usize);
+        self.image = blank_image(width, height);
+        self.texture = None;
+        true
+    }
+}
+
+fn texture_dimensions(width: usize, height: usize) -> (u16, u16) {
+    let width = width.clamp(1, u16::MAX as usize) as u16;
+    let height = height.clamp(1, u16::MAX as usize) as u16;
+    (width, height)
+}
+
+fn blank_image(width: u16, height: u16) -> Image {
+    Image {
+        bytes: vec![0; width as usize * height as usize * 4],
+        width,
+        height,
     }
 }
 
@@ -536,45 +597,6 @@ fn draw_ship_sprite(center: Vec2, forward: Vec2, right: Vec2, phase: f32) {
         thruster - forward * flame,
         ORANGE,
     );
-}
-
-fn scale_point(point: Point, x_scrunch: f64, y_scrunch: f64) -> Point {
-    Point::new(point.x * x_scrunch, point.y * y_scrunch)
-}
-
-fn scale_event(event: &TurtleEvent, x_scrunch: f64, y_scrunch: f64) -> TurtleEvent {
-    match event {
-        TurtleEvent::Clear => TurtleEvent::Clear,
-        TurtleEvent::Line {
-            from,
-            to,
-            color,
-            width,
-            mode,
-        } => TurtleEvent::Line {
-            from: scale_point(*from, x_scrunch, y_scrunch),
-            to: scale_point(*to, x_scrunch, y_scrunch),
-            color: *color,
-            width: *width,
-            mode: *mode,
-        },
-        TurtleEvent::Label {
-            at,
-            text,
-            color,
-            height,
-        } => TurtleEvent::Label {
-            at: scale_point(*at, x_scrunch, y_scrunch),
-            text: text.clone(),
-            color: *color,
-            height: *height,
-        },
-        TurtleEvent::Fill { at, color } => TurtleEvent::Fill {
-            at: scale_point(*at, x_scrunch, y_scrunch),
-            color: *color,
-        },
-        TurtleEvent::State(state) => TurtleEvent::State(*state),
-    }
 }
 
 fn logo_to_screen(point: Point, screen_width: f32, canvas_height: f32) -> Vec2 {
@@ -850,7 +872,9 @@ mod tests {
             Value::list([Value::number(8.0), Value::number(-6.0)]),
             Value::list([Value::number(-8.0), Value::number(-6.0)]),
         ]);
-        let points = custom_shape_points(&value).unwrap();
+        let Some(points) = custom_shape_points(&value) else {
+            panic!("valid custom shape points");
+        };
         assert_eq!(points.len(), 3);
         assert_eq!(points[0], Vec2::new(0.0, 10.0));
     }
