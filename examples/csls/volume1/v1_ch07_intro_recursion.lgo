@@ -1,0 +1,44 @@
+; Examples from Computer Science Logo Style, Volume 1, Chapter 7: Introduction to Recursion
+; Source URL: https://people.eecs.berkeley.edu/~bh/v1ch7/recur1.html
+
+to downup :word
+print :word
+if equalp count :word 1 [stop]
+downup butlast :word
+print :word
+end
+
+downup "hello
+downup "goodbye
+
+to down :word
+print :word
+if equalp count :word 1 [stop]
+down butlast :word
+end
+
+to up :word
+if emptyp :word [stop]
+up butlast :word
+print :word
+end
+
+down "hello
+up "hello
+
+to countdown :number
+if equalp :number 0 [print "Blastoff! stop]
+print :number
+countdown difference :number 1
+end
+
+countdown 10
+
+to one.per.line :thing
+if emptyp :thing [stop]
+print first :thing
+one.per.line butfirst :thing
+end
+
+one.per.line "hello
+one.per.line [the rain in spain]

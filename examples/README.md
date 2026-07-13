@@ -25,6 +25,10 @@ Then paste a program into the prompt.
 
 ## Included examples
 
+### Computer Science Logo Style corpus
+
+- `csls/` — runnable examples adapted from Brian Harvey's *Computer Science Logo Style*, organized by volume/chapter with attribution, source URLs, and expected-output sidecars. See [`csls/README.md`](csls/README.md).
+
 ### Classic turtle graphics
 
 - `square.lgo` — basic turtle motion

@@ -1,0 +1,20 @@
+; Examples from Computer Science Logo Style, Volume 3, Chapter 2: Advanced Recursion
+; Source URL: https://people.eecs.berkeley.edu/~bh/v3ch2/math.html
+
+to combs :list :howmany
+if equalp :howmany 0 [output [[]]]
+if equalp :howmany count :list [output (list :list)]
+output sentence (map [fput first :list ?] combs (butfirst :list) (difference :howmany 1)) (combs (butfirst :list) :howmany)
+end
+
+show combs [a b c d e] 3
+
+to fact :n
+output cascade :n [# * ?] 1
+end
+
+to perms :n :r
+output (fact :n)/(fact (:n-:r))
+end
+
+print perms 5 3

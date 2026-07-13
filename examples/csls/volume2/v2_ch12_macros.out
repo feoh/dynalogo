@@ -1,0 +1,6 @@
+[local "fred make "fred 87]
+[start [a b] middle a b end]
+[local "bar apply "make [bar 99]]
+87
+before-stop
+after-top

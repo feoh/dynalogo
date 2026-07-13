@@ -1,0 +1,67 @@
+; Examples from Computer Science Logo Style, Volume 1, Chapter 8: Practical Recursion
+; Source URL: https://people.eecs.berkeley.edu/~bh/v1ch8/recur2.html
+
+to hanoi :number :from :to :other
+if equalp :number 0 [stop]
+hanoi :number-1 :from :other :to
+movedisk :number :from :to
+hanoi :number-1 :other :to :from
+end
+
+to movedisk :number :from :to
+print (sentence [Move disk] :number "from :from "to :to)
+end
+
+hanoi 3 "A "B "C
+
+to up :word
+if emptyp :word [stop]
+up butlast :word
+print :word
+end
+
+to down :word
+if emptyp :word [stop]
+print :word
+down butlast :word
+end
+
+to updown :word
+up :word
+down butlast :word
+end
+
+updown "hello
+
+to praise :flavors
+if emptyp :flavors [stop]
+print sentence [I love] first :flavors
+praise butfirst :flavors
+end
+
+praise [[ultra chocolate] [chocolate cinnamon raisin] ginger]
+
+to manyprint :number :text
+if equalp :number 0 [stop]
+print :text
+manyprint :number-1 :text
+end
+
+manyprint 4 [Lots of echo in this cavern.]
+
+to multiply :letters :number
+if equalp :number 0 [stop]
+print :letters
+multiply (word :letters first :letters) :number-1
+end
+
+multiply "f 5
+
+to two.per.line :stuff
+if emptyp :stuff [stop]
+if emptyp butfirst :stuff [show first :stuff stop]
+print list (first :stuff) (first butfirst :stuff)
+two.per.line butfirst butfirst :stuff
+end
+
+two.per.line [now here after glow worm]

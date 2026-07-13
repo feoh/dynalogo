@@ -1,0 +1,78 @@
+; Examples from Computer Science Logo Style, Volume 1, Chapter 5: Functions of Functions
+; Source URL: https://people.eecs.berkeley.edu/~bh/v1ch5/hof.html
+
+for [number 4 7] [print :number]
+for [value 4 11 3] [print :value]
+for [i 7 5] [print :i]
+for [n 15 2 -6] [print :n]
+
+
+to initials :name
+output map "first :name
+end
+
+show map "first [Rod Argent]
+show initials [Computer Science Logo Style]
+show initials [American Civil Liberties Union]
+show initials [Association for Computing Machinery]
+show initials [People's Republic of China]
+
+to importantp :word
+output not memberp :word [the an a of for by with in to and or]
+end
+
+to important.initials :name
+output map "first (filter "importantp :name)
+end
+
+show important.initials [Association for Computing Machinery]
+show important.initials [People's Republic of China]
+
+show filter "numberp [76 trombones, 4 calling birds, and 8 days]
+
+to beatlep :person
+output memberp :person [John Paul George Ringo]
+end
+
+show filter "beatlep [Bob George Jeff Roy Tom]
+
+show reduce "word [C S L S]
+show reduce "sum [3 4 5 6]
+
+to bigger :a :b
+output ifelse :a > :b [:a] [:b]
+end
+
+to biggest :nums
+output reduce "bigger :nums
+end
+
+show biggest [5 7 781 42 8]
+
+show map [sentence (word "With ?) "You] [in out]
+show map [sentence ? "Warner] [Yakko Wakko Dot]
+
+to power :base :exponent
+output cascade :exponent [? * :base] 1
+end
+
+print power 2 8
+
+to range :from :to
+output cascade :to-:from [sentence ? (1+last ?)] (sentence :from)
+end
+
+show range 3 8
+
+to fib :n
+output (cascade :n [?1 + ?2] 1 [?1] 0)
+end
+
+print fib 5
+print fib 23
+
+to reverse :sent
+output (cascade (count :sent) [sentence (first ?2) ?1] [] [butfirst ?2] :sent)
+end
+
+print reverse [how now brown cow]

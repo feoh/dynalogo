@@ -1,0 +1,31 @@
+; Examples from Computer Science Logo Style, Volume 3, Chapter 4: Language Design
+; Source URL: https://people.eecs.berkeley.edu/~bh/v3ch4/langd.html
+
+to fact :n
+if :n=0 [output 1]
+output :n * fact :n-1
+end
+
+print fact 5
+
+
+to increment :var
+make :var (thing :var)+1
+end
+
+make "baz 23
+increment "baz
+print :baz
+
+to hanoi :number :from :to :other
+if equalp :number 0 [stop]
+hanoi :number-1 :from :other :to
+movedisk :number :from :to
+hanoi :number-1 :other :to :from
+end
+
+to movedisk :number :from :to
+print (sentence [Move disk] :number "from :from "to :to)
+end
+
+hanoi 3 "a "b "c

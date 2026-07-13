@@ -1,0 +1,78 @@
+; Examples from Computer Science Logo Style, Volume 2, Chapter 8: Property Lists
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch8/plist.html
+
+pprop "book "French "livre
+pprop "book "German "buch
+print gprop "book "French
+print gprop "book "German
+show gprop "book "urdu
+
+pprop "book "pages 450
+print plist "book
+remprop "book "pages
+print plist "book
+
+to family :mom :dad :girls :boys
+catch "error [pprop :mom "sex "female]
+catch "error [pprop :dad "sex "male]
+foreach :girls [pprop ? "sex "female]
+foreach :boys [pprop ? "sex "male]
+localmake "kids sentence :girls :boys
+catch "error [pprop :mom "kids :kids]
+catch "error [pprop :dad "kids :kids]
+foreach :kids [pprop ? "mother :mom   pprop ? "father :dad]
+end
+
+family "Ann "Abraham [Betty] [Bill Bob]
+family "Amelia "Albert [Barbara] [Brian Boris]
+family "Betty [] [Cathy] [Colin]
+family "Barbara "Bob [Carol] [Charlie]
+family [] "Boris [] [Chris Cecil]
+
+to mother :person
+output gprop :person "mother
+end
+
+to father :person
+output gprop :person "father
+end
+
+to kids :person
+output gprop :person "kids
+end
+
+to sons :person
+output filter [equalp (gprop ? "sex) "male] kids :person
+end
+
+to grandchildren :person
+output map.se [gprop ? "kids] (kids :person)
+end
+
+to granddaughters :person
+output justgirls grandchildren :person
+end
+
+to justgirls :people
+output filter [equalp (gprop ? "sex) "female] :people
+end
+
+to siblings :person
+local "parent
+if emptyp :person [output []]
+make "parent mother :person
+if emptyp :parent [make "parent father :person]
+output remove :person kids :parent
+end
+
+to cousins :person
+output map.se [gprop ? "kids] sentence (siblings mother :person) ~
+                                       (siblings father :person)
+end
+
+show kids "Ann
+show sons "Ann
+show grandchildren "Ann
+show granddaughters "Ann
+show siblings "Bob
+show cousins "Cathy

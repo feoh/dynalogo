@@ -1,0 +1,10 @@
+state
+pos=(7.071, 7.071) heading=45.000 pen=down color=14 width=2.000 label_height=9.000 visible=true
+events
+clear
+line from=(0.000, 0.000) to=(0.000, 50.000) color=14 width=2.000 mode=down
+line from=(0.000, 50.000) to=(50.000, 50.000) color=14 width=2.000 mode=down
+line from=(50.000, 50.000) to=(50.000, 0.000) color=14 width=2.000 mode=down
+line from=(50.000, 0.000) to=(0.000, 0.000) color=14 width=2.000 mode=down
+label at=(7.071, 7.071) text="done" color=14 height=9.000
+fill at=(7.071, 7.071) color=14

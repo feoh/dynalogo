@@ -3394,11 +3394,7 @@ impl Vm {
         result_value(self.run(&chunk)?).map(PrimitiveResult::Value)
     }
 
-    fn apply(
-        &mut self,
-        args: Vec<Value>,
-        expects_value: bool,
-    ) -> Result<PrimitiveResult, VmError> {
+    fn apply(&mut self, args: Vec<Value>, expects_value: bool) -> Result<PrimitiveResult, VmError> {
         expect_min_arity("apply", &args, 2)?;
         let mut values = Vec::new();
         for input in &args[1..] {
@@ -3732,7 +3728,9 @@ impl Vm {
                     let expression = list_input(expression, ",@", &self.interner)?;
                     let value = result_value(self.execute_instruction_list_result(expression)?)?;
                     let Value::List(splice) = value else {
-                        return Err(VmError::new("backquote comma-at expression must output a list"));
+                        return Err(VmError::new(
+                            "backquote comma-at expression must output a list",
+                        ));
                     };
                     expanded.extend(list_values(&splice));
                     index += 2;
@@ -3757,11 +3755,13 @@ impl Vm {
 
     fn backquote_marker(&self, value: &Value) -> Option<&str> {
         match value {
-            Value::Word(symbol) | Value::BareWord(symbol) => match self.interner.spelling(*symbol) {
-                "," => Some(","),
-                ",@" => Some(",@"),
-                _ => None,
-            },
+            Value::Word(symbol) | Value::BareWord(symbol) => {
+                match self.interner.spelling(*symbol) {
+                    "," => Some(","),
+                    ",@" => Some(",@"),
+                    _ => None,
+                }
+            }
             Value::Number(_) | Value::List(_) | Value::Array(_) => None,
         }
     }
@@ -5204,8 +5204,21 @@ fn result_value(result: RunResult) -> Result<Value, VmError> {
 
 fn rank_value(value: &Value) -> usize {
     match value {
-        Value::List(list) => 1 + list.iter().map(|value| rank_value(&value)).max().unwrap_or(0),
-        Value::Array(array) => 1 + array.to_list().iter().map(|value| rank_value(&value)).max().unwrap_or(0),
+        Value::List(list) => {
+            1 + list
+                .iter()
+                .map(|value| rank_value(&value))
+                .max()
+                .unwrap_or(0)
+        }
+        Value::Array(array) => {
+            1 + array
+                .to_list()
+                .iter()
+                .map(|value| rank_value(&value))
+                .max()
+                .unwrap_or(0)
+        }
         Value::Word(_) | Value::BareWord(_) | Value::Number(_) => 0,
     }
 }

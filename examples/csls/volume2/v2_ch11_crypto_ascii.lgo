@@ -1,0 +1,7 @@
+; Examples from Computer Science Logo Style, Volume 2, Chapter 11: Cryptography
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch11/crypto.html
+
+print ascii "A
+print char 65
+print ascii "Z
+print char 90
