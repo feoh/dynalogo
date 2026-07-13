@@ -27,6 +27,8 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 - Expanded source-of-truth help coverage for primitive groups, data types,
   expression syntax, library procedures, and language features; the help
   generator now validates that every implemented primitive has topic coverage.
+- Surfaced interactive `HELP` / `APROPOS` hints in terminal and native/window
+  frontend onboarding text.
 
 ### Fixed
 

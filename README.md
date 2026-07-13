@@ -74,6 +74,8 @@ cargo run -p dynalogo --bin dynalogo
 
 Useful commands:
 
+- `help` / `help "fd` — show embedded interactive help
+- `apropos "turtle` — search help topics
 - `cargo run -p dynalogo --bin dynalogo -- --eval 'print sum 2 3'`
 - `cargo run -p dynalogo --bin dynalogo < examples/square.lgo`
 
@@ -84,8 +86,9 @@ cargo run -p dynalogo --bin dynalogo-window
 ```
 
 The window frontend keeps a small command log at the bottom and renders turtle
-lines on a centered Cartesian canvas. The prompt supports command editing with
-Left/Right, Home/End, Backspace, Delete, and Up/Down command history.
+lines on a centered Cartesian canvas. The startup log suggests `HELP` /
+`APROPOS` examples, and the prompt supports command editing with Left/Right,
+Home/End, Backspace, Delete, and Up/Down command history.
 
 ### Browser demo (WASM)
 

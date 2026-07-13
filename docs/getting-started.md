@@ -95,7 +95,14 @@ Launch the command-line frontend:
 cargo run -p dynalogo --bin dynalogo
 ```
 
-You should see a `?` prompt.
+You should see a short startup hint and a `?` prompt. Built-in help is
+available immediately:
+
+```logo
+help
+help "fd
+apropos "turtle
+```
 
 Try a simple arithmetic command:
 
@@ -188,9 +195,10 @@ The window shows:
 - a small command log at the bottom
 - a prompt where you can type or paste Logo commands
 
-The prompt supports normal single-line editing: Left/Right move the cursor,
-Home/End jump to the start/end, Backspace and Delete edit around the cursor,
-and Up/Down browse command history.
+The prompt starts with `HELP` / `APROPOS` examples. It supports normal
+single-line editing: Left/Right move the cursor, Home/End jump to the start/end,
+Backspace and Delete edit around the cursor, and Up/Down browse command
+history.
 
 Paste this into the window prompt:
 

@@ -87,10 +87,7 @@ impl App {
         let app = Self {
             vm: Vm::new(),
             input: InputState::default(),
-            log: vec![
-                "Type Logo commands, then Enter. Try: tell [0 1 2] each [setshape \"dog 12]"
-                    .to_string(),
-            ],
+            log: initial_log_lines(),
             bark_sound: load_sound_from_bytes(&generate_bark_wav()).await.ok(),
             last_toot: None,
             bark_flash_until: 0.0,
@@ -797,6 +794,13 @@ fn is_exit_command(command: &str) -> bool {
         command.trim().to_ascii_lowercase().as_str(),
         "exit" | "quit" | "bye"
     )
+}
+
+fn initial_log_lines() -> Vec<String> {
+    vec![
+        "Type Logo commands, then Enter. Try: help, help \"fd, or apropos \"turtle.".to_string(),
+        "Try graphics: tell [0 1 2] each [setshape \"dog 12]".to_string(),
+    ]
 }
 
 fn process_browser_commands(commands: Vec<String>) -> Vec<String> {
@@ -1627,6 +1631,13 @@ mod tests {
         assert!(is_exit_command(" QUIT "));
         assert!(is_exit_command("Bye"));
         assert!(!is_exit_command("print \"bye"));
+    }
+
+    #[test]
+    fn initial_log_mentions_interactive_help() {
+        let log = initial_log_lines().join("\n");
+        assert!(log.contains("help \"fd"));
+        assert!(log.contains("apropos \"turtle"));
     }
 
     #[test]

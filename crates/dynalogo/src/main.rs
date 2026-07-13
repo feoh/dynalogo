@@ -1,5 +1,5 @@
 use std::env;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::process::ExitCode;
 
 use dynalogo_core::vm::{ControlFlow, Vm};
@@ -35,15 +35,25 @@ fn run() -> Result<(), String> {
 }
 
 fn print_help() {
-    println!(
-        "DynaLOGO\n\nUSAGE:\n    dynalogo             Start the terminal REPL\n    dynalogo --eval SRC  Evaluate one Logo source string\n\nREPL:\n    ? prompt: enter Logo instructions\n    > prompt: continuing a TO ... END procedure definition\n    bye / exit / quit: leave the REPL"
-    );
+    println!("{}", usage_text());
+}
+
+fn usage_text() -> &'static str {
+    "DynaLOGO\n\nUSAGE:\n    dynalogo             Start the terminal REPL\n    dynalogo --eval SRC  Evaluate one Logo source string\n\nREPL:\n    ? prompt: enter Logo instructions\n    > prompt: continuing a TO ... END procedure definition\n    help / help \"fd: show interactive help\n    apropos \"turtle: search help topics\n    bye / exit / quit: leave the REPL"
+}
+
+fn repl_intro_text() -> &'static str {
+    "Type Logo instructions. Try: help, help \"fd, or apropos \"turtle. Use bye/exit/quit to leave."
 }
 
 fn repl() -> Result<(), String> {
     let stdin = io::stdin();
     let mut vm = Vm::new();
     let mut definition_buffer: Option<String> = None;
+
+    if stdin.is_terminal() {
+        println!("{}", repl_intro_text());
+    }
 
     loop {
         let in_definition = definition_buffer.is_some();
@@ -75,7 +85,9 @@ fn repl() -> Result<(), String> {
         if let Some(buffer) = &mut definition_buffer {
             buffer.push_str(&line);
             if trimmed.eq_ignore_ascii_case("end") {
-                let source = definition_buffer.take().expect("definition buffer exists");
+                let Some(source) = definition_buffer.take() else {
+                    return Err("internal error: missing procedure definition buffer".to_string());
+                };
                 eval_and_print(&mut vm, &source)?;
             }
             continue;
@@ -126,4 +138,23 @@ fn eval_and_print(vm: &mut Vm, source: &str) -> Result<(), String> {
 fn starts_with_logo_word(line: &str, word: &str) -> bool {
     let mut parts = line.split_whitespace();
     matches!(parts.next(), Some(first) if first.eq_ignore_ascii_case(word))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn usage_mentions_runtime_help() {
+        let usage = usage_text();
+        assert!(usage.contains("help \"fd"));
+        assert!(usage.contains("apropos \"turtle"));
+    }
+
+    #[test]
+    fn repl_intro_mentions_runtime_help() {
+        let intro = repl_intro_text();
+        assert!(intro.contains("help \"fd"));
+        assert!(intro.contains("apropos \"turtle"));
+    }
 }
