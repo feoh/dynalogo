@@ -1,4 +1,5 @@
 ; Source: Computer Science Logo Style, Volume 2 file/input examples.
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch1/files.html
 ; This deterministic input fixture exercises the same READWORD/READLIST/READCHAR
 ; shape without depending on an interactive terminal.
 print readword

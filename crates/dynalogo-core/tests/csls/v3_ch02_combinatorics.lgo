@@ -10,11 +10,11 @@ end
 show combs [a b c d e] 3
 
 to fact :n
-output cascade :n [product # ?] 1
+output cascade :n [# * ?] 1
 end
 
 to perms :n :r
-output quotient (fact :n) (fact difference :n :r)
+output (fact :n)/(fact (:n-:r))
 end
 
 print perms 5 3

@@ -3,7 +3,7 @@
 
 to fact :n
 if :n=0 [output 1]
-output product :n (fact difference :n 1)
+output :n * fact :n-1
 end
 
 print fact 5
@@ -19,9 +19,9 @@ print :baz
 
 to hanoi :number :from :to :other
 if equalp :number 0 [stop]
-hanoi difference :number 1 :from :other :to
+hanoi :number-1 :from :other :to
 movedisk :number :from :to
-hanoi difference :number 1 :other :to :from
+hanoi :number-1 :other :to :from
 end
 
 to movedisk :number :from :to

@@ -1,9 +1,9 @@
 ; Examples from Computer Science Logo Style, Volume 1, Chapter 5: Functions of Functions
 ; Source URL: https://people.eecs.berkeley.edu/~bh/v1ch5/hof.html
 
-for [number 4 7 1] [print :number]
+for [number 4 7] [print :number]
 for [value 4 11 3] [print :value]
-for [i 7 5 -1] [print :i]
+for [i 7 5] [print :i]
 for [n 15 2 -6] [print :n]
 
 
@@ -59,7 +59,7 @@ end
 print power 2 8
 
 to range :from :to
-output cascade difference :to :from [sentence ? (sum 1 last ?)] (sentence :from)
+output cascade :to-:from [sentence ? (1+last ?)] (sentence :from)
 end
 
 show range 3 8
