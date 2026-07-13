@@ -10,6 +10,23 @@ and the project follows [Semantic Versioning](https://semver.org/); see
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-13
+
+### Fixed
+
+- Fixed the native window ignoring `SETBG`; it always cleared the canvas with
+  a hardcoded color instead of the interpreter's background color.
+- Fixed `RANDOM`/`RANPICK` replaying the same sequence on every process
+  launch by seeding the PRNG from OS entropy at startup instead of a
+  hardcoded constant. `RERANDOM`'s deterministic reset for reproducible runs
+  is unchanged.
+- Fixed `TOOT` audio always falling back to the disabled-audio stub (and
+  printing a warning on every call) by enabling macroquad's `audio` feature.
+- Fixed the `dogs_in_the_park.lgo` example floating dogs through each other
+  with fixed starting positions; dogs now scatter to random positions and
+  headings, actually deflect on collision, and roam a fenced park with tree
+  obstacles using turtle<->pixel `WHEN [OVER ...]` collision.
+
 ### Removed
 
 - Removed the crates.io publishing workflow and related release instructions;
@@ -164,7 +181,8 @@ Logo interpreter, native frontends, browser demo, and compatibility surface.
 - Browser/WASM demo published via GitHub Pages.
 - CI workflow running `cargo fmt`, `cargo clippy`, and `cargo test`.
 
-[Unreleased]: https://github.com/feoh/dynalogo/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/feoh/dynalogo/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/feoh/dynalogo/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/feoh/dynalogo/compare/v0.1.4...v1.0.0
 [0.1.4]: https://github.com/feoh/dynalogo/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/feoh/dynalogo/compare/v0.1.2...v0.1.3
