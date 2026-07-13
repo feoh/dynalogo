@@ -142,6 +142,12 @@ Acceptance criteria:
   normalized event trace for drawn segments.
 - Graphics assertions remain backend-independent and run in headless CI.
 
+Implementation note: graphics-only CSLS fixtures live under
+`crates/dynalogo-core/tests/csls_graphics/` and are paired with `.trace` files
+checked by `crates/dynalogo-core/tests/csls_graphics.rs`. The trace oracle pins
+the final turtle state plus normalized clear/line/label/fill events so geometry
+examples can run in CI without a rendering backend.
+
 ### Macro and quasiquote compatibility
 
 Task: `tk-implement-csls-macro-quasiquote-compatibility-7e2466`

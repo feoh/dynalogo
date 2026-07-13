@@ -1,0 +1,15 @@
+; Source: Computer Science Logo Style, Volume 1, Chapter 10 turtle-geometry examples.
+; This fixture is a compact deterministic drawing modeled on the chapter's
+; square/polygon walk patterns so the conformance suite can assert turtle state
+; and headless drawing events without a window.
+clearscreen
+setpc 14
+setpensize 2
+repeat 4 [forward 50 right 90]
+penup
+right 45
+forward 10
+pendown
+setlabelheight 9
+label "done
+fill
