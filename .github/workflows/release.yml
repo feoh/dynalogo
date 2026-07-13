@@ -32,6 +32,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
       - name: Install Rust target
         run: rustup target add ${{ matrix.target }}
 

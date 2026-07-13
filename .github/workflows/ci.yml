@@ -25,6 +25,9 @@ jobs:
       - name: Validate generated help docs
         run: ruby scripts/build_help_docs.rb --check
 
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
       - name: Install Rust components
         run: rustup component add rustfmt clippy
 
