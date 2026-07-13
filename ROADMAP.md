@@ -69,9 +69,14 @@ maintained in the README and compatibility documentation.
 
 - Audit of all ~400 UCBLogo primitives against the manual
 - Compatibility test suite run against UCBLogo behavior
-- Remaining Atari/UCBLogo surface: `SETBG`, `SETC`, `SETSP`, `CT`, `READLINE`,
-  `ERF`, `CATALOG`, and low-level Atari special primitives
-- Remaining graphics fidelity: true per-pixel `PX` reverse/XOR compositing and
-  Atari-native editor/screen behavior
+- Remaining Atari/UCBLogo surface: low-level Atari-only special primitives such
+  as `.DEPOSIT`, `EXAMINE`, `.CALL`, and related hardware/memory hooks remain
+  documented as intentionally outside the portable runtime unless a future
+  Atari-emulation target needs them
+- Remaining graphics/editor fidelity: true per-pixel `PX` reverse/XOR
+  compositing is implemented in the software raster canvas; Atari-native
+  editor/screen behavior has been audited and documented as a modern
+  `$EDITOR`/frontend-state substitution rather than a byte-for-byte Atari
+  display-list emulation target
 - Dynaturtle polish: visual/audio snapshot coverage and additional concrete
   compatibility cases

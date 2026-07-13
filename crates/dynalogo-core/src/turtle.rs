@@ -53,11 +53,8 @@ pub enum TurtleEvent {
         width: f64,
         /// How this segment should composite against the canvas.
         ///
-        /// `PenMode::Reverse` (Atari's `PX`) is tracked here so frontends
-        /// can distinguish it, but true per-pixel XOR compositing is not
-        /// implemented: the vector event-replay renderers in this
-        /// workspace have no persistent raster canvas to invert, so
-        /// `Reverse` segments currently render identically to `Down`.
+        /// `PenMode::Reverse` (Atari's `PX`) is tracked here so rasterizing
+        /// frontends can XOR each affected pixel against the pen color.
         mode: PenMode,
     },
     Label {

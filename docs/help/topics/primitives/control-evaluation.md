@@ -3,12 +3,12 @@ id: "control-evaluation"
 title: "Control and evaluation primitives"
 kind: "primitive"
 category: "control"
-names: ["OUTPUT", "OP", "STOP", "REPEAT", "IF", "IFELSE", "RUN", "RUNRESULT", "PARSE", "RUNPARSE", "APPLY", "FOREACH", "MAP", "FILTER", "REDUCE", "CASCADE", "CASCADE.2", "TRANSFER", "REPCOUNT", "TEST", "IFTRUE", "IFT", "IFFALSE", "IFF", "WAIT", "CATCH", "THROW", "ERROR", "PAUSE", "CONTINUE"]
-signature: "REPEAT count instructions; IF condition instructions; RUN instructions"
+names: ["OUTPUT", "OP", "STOP", "REPEAT", "IF", "IFELSE", "RUN", "RUNRESULT", "PARSE", "RUNPARSE", "APPLY", "FOREACH", "MAP", "MAP.SE", "FILTER", "REDUCE", "CASCADE", "CASCADE.2", "TRANSFER", "REPCOUNT", "TEST", "IFTRUE", "IFT", "IFFALSE", "IFF", "WAIT", "CATCH", "THROW", "ERROR", "PAUSE", "CONTINUE"]
+signature: "REPEAT count instructions; IF condition instructions; RUN instructions; MAP template data"
 aliases: []
 summary: "Control evaluation, run instruction lists, process collections, and handle errors or pauses."
 tags: ["control", "evaluation", "lists", "errors", "pause"]
-see_also: ["instruction-lists", "templates", "procedures"]
+see_also: ["instruction-lists", "templates", "procedure-definitions"]
 status: "implemented"
 ---
 

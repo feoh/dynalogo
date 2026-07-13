@@ -1,0 +1,15 @@
+DIFF results:
+< File 1 = __SCRATCH__/text1.txt
+> File 2 = __SCRATCH__/text2.txt
+==========
+CHANGE 3-3 3-3
+<old line
+-----
+>new line
+==========
+DELETE 6-6 5
+<delete me
+==========
+INSERT 8 6-6
+>insert me
+==========

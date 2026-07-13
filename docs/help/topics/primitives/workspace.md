@@ -3,12 +3,12 @@ id: "workspace"
 title: "Variables, workspace, and property-list primitives"
 kind: "primitive"
 category: "workspace"
-names: ["MAKE", "NAME", "THING", "LOCAL", "NAMEP", "DEFINEDP", "DEFINED?", "PRIMITIVEP", "PRIMITIVE?", "TEXT", "FULLTEXT", "COPYDEF", "DEFINE", "PO", "POALL", "PONS", "POPS", "POTS", "POPLS", ".PRIMITIVES", "ERASE", "ER", "ERN", "ERNS", "ERPS", "ERPL", "ERALL", "NODES", "RECYCLE", "BURY", "UNBURY", "BURIEDP", "PPROP", "GPROP", "REMPROP", "PLIST"]
-signature: "MAKE name value; THING name; DEFINE name text; PPROP plist key value"
+names: ["MAKE", "NAME", "LOCALMAKE", "THING", "LOCAL", "NAMEP", "BOUNDP", "DEFINEDP", "DEFINED?", "PRIMITIVEP", "PRIMITIVE?", "TEXT", "FULLTEXT", "PROCEDURES", "COPYDEF", "DEFINE", "PO", "POALL", "PONS", "POPS", "POTS", "POPLS", ".PRIMITIVES", "ERASE", "ER", "ERN", "ERNS", "ERPS", "ERPL", "ERALL", "NODES", "RECYCLE", "BURY", "UNBURY", "BURIEDP", "PPROP", "GPROP", "REMPROP", "PLIST"]
+signature: "MAKE name value; LOCALMAKE name value; THING name; DEFINE name text; PPROP plist key value"
 aliases: []
 summary: "Create variables, inspect definitions, manage procedure text, and use property lists."
 tags: ["workspace", "variables", "procedures", "properties", "definitions"]
-see_also: ["procedures", "dynamic-scope", "property-lists"]
+see_also: ["procedure-definitions", "dynamic-scope", "property-lists"]
 status: "implemented"
 ---
 

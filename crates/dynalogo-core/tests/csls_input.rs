@@ -39,7 +39,8 @@ fn run_fixture(input_path: &Path) {
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", script_path.display()))
         .replace("__SCRATCH__", &scratch);
     let expected = fs::read_to_string(&stdout_path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", stdout_path.display()));
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", stdout_path.display()))
+        .replace("__SCRATCH__", &scratch);
 
     let mut vm = Vm::new();
     vm.set_scripted_input(script_path.clone(), script);

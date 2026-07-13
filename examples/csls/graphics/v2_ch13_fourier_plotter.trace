@@ -1,0 +1,11 @@
+state
+pos=(1.000, -2.000) heading=0.000 pen=down color=6 width=1.000 label_height=12.000 visible=true
+events
+clear
+line from=(-6.000, 0.000) to=(-5.000, 2.000) color=6 width=1.000 mode=down
+line from=(-5.000, 2.000) to=(-4.000, 3.464) color=6 width=1.000 mode=down
+line from=(-4.000, 3.464) to=(-3.000, 4.000) color=6 width=1.000 mode=down
+line from=(-3.000, 4.000) to=(-2.000, 3.464) color=6 width=1.000 mode=down
+line from=(-2.000, 3.464) to=(-1.000, 2.000) color=6 width=1.000 mode=down
+line from=(-1.000, 2.000) to=(0.000, 0.000) color=6 width=1.000 mode=down
+line from=(0.000, 0.000) to=(1.000, -2.000) color=6 width=1.000 mode=down

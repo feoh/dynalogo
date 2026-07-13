@@ -46,7 +46,7 @@ editing this file directly.
   - [`infix`](#infix) — Arithmetic and comparison operators that can be written between expressions.
   - [`instruction-lists`](#instruction-lists) — Lists of Logo instructions evaluated by control primitives such as REPEAT, IF, RUN, and ASK.
   - [`macros`](#macros) — Macro definitions and expansion for programs that transform Logo code.
-  - [`procedures`](#procedures) — User-defined TO ... END procedures with Logo-style dynamic inputs.
+  - [`procedure-definitions`](#procedure-definitions) — User-defined TO ... END procedures with Logo-style dynamic inputs.
   - [`quoting`](#quoting) — How quoted words, colon references, and bare words become Logo values or procedure calls.
   - [`templates`](#templates) — Template variables such as ?, ?1, ?IN, and ?OUT used by higher-order primitives.
 - **turtle-graphics**
@@ -84,10 +84,10 @@ window.
 - Kind: `primitive`
 - Status: `implemented`
 - Source: `docs/help/topics/primitives/control-evaluation.md`
-- Names: `OUTPUT`, `OP`, `STOP`, `REPEAT`, `IF`, `IFELSE`, `RUN`, `RUNRESULT`, `PARSE`, `RUNPARSE`, `APPLY`, `FOREACH`, `MAP`, `FILTER`, `REDUCE`, `CASCADE`, `CASCADE.2`, `TRANSFER`, `REPCOUNT`, `TEST`, `IFTRUE`, `IFT`, `IFFALSE`, `IFF`, `WAIT`, `CATCH`, `THROW`, `ERROR`, `PAUSE`, `CONTINUE`
-- Signature: `REPEAT count instructions; IF condition instructions; RUN instructions`
+- Names: `OUTPUT`, `OP`, `STOP`, `REPEAT`, `IF`, `IFELSE`, `RUN`, `RUNRESULT`, `PARSE`, `RUNPARSE`, `APPLY`, `FOREACH`, `MAP`, `MAP.SE`, `FILTER`, `REDUCE`, `CASCADE`, `CASCADE.2`, `TRANSFER`, `REPCOUNT`, `TEST`, `IFTRUE`, `IFT`, `IFFALSE`, `IFF`, `WAIT`, `CATCH`, `THROW`, `ERROR`, `PAUSE`, `CONTINUE`
+- Signature: `REPEAT count instructions; IF condition instructions; RUN instructions; MAP template data`
 - Tags: `control`, `evaluation`, `lists`, `errors`, `pause`
-- See also: `instruction-lists`, `templates`, `procedures`
+- See also: `instruction-lists`, `templates`, `procedure-definitions`
 
 Control primitives evaluate instruction lists, branch on conditions,
 process collections, and manage non-local control flow such as errors,
@@ -167,8 +167,8 @@ if true [print "yes]
 - Kind: `primitive`
 - Status: `implemented`
 - Source: `docs/help/topics/primitives/list-operations.md`
-- Names: `FIRST`, `BUTFIRST`, `BF`, `LAST`, `BUTLAST`, `BL`, `FPUT`, `LPUT`, `SENTENCE`, `SE`, `LIST`, `COUNT`, `ITEM`, `RANK`, `RANPICK`
-- Signature: `FIRST value; LIST a b; ITEM index aggregate; COUNT value`
+- Names: `FIRST`, `BUTFIRST`, `BF`, `LAST`, `BUTLAST`, `BL`, `FPUT`, `LPUT`, `.SETFIRST`, `.SETBF`, `MEMBER`, `REMOVE`, `SUBSTRINGP`, `FIND`, `QUEUE`, `PUSH`, `POP`, `SENTENCE`, `SE`, `LIST`, `COUNT`, `ITEM`, `RANK`, `RANPICK`
+- Signature: `FIRST value; MEMBER thing aggregate; FIND template data; LIST a b; ITEM index aggregate; COUNT value`
 - Tags: `lists`, `sequences`, `aggregate`, `selection`
 - See also: `lists`, `word-operations`, `arrays`
 
@@ -375,8 +375,8 @@ when [touching 0 1] [toot 1 2 3 4]
 - Kind: `primitive`
 - Status: `implemented`
 - Source: `docs/help/topics/primitives/atari-io-screen.md`
-- Names: `KEYP`, `JOY`, `JOYB`, `PADDLE`, `PADDLEB`, `TIMEOUT`, `TEXTSCREEN`, `TS`, `SPLITSCREEN`, `SS`, `FULLSCREEN`, `FS`, `SETCURSOR`, `SETENV`
-- Signature: `KEYP; TEXTSCREEN; SPLITSCREEN; SETCURSOR row column`
+- Names: `KEYP`, `JOY`, `JOYB`, `PADDLE`, `PADDLEB`, `TIMEOUT`, `TEXTSCREEN`, `TS`, `SPLITSCREEN`, `SS`, `FULLSCREEN`, `FS`, `SETCURSOR`, `SETPOSN`, `SETENV`
+- Signature: `KEYP; TEXTSCREEN; SPLITSCREEN; SETCURSOR row column; SETPOSN row column`
 - Tags: `atari`, `input`, `screen`, `text`, `graphics`, `compatibility`
 - See also: `window-input`
 
@@ -471,19 +471,22 @@ helpon "lists
 - Kind: `primitive`
 - Status: `implemented`
 - Source: `docs/help/topics/primitives/console-files.md`
-- Names: `PRINT`, `PR`, `SHOW`, `TYPE`, `LOAD`, `SAVE`, `SETREAD`, `SETWRITE`, `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, `CLOSE`, `READER`, `WRITER`, `DRIBBLE`, `NODRIBBLE`, `READCHAR`, `RC`, `READLIST`, `RL`, `READWORD`, `RW`
-- Signature: `PRINT value; LOAD filename; SAVE filename; OPENREAD filename; READWORD`
+- Names: `PRINT`, `PR`, `SHOW`, `TYPE`, `CT`, `LOAD`, `SAVE`, `SETREAD`, `SETWRITE`, `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, `CLOSE`, `READER`, `WRITER`, `DRIBBLE`, `NODRIBBLE`, `ERF`, `CATALOG`, `READCHAR`, `RC`, `READLIST`, `RL`, `READWORD`, `RW`, `READLINE`, `EOFP`
+- Signature: `PRINT value; CT; LOAD filename; ERF filename; CATALOG [directory]; READWORD; READLINE`
 - Tags: `print`, `console`, `files`, `input`, `output`
 - See also: `browser-filesystem`, `window-input`
 
-Console primitives write text to the current frontend output path. `LOAD` reads
-Logo source from a file and evaluates it. `SAVE` writes the visible workspace
-procedures as Logo source. File primitives are available in native builds;
-browser builds have filesystem limits documented separately.
+Console primitives write text to the current frontend output path. `CT` clears
+the current text output buffer. `LOAD` reads Logo source from a file and
+evaluates it. `SAVE` writes the visible workspace procedures as Logo source.
+`CATALOG` lists files in a directory, and `ERF` erases a file. File primitives
+are available in native builds; browser builds have filesystem limits documented
+separately.
 
 ```logo
 print "hello
 show [a b c]
+catalog
 load "examples/square.lgo
 save "my-workspace.lgo
 ```
@@ -563,7 +566,7 @@ print random 10
 - Status: `implemented`
 - Source: `docs/help/topics/syntax/dynamic-scope.md`
 - Tags: `scope`, `variables`, `procedures`
-- See also: `procedures`, `workspace`
+- See also: `procedure-definitions`, `workspace`
 
 DynaLOGO follows classic Logo dynamic scope: variable lookup searches the
 current procedure call chain rather than lexical blocks.
@@ -637,7 +640,7 @@ ask [0 1] [fd 20]
 - Status: `implemented`
 - Source: `docs/help/topics/syntax/macros.md`
 - Tags: `macros`, `syntax`, `expansion`
-- See also: `macros-editing`, `procedures`
+- See also: `macros-editing`, `procedure-definitions`
 
 Macros are advanced workspace entries that expand into Logo code before the
 resulting expression is evaluated.
@@ -647,7 +650,7 @@ print macrop "example
 print macroexpand [example 1 2]
 ```
 
-### procedures
+### procedure-definitions
 
 **Procedures**
 
@@ -757,17 +760,21 @@ cs
 - Kind: `primitive`
 - Status: `implemented`
 - Source: `docs/help/topics/primitives/turtle-pen-screen.md`
-- Names: `PENUP`, `PU`, `PENDOWN`, `PD`, `PE`, `PX`, `PEN`, `PN`, `SETPN`, `PC`, `SETPENCOLOR`, `SETPC`, `SETPENSIZE`, `SETSCRUNCH`, `SETSCR`, `SETLABELHEIGHT`, `LABEL`, `FILL`, `FILLED`, `HIDETURTLE`, `HT`, `SHOWTURTLE`, `ST`, `POS`, `HEADING`, `XCOR`, `YCOR`
-- Signature: `PENUP; PENDOWN; SETPENCOLOR color; LABEL text; POS`
+- Names: `PENUP`, `PU`, `PENDOWN`, `PD`, `PE`, `PX`, `PEN`, `PN`, `SETPN`, `PC`, `SETPENCOLOR`, `SETPC`, `SETC`, `SETBG`, `SETPENSIZE`, `SETSP`, `SETSCRUNCH`, `SETSCR`, `SETLABELHEIGHT`, `LABEL`, `FILL`, `FILLED`, `HIDETURTLE`, `HT`, `SHOWTURTLE`, `ST`, `POS`, `HEADING`, `XCOR`, `YCOR`
+- Signature: `PENUP; PENDOWN; SETPENCOLOR color; SETBG color; SETSP size; LABEL text; POS`
 - Tags: `turtle`, `pen`, `drawing`, `color`, `label`, `fill`
 - See also: `fd`, `turtle-motion`
 
 Pen and drawing primitives control whether movement draws, how lines are
-styled, labels and fills, visibility, and queries for turtle state.
+styled, background color state, labels and fills, visibility, and queries for
+turtle state. `SETC` aliases `SETPC`, and `SETSP` aliases `SETPENSIZE` for
+Atari LOGO compatibility.
 
 ```logo
 penup
 setpc 2
+setbg 0
+setsp 3
 pendown
 label "hello
 print pos
@@ -782,8 +789,8 @@ print pos
 - Kind: `primitive`
 - Status: `implemented`
 - Source: `docs/help/topics/primitives/macros-editing.md`
-- Names: `.DEFMACRO`, `MACROP`, `MACRO?`, `MACROEXPAND`, `EDIT`, `ED`, `EDNS`, `EDSH`
-- Signature: `.DEFMACRO name inputs body; EDIT [name-or-file]; EDSH`
+- Names: `.DEFMACRO`, `MACROP`, `MACRO?`, `MACROEXPAND`, ```, `EDIT`, `ED`, `EDNS`, `EDSH`
+- Signature: `.DEFMACRO name inputs body; ` template; EDIT [name-or-file]; EDSH`
 - Tags: `macros`, `editor`, `procedures`, `shapes`
 - See also: `macros`, `shapes`, `workspace`
 
@@ -808,10 +815,10 @@ edsh
 - Kind: `primitive`
 - Status: `implemented`
 - Source: `docs/help/topics/primitives/workspace.md`
-- Names: `MAKE`, `NAME`, `THING`, `LOCAL`, `NAMEP`, `DEFINEDP`, `DEFINED?`, `PRIMITIVEP`, `PRIMITIVE?`, `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`, `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `POPLS`, `.PRIMITIVES`, `ERASE`, `ER`, `ERN`, `ERNS`, `ERPS`, `ERPL`, `ERALL`, `NODES`, `RECYCLE`, `BURY`, `UNBURY`, `BURIEDP`, `PPROP`, `GPROP`, `REMPROP`, `PLIST`
-- Signature: `MAKE name value; THING name; DEFINE name text; PPROP plist key value`
+- Names: `MAKE`, `NAME`, `LOCALMAKE`, `THING`, `LOCAL`, `NAMEP`, `BOUNDP`, `DEFINEDP`, `DEFINED?`, `PRIMITIVEP`, `PRIMITIVE?`, `TEXT`, `FULLTEXT`, `PROCEDURES`, `COPYDEF`, `DEFINE`, `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `POPLS`, `.PRIMITIVES`, `ERASE`, `ER`, `ERN`, `ERNS`, `ERPS`, `ERPL`, `ERALL`, `NODES`, `RECYCLE`, `BURY`, `UNBURY`, `BURIEDP`, `PPROP`, `GPROP`, `REMPROP`, `PLIST`
+- Signature: `MAKE name value; LOCALMAKE name value; THING name; DEFINE name text; PPROP plist key value`
 - Tags: `workspace`, `variables`, `procedures`, `properties`, `definitions`
-- See also: `procedures`, `dynamic-scope`, `property-lists`
+- See also: `procedure-definitions`, `dynamic-scope`, `property-lists`
 
 Workspace primitives manage names, variables, procedures, buried names,
 property lists, and introspection. `MAKE` assigns a value, while `THING`

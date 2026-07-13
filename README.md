@@ -22,9 +22,9 @@ END
 
 ## Goals
 
-- **UCBLogo compatibility** — the full rich syntax and library (~400
-  primitives) is the v1.0 target, including dynamic scope, templates,
-  macros, property lists, and UCBLogo-accurate error messages.
+- **UCBLogo compatibility** — rich syntax and a broad compatibility surface,
+  including dynamic scope, templates, macros, property lists, file/workspace
+  tools, Atari LOGO-inspired helpers, and UCBLogo-accurate error messages.
 - **Dynaturtles** — velocity-bearing turtles, `SETSPEED`/`SETVELOCITY`,
   `WHEN TOUCHING`/`WHEN EDGE` collision demons, `BOUNCE`/`WRAP`/`FENCE`
   edge modes.
@@ -145,13 +145,13 @@ Implemented today:
   `REDUCE FOREACH APPLY CASCADE CASCADE.2 TRANSFER`
 - Macros: `.MACRO .DEFMACRO MACROP MACRO? MACROEXPAND`
 - File/outside-world helpers: `LOAD SAVE EDIT OPENREAD OPENWRITE OPENAPPEND`
-  `READWORD READCHAR DRIBBLE KEYP JOY PADDLE TIMEOUT SETCURSOR SETENV`; native
-  builds can `EDIT "program.lgo` through `$EDITOR`/`$VISUAL` (or Notepad on
-  Windows) and evaluate the edited source
-- Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD`
+  `READWORD READCHAR READLIST READLINE DRIBBLE ERF CATALOG KEYP JOY PADDLE`
+  `TIMEOUT SETCURSOR SETENV CT`; native builds can `EDIT "program.lgo` through
+  `$EDITOR`/`$VISUAL` (or Notepad on Windows) and evaluate the edited source
+- Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD PE PX`
   <!-- typos:ignore PN SETPN -->
-  `PN SETPN PC SETPC SETPENSIZE SETSCRUNCH SETLABELHEIGHT LABEL HT ST POS`
-  `HEADING XCOR YCOR`
+  `PN SETPN PC SETPC SETC SETBG SETPENSIZE SETSP SETSCRUNCH SETLABELHEIGHT`
+  `LABEL HT ST POS HEADING XCOR YCOR`
 - Dynaturtle shape surface: `SETSHAPE SHAPE PUTSH GETSH`, registry-backed
   custom-outline rendering, the browser shape editor, and `$EDITOR`-driven
   `EDSH`
@@ -197,9 +197,9 @@ known limitations (no code signing/notarization, no installers).
 
 ## Status
 
-Early development, but the current REPL and window frontend are already useful
-for experimenting with core Logo, static turtle graphics, and early
-dynaturtle programs. See [ROADMAP.md](ROADMAP.md) for the version plan,
+The 1.0 release is suitable for experimenting with core Logo, static turtle
+graphics, Computer Science Logo Style examples, and dynaturtle programs. See
+[ROADMAP.md](ROADMAP.md) for the historical version plan,
 [PLAN.md](PLAN.md) for the architecture,
 [docs/getting-started.md](docs/getting-started.md) for onboarding, and
 [docs/primitive-inventory.md](docs/primitive-inventory.md) for a snapshot of

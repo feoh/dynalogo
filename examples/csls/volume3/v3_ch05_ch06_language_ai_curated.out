@@ -1,0 +1,4 @@
+[to sample] [make subtotal 7] [make tax 2] [make total sum :subtotal :tax] [print :total] [end]
+9
+x
+n

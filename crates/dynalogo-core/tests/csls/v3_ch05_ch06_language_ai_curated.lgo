@@ -1,0 +1,42 @@
+; Curated Computer Science Logo Style Volume 3 fixtures.
+; Chapter 5: Programming Language Implementation
+; Source URL: https://people.eecs.berkeley.edu/~bh/v3ch5/langi.html
+; Chapter 6: Artificial Intelligence
+; Source URL: https://people.eecs.berkeley.edu/~bh/v3ch6/ai.html
+;
+; The original Pascal compiler and STUDENT algebra program are large
+; applications.  This deterministic fixture exercises representative runtime
+; support they rely on: treating programs as Logo data, DEFINE-generated code,
+; dynamic variable lookup, recursive list processing, and symbolic rewrite rules.
+
+to compile.tiny.pascal :name :assignments
+local [body]
+make "body []
+foreach :assignments [ [assignment] make "body lput sentence [make] :assignment :body ]
+make "body lput [print :total] :body
+define :name fput [] :body
+end
+
+to simplify :expr
+if not listp :expr [output :expr]
+if equalp count :expr 3 [output simplify.binary first :expr item 2 :expr item 3 :expr]
+output :expr
+end
+
+to simplify.binary :left :op :right
+make "left simplify :left
+make "right simplify :right
+if and equalp :op "+ equalp :right 0 [output :left]
+if and equalp :op "+ equalp :left 0 [output :right]
+if and equalp :op "* equalp :right 1 [output :left]
+if and equalp :op "* equalp :left 1 [output :right]
+if and equalp :op "* equalp :right 0 [output 0]
+if and equalp :op "* equalp :left 0 [output 0]
+output list :left :op :right
+end
+
+compile.tiny.pascal "sample [["subtotal 7] ["tax 2] ["total sum :subtotal :tax]]
+print fulltext "sample
+sample
+print simplify [[x * 1] + [0 * y]]
+print simplify [[1 * [n + 0]] + 0]

@@ -1,5 +1,5 @@
 ---
-id: "procedures"
+id: "procedure-definitions"
 title: "Procedures"
 kind: "syntax"
 category: "syntax"

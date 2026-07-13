@@ -134,7 +134,8 @@ impl SoftwareCanvas {
                 if dx * dx + dy * dy <= radius * radius {
                     match mode {
                         PenMode::Up => {}
-                        PenMode::Down | PenMode::Reverse => self.set_pixel(x + dx, y + dy, color),
+                        PenMode::Down => self.set_pixel(x + dx, y + dy, color),
+                        PenMode::Reverse => self.xor_pixel(x + dx, y + dy, color),
                         PenMode::Erase => self.clear_pixel(x + dx, y + dy),
                     }
                 }
@@ -182,6 +183,15 @@ impl SoftwareCanvas {
         if self.in_bounds(x, y) {
             let index = y as usize * self.width + x as usize;
             self.pixels[index] = None;
+        }
+    }
+
+    fn xor_pixel(&mut self, x: i32, y: i32, color: u32) {
+        if self.in_bounds(x, y) {
+            let index = y as usize * self.width + x as usize;
+            let current = self.pixels[index].unwrap_or(0);
+            let reversed = (current ^ color) & 0x00ff_ffff;
+            self.pixels[index] = (reversed != 0).then_some(reversed);
         }
     }
 
@@ -490,6 +500,47 @@ mod tests {
             },
             TurtleEvent::Clear,
         ]);
+
+        assert_eq!(canvas.color_at_logo_point(Point::new(0.0, 0.0)), None);
+    }
+
+    #[test]
+    fn reverse_pen_xors_against_existing_pixels() {
+        let mut canvas = SoftwareCanvas::new(21, 21);
+        canvas.rasterize_events(&[
+            TurtleEvent::Line {
+                from: Point::new(0.0, 0.0),
+                to: Point::new(0.0, 0.0),
+                color: 0x000f_000f,
+                width: 1.0,
+                mode: PenMode::Down,
+            },
+            TurtleEvent::Line {
+                from: Point::new(0.0, 0.0),
+                to: Point::new(0.0, 0.0),
+                color: 0x00f0_00ff,
+                width: 1.0,
+                mode: PenMode::Reverse,
+            },
+        ]);
+
+        assert_eq!(
+            canvas.color_at_logo_point(Point::new(0.0, 0.0)),
+            Some(0x00ff_00f0)
+        );
+    }
+
+    #[test]
+    fn reverse_pen_can_restore_background_on_second_pass() {
+        let mut canvas = SoftwareCanvas::new(21, 21);
+        let line = TurtleEvent::Line {
+            from: Point::new(-2.0, 0.0),
+            to: Point::new(2.0, 0.0),
+            color: 0x0000_00aa,
+            width: 1.0,
+            mode: PenMode::Reverse,
+        };
+        canvas.rasterize_events(&[line.clone(), line]);
 
         assert_eq!(canvas.color_at_logo_point(Point::new(0.0, 0.0)), None);
     }

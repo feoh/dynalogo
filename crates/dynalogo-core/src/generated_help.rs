@@ -148,9 +148,12 @@ print arraytolist :a
             r#"FULLSCREEN"#,
             r#"FS"#,
             r#"SETCURSOR"#,
+            r#"SETPOSN"#,
             r#"SETENV"#,
         ],
-        signature: Some(r#"KEYP; TEXTSCREEN; SPLITSCREEN; SETCURSOR row column"#),
+        signature: Some(
+            r#"KEYP; TEXTSCREEN; SPLITSCREEN; SETCURSOR row column; SETPOSN row column"#,
+        ),
         aliases: &[],
         summary: r#"Access compatibility input probes and switch text/graphics screen modes."#,
         tags: &[
@@ -221,6 +224,7 @@ window."#,
             r#"PR"#,
             r#"SHOW"#,
             r#"TYPE"#,
+            r#"CT"#,
             r#"LOAD"#,
             r#"SAVE"#,
             r#"SETREAD"#,
@@ -233,15 +237,19 @@ window."#,
             r#"WRITER"#,
             r#"DRIBBLE"#,
             r#"NODRIBBLE"#,
+            r#"ERF"#,
+            r#"CATALOG"#,
             r#"READCHAR"#,
             r#"RC"#,
             r#"READLIST"#,
             r#"RL"#,
             r#"READWORD"#,
             r#"RW"#,
+            r#"READLINE"#,
+            r#"EOFP"#,
         ],
         signature: Some(
-            r#"PRINT value; LOAD filename; SAVE filename; OPENREAD filename; READWORD"#,
+            r#"PRINT value; CT; LOAD filename; ERF filename; CATALOG [directory]; READWORD; READLINE"#,
         ),
         aliases: &[],
         summary: r#"Print output, load/save Logo files, manage reader/writer streams, and read input."#,
@@ -254,14 +262,17 @@ window."#,
         ],
         see_also: &[r#"browser-filesystem"#, r#"window-input"#],
         status: r#"implemented"#,
-        body: r#"Console primitives write text to the current frontend output path. `LOAD` reads
-Logo source from a file and evaluates it. `SAVE` writes the visible workspace
-procedures as Logo source. File primitives are available in native builds;
-browser builds have filesystem limits documented separately.
+        body: r#"Console primitives write text to the current frontend output path. `CT` clears
+the current text output buffer. `LOAD` reads Logo source from a file and
+evaluates it. `SAVE` writes the visible workspace procedures as Logo source.
+`CATALOG` lists files in a directory, and `ERF` erases a file. File primitives
+are available in native builds; browser builds have filesystem limits documented
+separately.
 
 ```logo
 print "hello
 show [a b c]
+catalog
 load "examples/square.lgo
 save "my-workspace.lgo
 ```"#,
@@ -285,6 +296,7 @@ save "my-workspace.lgo
             r#"APPLY"#,
             r#"FOREACH"#,
             r#"MAP"#,
+            r#"MAP.SE"#,
             r#"FILTER"#,
             r#"REDUCE"#,
             r#"CASCADE"#,
@@ -304,7 +316,7 @@ save "my-workspace.lgo
             r#"CONTINUE"#,
         ],
         signature: Some(
-            r#"REPEAT count instructions; IF condition instructions; RUN instructions"#,
+            r#"REPEAT count instructions; IF condition instructions; RUN instructions; MAP template data"#,
         ),
         aliases: &[],
         summary: r#"Control evaluation, run instruction lists, process collections, and handle errors or pauses."#,
@@ -315,7 +327,11 @@ save "my-workspace.lgo
             r#"errors"#,
             r#"pause"#,
         ],
-        see_also: &[r#"instruction-lists"#, r#"templates"#, r#"procedures"#],
+        see_also: &[
+            r#"instruction-lists"#,
+            r#"templates"#,
+            r#"procedure-definitions"#,
+        ],
         status: r#"implemented"#,
         body: r#"Control primitives evaluate instruction lists, branch on conditions,
 process collections, and manage non-local control flow such as errors,
@@ -338,7 +354,7 @@ catch "oops [throw "oops "handled]
         aliases: &[],
         summary: r#"Logo-style dynamic variable lookup through the current call stack."#,
         tags: &[r#"scope"#, r#"variables"#, r#"procedures"#],
-        see_also: &[r#"procedures"#, r#"workspace"#],
+        see_also: &[r#"procedure-definitions"#, r#"workspace"#],
         status: r#"implemented"#,
         body: r#"DynaLOGO follows classic Logo dynamic scope: variable lookup searches the
 current procedure call chain rather than lexical blocks.
@@ -537,6 +553,15 @@ cond [[true [print "matched]]]
             r#"BL"#,
             r#"FPUT"#,
             r#"LPUT"#,
+            r#".SETFIRST"#,
+            r#".SETBF"#,
+            r#"MEMBER"#,
+            r#"REMOVE"#,
+            r#"SUBSTRINGP"#,
+            r#"FIND"#,
+            r#"QUEUE"#,
+            r#"PUSH"#,
+            r#"POP"#,
             r#"SENTENCE"#,
             r#"SE"#,
             r#"LIST"#,
@@ -545,7 +570,9 @@ cond [[true [print "matched]]]
             r#"RANK"#,
             r#"RANPICK"#,
         ],
-        signature: Some(r#"FIRST value; LIST a b; ITEM index aggregate; COUNT value"#),
+        signature: Some(
+            r#"FIRST value; MEMBER thing aggregate; FIND template data; LIST a b; ITEM index aggregate; COUNT value"#,
+        ),
         aliases: &[],
         summary: r#"Build, inspect, and select items from lists, words, and other Logo aggregates."#,
         tags: &[r#"lists"#, r#"sequences"#, r#"aggregate"#, r#"selection"#],
@@ -656,7 +683,7 @@ while [:x < 10] [make "x sum :x 1]
         aliases: &[],
         summary: r#"Macro definitions and expansion for programs that transform Logo code."#,
         tags: &[r#"macros"#, r#"syntax"#, r#"expansion"#],
-        see_also: &[r#"macros-editing"#, r#"procedures"#],
+        see_also: &[r#"macros-editing"#, r#"procedure-definitions"#],
         status: r#"implemented"#,
         body: r#"Macros are advanced workspace entries that expand into Logo code before the
 resulting expression is evaluated.
@@ -676,12 +703,13 @@ print macroexpand [example 1 2]
             r#"MACROP"#,
             r#"MACRO?"#,
             r#"MACROEXPAND"#,
+            r#"`"#,
             r#"EDIT"#,
             r#"ED"#,
             r#"EDNS"#,
             r#"EDSH"#,
         ],
-        signature: Some(r#".DEFMACRO name inputs body; EDIT [name-or-file]; EDSH"#),
+        signature: Some(r#".DEFMACRO name inputs body; ` template; EDIT [name-or-file]; EDSH"#),
         aliases: &[],
         summary: r#"Define macros and open text/shape editing surfaces where supported."#,
         tags: &[r#"macros"#, r#"editor"#, r#"procedures"#, r#"shapes"#],
@@ -723,7 +751,7 @@ fd 100
 ```"#,
     },
     GeneratedHelpTopic {
-        id: r#"procedures"#,
+        id: r#"procedure-definitions"#,
         title: r#"Procedures"#,
         kind: r#"syntax"#,
         category: r#"syntax"#,
@@ -910,7 +938,10 @@ cs
             r#"PC"#,
             r#"SETPENCOLOR"#,
             r#"SETPC"#,
+            r#"SETC"#,
+            r#"SETBG"#,
             r#"SETPENSIZE"#,
+            r#"SETSP"#,
             r#"SETSCRUNCH"#,
             r#"SETSCR"#,
             r#"SETLABELHEIGHT"#,
@@ -926,7 +957,9 @@ cs
             r#"XCOR"#,
             r#"YCOR"#,
         ],
-        signature: Some(r#"PENUP; PENDOWN; SETPENCOLOR color; LABEL text; POS"#),
+        signature: Some(
+            r#"PENUP; PENDOWN; SETPENCOLOR color; SETBG color; SETSP size; LABEL text; POS"#,
+        ),
         aliases: &[],
         summary: r#"Control pen modes, colors, labels, fills, turtle visibility, and turtle state queries."#,
         tags: &[
@@ -940,11 +973,15 @@ cs
         see_also: &[r#"fd"#, r#"turtle-motion"#],
         status: r#"implemented"#,
         body: r#"Pen and drawing primitives control whether movement draws, how lines are
-styled, labels and fills, visibility, and queries for turtle state.
+styled, background color state, labels and fills, visibility, and queries for
+turtle state. `SETC` aliases `SETPC`, and `SETSP` aliases `SETPENSIZE` for
+Atari LOGO compatibility.
 
 ```logo
 penup
 setpc 2
+setbg 0
+setsp 3
 pendown
 label "hello
 print pos
@@ -1031,15 +1068,18 @@ print :name
         names: &[
             r#"MAKE"#,
             r#"NAME"#,
+            r#"LOCALMAKE"#,
             r#"THING"#,
             r#"LOCAL"#,
             r#"NAMEP"#,
+            r#"BOUNDP"#,
             r#"DEFINEDP"#,
             r#"DEFINED?"#,
             r#"PRIMITIVEP"#,
             r#"PRIMITIVE?"#,
             r#"TEXT"#,
             r#"FULLTEXT"#,
+            r#"PROCEDURES"#,
             r#"COPYDEF"#,
             r#"DEFINE"#,
             r#"PO"#,
@@ -1066,7 +1106,9 @@ print :name
             r#"REMPROP"#,
             r#"PLIST"#,
         ],
-        signature: Some(r#"MAKE name value; THING name; DEFINE name text; PPROP plist key value"#),
+        signature: Some(
+            r#"MAKE name value; LOCALMAKE name value; THING name; DEFINE name text; PPROP plist key value"#,
+        ),
         aliases: &[],
         summary: r#"Create variables, inspect definitions, manage procedure text, and use property lists."#,
         tags: &[
@@ -1076,7 +1118,11 @@ print :name
             r#"properties"#,
             r#"definitions"#,
         ],
-        see_also: &[r#"procedures"#, r#"dynamic-scope"#, r#"property-lists"#],
+        see_also: &[
+            r#"procedure-definitions"#,
+            r#"dynamic-scope"#,
+            r#"property-lists"#,
+        ],
         status: r#"implemented"#,
         body: r#"Workspace primitives manage names, variables, procedures, buried names,
 property lists, and introspection. `MAKE` assigns a value, while `THING`

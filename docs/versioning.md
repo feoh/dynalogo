@@ -9,7 +9,8 @@ workspace crates (`dynalogo-core`, `dynalogo`) inherit it via
 
 ## Policy
 
-DynaLOGO follows [Semantic Versioning](https://semver.org/). Before 1.0.0:
+DynaLOGO follows [Semantic Versioning](https://semver.org/). For historical
+pre-1.0.0 releases:
 
 - `0.x.0` (minor) bumps may include breaking changes to the language,
   primitives, or CLI/API surface — this matches the version roadmap in
@@ -18,7 +19,7 @@ DynaLOGO follows [Semantic Versioning](https://semver.org/). Before 1.0.0:
 - `0.x.y` (patch) bumps are for fixes and small additions within a
   milestone that don't change the primitive surface.
 
-After 1.0.0, standard SemVer applies: patch for fixes, minor for
+Starting with 1.0.0, standard SemVer applies: patch for fixes, minor for
 backward-compatible additions, major for breaking changes.
 
 ## Changelog

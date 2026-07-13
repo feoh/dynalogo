@@ -1,0 +1,17 @@
+output
+visual
+background=9
+turtle 0 pos=(0.000, 0.000) heading=0.000 velocity=(0.000, 0.000) pen=reverse color=5 width=1.000 shape=turtle radius=8.000 visible=true
+turtle 1 pos=(1.000, -3.000) heading=90.000 velocity=(2.000, 4.000) pen=down color=7 width=1.000 shape=ship radius=3.000 visible=true
+audio
+sound_envelope=[1, 2, 3, 4]
+last_toot=Some([2, 64, 12, 8])
+events
+line from=(0.000, 0.000) to=(0.000, 10.000) color=5 width=1.000 mode=down
+line from=(0.000, 10.000) to=(0.000, 0.000) color=5 width=1.000 mode=reverse
+line from=(0.000, 0.000) to=(-5.000, -5.000) color=16777215 width=1.000 mode=down
+line from=(-5.000, -5.000) to=(0.000, -5.000) color=7 width=1.000 mode=down
+raster-samples
+point=(0.000, 5.000) color=none
+point=(-3.000, -3.000) color=16777215
+point=(-2.000, -5.000) color=7

@@ -312,6 +312,7 @@ struct OutsideWorldState {
     text_cursor: (usize, usize),
     timeout_sixtieths: usize,
     text_screen_mode: TextScreenMode,
+    background_color: u32,
 }
 
 impl Default for OutsideWorldState {
@@ -326,6 +327,7 @@ impl Default for OutsideWorldState {
             text_cursor: (0, 0),
             timeout_sixtieths: 0,
             text_screen_mode: TextScreenMode::SplitScreen,
+            background_color: 0,
         }
     }
 }
@@ -573,6 +575,10 @@ impl Vm {
 
     pub fn text_screen_mode(&self) -> &'static str {
         self.outside_world.text_screen_mode.name()
+    }
+
+    pub fn background_color(&self) -> u32 {
+        self.outside_world.background_color
     }
 
     fn write_output_fragment(&mut self, text: &str) -> Result<(), VmError> {
@@ -976,6 +982,13 @@ impl Vm {
     ) -> Result<PrimitiveResult, VmError> {
         let name = self.interner.canonical_spelling(callee).to_string();
         self.call_stack.push(name.clone());
+        if self.procedures.contains_key(&name) && !is_protected_workspace_procedure(&name) {
+            let result = self
+                .call_user_procedure(&name, args, expects_value)
+                .map_err(|error| self.contextualize_error(error));
+            self.call_stack.pop();
+            return result;
+        }
         let result = match name.as_str() {
             "sum" | "+" => self.number_binop(&name, args, |a, b| a + b),
             "difference" | "-" => self.number_binop(&name, args, |a, b| a - b),
@@ -1043,9 +1056,12 @@ impl Vm {
             "writer" => self.writer(args),
             "dribble" => self.dribble_command(args),
             "nodribble" => self.nodribble(args),
+            "erf" => self.erf(args),
+            "catalog" => self.catalog(args),
             "readchar" | "rc" => self.readchar(args),
             "readlist" | "rl" => self.readlist(args),
             "readword" | "rw" => self.readword(args),
+            "readline" => self.readline(args),
             "eofp" => self.eofp(args),
             "keyp" => self.keyp(args),
             "joy" => self.joy(args),
@@ -1058,6 +1074,7 @@ impl Vm {
             "fullscreen" | "fs" => self.fullscreen(args),
             "setcursor" | "setposn" => self.setcursor(args),
             "setenv" => self.setenv(args),
+            "ct" => self.cleartext(args),
             "make" | "name" => self.make(args),
             "localmake" => self.localmake(args),
             "thing" => self.thing(args),
@@ -1137,7 +1154,7 @@ impl Vm {
             "iftrue" | "ift" => self.iftrue(args),
             "iffalse" | "iff" => self.iffalse(args),
             "wait" => self.wait(args),
-            "catch" => self.catch(args),
+            "catch" => self.catch(args, expects_value),
             "throw" => self.throw(args),
             "error" => self.error(args),
             "pause" => self.pause(args),
@@ -1161,8 +1178,9 @@ impl Vm {
             "pn" => self.turtle_pn(args),
             "setpn" => self.turtle_setpn(args),
             "pc" => self.turtle_pc(args),
-            "setpencolor" | "setpc" => self.turtle_setpencolor(args),
-            "setpensize" => self.turtle_setpensize(args),
+            "setpencolor" | "setpc" | "setc" => self.turtle_setpencolor(args),
+            "setbg" => self.turtle_setbg(args),
+            "setpensize" | "setsp" => self.turtle_setpensize(args),
             "setscrunch" | "setscr" => self.turtle_setscrunch(args),
             "setlabelheight" => self.turtle_setlabelheight(args),
             "label" => self.turtle_label(args),
@@ -2217,18 +2235,49 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
+    fn erf(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("erf", &args, 1)?;
+        let path = PathBuf::from(source_text_input(&args[0], &self.interner));
+        fs::remove_file(&path)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn catalog(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        if args.len() > 1 {
+            return Err(VmError::new(format!(
+                "catalog expected 0 or 1 input(s), got {}",
+                args.len()
+            )));
+        }
+        let path = args
+            .first()
+            .map(|value| PathBuf::from(source_text_input(value, &self.interner)))
+            .unwrap_or_else(|| PathBuf::from("."));
+        let mut names = fs::read_dir(&path)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?
+            .map(|entry| {
+                entry
+                    .map_err(|error| VmError::new(format!("{}: {error}", path.display())))
+                    .map(|entry| entry.file_name().to_string_lossy().to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        names.sort();
+        for name in names {
+            self.write_output_line(&name)?;
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
     fn readchar(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("readchar", &args, 0)?;
         let stream = self
             .read_stream
             .as_mut()
             .ok_or_else(|| VmError::new("READCHAR is not connected to an input stream yet"))?;
-        let ch = stream.read_char().ok_or_else(|| {
-            VmError::new(format!(
-                "READCHAR reached end of input stream {}",
-                stream.path.display()
-            ))
-        })?;
+        let Some(ch) = stream.read_char() else {
+            return Ok(PrimitiveResult::Value(Value::List(List::from_values([]))));
+        };
         Ok(PrimitiveResult::Value(Value::word(&mut self.interner, ch)))
     }
 
@@ -2238,12 +2287,9 @@ impl Vm {
             .read_stream
             .as_mut()
             .ok_or_else(|| VmError::new("READLIST is not connected to an input stream yet"))?;
-        let line = stream.read_line().ok_or_else(|| {
-            VmError::new(format!(
-                "READLIST reached end of input stream {}",
-                stream.path.display()
-            ))
-        })?;
+        let Some(line) = stream.read_line() else {
+            return Ok(PrimitiveResult::Value(Value::List(List::from_values([]))));
+        };
         let values = lex(&line)
             .map_err(|error| VmError::new(error.to_string()))?
             .into_iter()
@@ -2260,12 +2306,24 @@ impl Vm {
             .read_stream
             .as_mut()
             .ok_or_else(|| VmError::new("READWORD is not connected to an input stream yet"))?;
-        let line = stream.read_line().ok_or_else(|| {
-            VmError::new(format!(
-                "READWORD reached end of input stream {}",
-                stream.path.display()
-            ))
-        })?;
+        let Some(line) = stream.read_line() else {
+            return Ok(PrimitiveResult::Value(Value::List(List::from_values([]))));
+        };
+        Ok(PrimitiveResult::Value(Value::word(
+            &mut self.interner,
+            line,
+        )))
+    }
+
+    fn readline(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("readline", &args, 0)?;
+        let stream = self
+            .read_stream
+            .as_mut()
+            .ok_or_else(|| VmError::new("READLINE is not connected to an input stream yet"))?;
+        let Some(line) = stream.read_line() else {
+            return Ok(PrimitiveResult::Value(Value::List(List::from_values([]))));
+        };
         Ok(PrimitiveResult::Value(Value::word(
             &mut self.interner,
             line,
@@ -2360,6 +2418,12 @@ impl Vm {
             ranged_byte_input(&args[2], &self.interner, "SETENV", 255)?,
             ranged_byte_input(&args[3], &self.interner, "SETENV", 255)?,
         ];
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn cleartext(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("ct", &args, 0)?;
+        self.clear_output();
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -4010,7 +4074,7 @@ impl Vm {
         Ok(PrimitiveResult::NoValue)
     }
 
-    fn catch(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+    fn catch(&mut self, args: Vec<Value>, expects_value: bool) -> Result<PrimitiveResult, VmError> {
         expect_arity("catch", &args, 2)?;
         let tag = args[0].clone();
         let list = list_input(&args[1], "CATCH", &self.interner)?;
@@ -4028,12 +4092,15 @@ impl Vm {
                         }
                         self.caught_error = Some(info);
                         Ok(PrimitiveResult::NoValue)
-                    } else {
+                    } else if expects_value {
                         Ok(PrimitiveResult::Value(value))
+                    } else {
+                        Ok(PrimitiveResult::NoValue)
                     }
                 }
                 ControlFlow::None | ControlFlow::Stop => Ok(PrimitiveResult::NoValue),
-                ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
+                ControlFlow::Output(value) if expects_value => Ok(PrimitiveResult::Value(value)),
+                ControlFlow::Output(_) => Ok(PrimitiveResult::NoValue),
                 ControlFlow::Continue => Ok(PrimitiveResult::Control(ControlFlow::Continue)),
                 ControlFlow::Throw { tag, value } => {
                     Ok(PrimitiveResult::Control(ControlFlow::Throw { tag, value }))
@@ -4348,6 +4415,13 @@ impl Vm {
                 args.len()
             ))),
         }
+    }
+
+    fn turtle_setbg(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("setbg", &args, 1)?;
+        self.outside_world.background_color =
+            number_input_named("setbg", &args[0], &self.interner)? as u32;
+        Ok(PrimitiveResult::NoValue)
     }
 
     fn turtle_setpensize(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -5624,12 +5698,15 @@ fn primitive_names() -> &'static [&'static str] {
         "writer",
         "dribble",
         "nodribble",
+        "erf",
+        "catalog",
         "readchar",
         "rc",
         "readlist",
         "rl",
         "readword",
         "rw",
+        "readline",
         "eofp",
         "keyp",
         "joy",
@@ -5646,6 +5723,7 @@ fn primitive_names() -> &'static [&'static str] {
         "setcursor",
         "setposn",
         "setenv",
+        "ct",
         "make",
         "name",
         "localmake",
@@ -5753,7 +5831,10 @@ fn primitive_names() -> &'static [&'static str] {
         "pc",
         "setpencolor",
         "setpc",
+        "setc",
+        "setbg",
         "setpensize",
+        "setsp",
         "setscrunch",
         "setscr",
         "setlabelheight",
@@ -6099,8 +6180,8 @@ mod tests {
     fn unique_temp_path(name: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("system time is before UNIX_EPOCH")
-            .as_nanos();
+            .map(|duration| duration.as_nanos())
+            .unwrap_or(0);
         env::temp_dir().join(format!(
             "dynalogo-test-{}-{nanos}-{name}",
             std::process::id()
@@ -6646,12 +6727,13 @@ mod tests {
     #[test]
     fn atari_outside_world_output_helpers_store_headless_requests() {
         let mut vm = Vm::new();
-        vm.eval_source("setenv 1 2 3 4 toot 0 64 10 15 setcursor 5 7")
+        vm.eval_source("setenv 1 2 3 4 toot 0 64 10 15 setcursor 5 7 setbg 12")
             .unwrap();
 
         assert_eq!(vm.sound_envelope(), [1, 2, 3, 4]);
         assert_eq!(vm.last_toot(), Some([0, 64, 10, 15]));
         assert_eq!(vm.text_cursor(), (5, 7));
+        assert_eq!(vm.background_color(), 12);
     }
 
     #[test]
@@ -6676,6 +6758,44 @@ mod tests {
             .eval_source("print keyp print joy 1 print joyb 1 print paddle 2 print paddleb 2")
             .unwrap();
         assert_eq!(result.output, "true\n6\ntrue\n99\ntrue\n");
+    }
+
+    #[test]
+    fn remaining_atari_surface_primitives_work() {
+        let mut vm = Vm::new();
+        vm.set_scripted_input("scripted", "alpha beta\nsecond line\n");
+        let result = vm
+            .eval_source(
+                "print readline print readword setc 4 setsp 3 fd 1 print pc pn ct print [after ct]",
+            )
+            .unwrap();
+        assert_eq!(result.output, "after ct\n");
+        let state = vm.turtles().state(TurtleId::new(0)).unwrap();
+        assert_eq!(state.pen_color, 4);
+        assert_eq!(state.pen_size, 3.0);
+    }
+
+    #[test]
+    fn catalog_and_erf_use_host_filesystem_deterministically() {
+        let dir = unique_temp_path("catalog");
+        fs::create_dir_all(&dir).unwrap();
+        let keep = dir.join("a.keep");
+        let remove = dir.join("b.tmp");
+        fs::write(&keep, "keep").unwrap();
+        fs::write(&remove, "remove").unwrap();
+
+        let source = format!(
+            "catalog \"{} erf \"{} catalog \"{}",
+            logo_path(&dir),
+            logo_path(&remove),
+            logo_path(&dir)
+        );
+        let (result, _) = run(&source).unwrap();
+        assert_eq!(result.output, "a.keep\nb.tmp\na.keep\n");
+        assert!(keep.exists());
+        assert!(!remove.exists());
+        fs::remove_file(keep).unwrap();
+        fs::remove_dir(dir).unwrap();
     }
 
     #[test]
@@ -6813,11 +6933,11 @@ mod tests {
         let mut vm = Vm::new();
         let result = vm
             .eval_source(&format!(
-                "setread \"{} print eofp print readword print eofp",
+                "setread \"{} print eofp print readword show readword print eofp",
                 logo_path(&path)
             ))
             .unwrap();
-        assert_eq!(result.output, "false\nhello\ntrue\n");
+        assert_eq!(result.output, "false\nhello\n[]\ntrue\n");
 
         let _ = fs::remove_file(path);
     }
@@ -7083,6 +7203,16 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
     }
 
     #[test]
+    fn user_procedures_can_shadow_primitive_names() {
+        let (result, _) = run(r#"to readline :value
+               output word :value ".shadow
+             end
+             print readline "ok"#)
+        .unwrap();
+        assert_eq!(result.output, "ok.shadow\n");
+    }
+
+    #[test]
     fn copydef_clones_a_workspace_procedure() {
         let mut vm = Vm::new();
         vm.eval_source(
@@ -7126,6 +7256,12 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
     fn catch_returns_matching_throw_value() {
         let (result, _) = run("print catch \"tag [throw \"tag \"value print \"bad]").unwrap();
         assert_eq!(result.output, "value\n");
+    }
+
+    #[test]
+    fn catch_in_command_position_consumes_matching_throw_value() {
+        let (result, _) = run("catch \"tag [throw \"tag \"value] print \"after").unwrap();
+        assert_eq!(result.output, "after\n");
     }
 
     #[test]

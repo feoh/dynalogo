@@ -3,8 +3,8 @@ id: "macros-editing"
 title: "Macro and editor primitives"
 kind: "primitive"
 category: "workspace"
-names: [".DEFMACRO", "MACROP", "MACRO?", "MACROEXPAND", "EDIT", "ED", "EDNS", "EDSH"]
-signature: ".DEFMACRO name inputs body; EDIT [name-or-file]; EDSH"
+names: [".DEFMACRO", "MACROP", "MACRO?", "MACROEXPAND", "`", "EDIT", "ED", "EDNS", "EDSH"]
+signature: ".DEFMACRO name inputs body; ` template; EDIT [name-or-file]; EDSH"
 aliases: []
 summary: "Define macros and open text/shape editing surfaces where supported."
 tags: ["macros", "editor", "procedures", "shapes"]

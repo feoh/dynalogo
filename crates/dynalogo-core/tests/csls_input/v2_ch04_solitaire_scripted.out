@@ -1,0 +1,20 @@
+Welcome to solitaire
+Commands:
++ deal three cards
+R redisplay board
+? retype help
+G give up and start a new game
+X exit to Logo
+New game
+Pile has 3
+Board pile: card card card
+Commands:
++ deal three cards
+R redisplay board
+? retype help
+G give up and start a new game
+X exit to Logo
+Giving up
+New game
+Exit command
+Back at Logo

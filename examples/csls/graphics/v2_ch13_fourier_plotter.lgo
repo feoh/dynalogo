@@ -1,0 +1,12 @@
+; Source: Computer Science Logo Style, Volume 2 Chapter 13, Fourier Series Plotter.
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch13/fourie.html
+; Modeled deterministic fixture: plot a small sampled sine-wave curve as a
+; headless turtle trace suitable for CI.
+
+clearscreen
+setpc 6
+setpensize 1
+penup
+setxy -6 0
+pendown
+repeat 7 [setxy sum -6 repcount product 4 sin product repcount 30]

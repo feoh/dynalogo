@@ -3,8 +3,8 @@ id: "atari-io-screen"
 title: "Atari-style input and screen primitives"
 kind: "primitive"
 category: "frontends"
-names: ["KEYP", "JOY", "JOYB", "PADDLE", "PADDLEB", "TIMEOUT", "TEXTSCREEN", "TS", "SPLITSCREEN", "SS", "FULLSCREEN", "FS", "SETCURSOR", "SETENV"]
-signature: "KEYP; TEXTSCREEN; SPLITSCREEN; SETCURSOR row column"
+names: ["KEYP", "JOY", "JOYB", "PADDLE", "PADDLEB", "TIMEOUT", "TEXTSCREEN", "TS", "SPLITSCREEN", "SS", "FULLSCREEN", "FS", "SETCURSOR", "SETPOSN", "SETENV"]
+signature: "KEYP; TEXTSCREEN; SPLITSCREEN; SETCURSOR row column; SETPOSN row column"
 aliases: []
 summary: "Access compatibility input probes and switch text/graphics screen modes."
 tags: ["atari", "input", "screen", "text", "graphics", "compatibility"]

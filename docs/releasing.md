@@ -34,5 +34,11 @@ runs validation but skips the crates.io publish steps cleanly.
    are skipped and the GitHub Release artifacts are still produced by
    `.github/workflows/release.yml`.
 
+A local `cargo package -p dynalogo-core` preflight can fully verify before the
+release tag. A local `cargo package -p dynalogo` preflight for the same new
+version is expected to fail until `dynalogo-core` for that version is visible in
+the crates.io index; the workflow handles that by publishing `dynalogo-core`
+first and waiting briefly before publishing `dynalogo`.
+
 There is no automatic rollback: a bad publish must be yanked by hand with
 `cargo yank -p <crate> --version <version>`.

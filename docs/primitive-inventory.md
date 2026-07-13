@@ -82,13 +82,13 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 
 - `PRINT`/`PR`
 - `SHOW`
-- `TYPE`
+- `TYPE`, `CT`
 - `LOAD`, `SAVE`
 - `SETREAD`, `SETWRITE`
 - `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, `CLOSE`
 - `READER`, `WRITER`
-- `DRIBBLE`, `NODRIBBLE`
-- `READCHAR`/`RC`, `READLIST`/`RL`, `READWORD`/`RW`, `EOFP`
+- `DRIBBLE`, `NODRIBBLE`, `ERF`, `CATALOG`
+- `READCHAR`/`RC`, `READLIST`/`RL`, `READWORD`/`RW`, `READLINE`, `EOFP`
 - `KEYP`
 - `JOY`, `JOYB`, `PADDLE`, `PADDLEB`
 - `TIMEOUT`
@@ -102,7 +102,7 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `SETXY`, `SETX`, `SETY`, `SETPOS`, `SETHEADING`/`SETH`
 - `HOME`, `CLEARSCREEN`/`CS`, `INIT.TURTLE`
 - `PENUP`/`PU`, `PENDOWN`/`PD`, `PE`, `PX`, `PEN`
-- `PN`, `SETPN`, `PC`, `SETPENCOLOR`/`SETPC`, `SETPENSIZE`, `SETSCRUNCH`/`SETSCR`
+- `PN`, `SETPN`, `PC`, `SETPENCOLOR`/`SETPC`/`SETC`, `SETBG`, `SETPENSIZE`/`SETSP`, `SETSCRUNCH`/`SETSCR`
 - `SETLABELHEIGHT`, `LABEL`, `FILL`, `FILLED`
 - `HIDETURTLE`/`HT`, `SHOWTURTLE`/`ST`, `SHOWNP`
 - `POS`, `HEADING`, `XCOR`, `YCOR`

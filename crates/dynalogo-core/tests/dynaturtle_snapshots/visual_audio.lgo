@@ -1,0 +1,17 @@
+; Deterministic dynaturtle visual + audio snapshot fixture.
+setbg 9
+setenv 1 2 3 4
+toot 2 64 12 8
+
+setc 5
+fd 10
+px
+bk 10
+
+tell 1
+setxy -5 -5
+setheading 90
+setshape "ship 3
+setvelocity 2 4
+setc 7
+fd 5

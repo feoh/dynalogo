@@ -42,12 +42,20 @@ Sidecar files are reference artifacts:
 ### Volume 2: Advanced Techniques
 
 - Chapter 1, Data Files: <https://people.eecs.berkeley.edu/~bh/v2ch1/files.html>
+- Chapter 2, File Differences: <https://people.eecs.berkeley.edu/~bh/v2ch2/diff.html>
 - Chapter 3, Nonlocal Exit: <https://people.eecs.berkeley.edu/~bh/v2ch3/exit.html>
+- Chapter 4, Solitaire: <https://people.eecs.berkeley.edu/~bh/v2ch4/solitaire.html>
 - Chapter 5, Program as Data: <https://people.eecs.berkeley.edu/~bh/v2ch5/prgdat.html>
+- Chapter 6, BASIC Compiler: <https://people.eecs.berkeley.edu/~bh/v2ch6/basic.html>
+- Chapter 7, Pattern Matcher: <https://people.eecs.berkeley.edu/~bh/v2ch7/match.html>
 - Chapter 8, Property Lists: <https://people.eecs.berkeley.edu/~bh/v2ch8/plist.html>
+- Chapter 9, Doctor: <https://people.eecs.berkeley.edu/~bh/v2ch9/doctor.html>
 - Chapter 10, Iteration and Control Structures: <https://people.eecs.berkeley.edu/~bh/v2ch10/iter.html>
 - Chapter 11, Cryptographer's Helper / ASCII: <https://people.eecs.berkeley.edu/~bh/v2ch11/crypto.html>
 - Chapter 12, Macros: <https://people.eecs.berkeley.edu/~bh/v2ch12/macro.html>
+- Chapter 13, Fourier Series Plotter: <https://people.eecs.berkeley.edu/~bh/v2ch13/fourie.html>
+- Volume 3 Chapter 5, Programming Language Implementation: <https://people.eecs.berkeley.edu/~bh/v3ch5/langi.html>
+- Volume 3 Chapter 6, Artificial Intelligence: <https://people.eecs.berkeley.edu/~bh/v3ch6/ai.html>
 
 ### Volume 3: Beyond Programming
 

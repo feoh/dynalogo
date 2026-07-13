@@ -65,22 +65,20 @@ The Atari manual organizes features into these areas:
 - `SETPENCOLOR`/`SETPC`, `SETPENSIZE`
 - `CLEARSCREEN`/`CS`
 - multi-pen state: `PEN`, `PE`, `PX`, `PN`, `SETPN`, Atari-style `SETPC pennumber colornumber`
-  (`PX`'s reverse/XOR pixel compositing is not implemented; see the
-  reference manual's Pen and visibility section)
+- `SETC`, `SETBG`, `SETSP`, `CT`
+- true `PX` reverse/XOR compositing in the software raster canvas; vector trace renderers preserve pen mode while raster snapshots validate pixel behavior
 
 **Implemented on the current DynaLOGO surface**
 
 - `ASK`, `TELL`, `EACH`, `WHO`
 - `OVER`, `TOUCHING`, and `WHEN` event/collision conditions
 - `SPEED`, `LABEL`, `FILL`, `FILLED`, and `SETSCRUNCH`/`SETSCR`
-- `FS`, `SS`, and `TS` screen-mode commands
+- `FS`, `SS`, and `TS` screen-mode commands that record the requested frontend screen mode in VM state
 - `SETSHAPE`/`SHAPE`/`GETSH`/`PUTSH` registry behavior plus native/browser custom-outline rendering
 
-**Still missing or intentionally narrower than Atari LOGO**
+**Still intentionally narrower than Atari LOGO**
 
-- `SETSP` alias, `SETBG`, `SETC`, and `CT`
-- Atari's original interactive shape-editor/screen behavior
-- true per-pixel `PX` reverse/XOR compositing (the current renderer preserves pen mode but does not emulate a persistent Atari raster)
+- Atari's original full-screen native editor is not reproduced byte-for-byte. DynaLOGO uses a modern `$EDITOR`-driven flow for procedure/name/shape/source editing and records screen-mode/cursor requests for frontends instead of emulating Atari display-list behavior.
 
 ### 2. Words and lists
 
@@ -114,9 +112,9 @@ The Atari manual organizes features into these areas:
 - `TEXT`
 - `WHICH`
 
-**Still missing from the appendix examples/tools**
+**Section status**
 
-- `READLINE` as used by Atari's file-backed TEXT example
+- No unimplemented appendix helper from this validation section remains in the current audited surface.
 
 ### 3. Variables
 
@@ -160,14 +158,11 @@ The Atari manual organizes features into these areas:
 - `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`
 - `POTS`
 
-**Partial / follow-up status**
+**Editor/screen fidelity audit**
 
-- `EDIT`/`ED` and `EDNS` are available through the current `$EDITOR`-driven
-  text-edit flow
-- `PUTSH`/`GETSH`/`SHAPE` provide a shape registry, the browser demo has a
-  shape-editor panel, and `EDSH` opens the existing `$EDITOR` flow on shape
-  definitions rendered as `PUTSH` commands
-- Atari editor/screen behavior itself is still not reproduced
+- `EDIT`/`ED`, `EDNS`, and `EDSH` are available through the current `$EDITOR`-driven text-edit flow. The edited buffer is evaluated on editor exit, and tests cover source-file editing, blank edit buffers, variable editing, and shape-registry editing.
+- `PUTSH`/`GETSH`/`SHAPE` provide a shape registry, the browser demo has a shape-editor panel, and `EDSH` opens the existing `$EDITOR` flow on shape definitions rendered as `PUTSH` commands.
+- This is an intentional modern frontend substitution rather than a byte-for-byte reproduction of Atari LOGO's native full-screen editor. The remaining fidelity limitation is documented here instead of tracked as an implementation blocker.
 
 ### 6. Flow of control and conditionals
 
@@ -202,9 +197,11 @@ The Atari manual organizes features into these areas:
 - sound/environment helpers (`TOOT`, `SETENV`, `TIMEOUT`)
 - cursor/screen helpers (`SETCURSOR`, `TEXTSCREEN`, `SPLITSCREEN`, `FULLSCREEN`)
 
-**Remaining outside-world work**
+**Editor/screen fidelity audit**
 
-- Atari-specific device behavior and exact hardware timing remain outside the current target.
+- `TEXTSCREEN`/`TS`, `SPLITSCREEN`/`SS`, `FULLSCREEN`/`FS`, and `SETCURSOR`/`SETPOSN` validate arguments and store the requested text-screen mode/cursor state in the VM for frontends and tests.
+- `CT` clears the current VM output buffer.
+- Native/browser frontends do not emulate Atari-specific display-list memory, cursor drawing, or physical keyboard/joystick timing. Those hardware details remain outside the current compatibility target.
 
 ### 9. Workspace management
 
@@ -237,9 +234,9 @@ The Atari manual organizes features into these areas:
 - file/device oriented `RC`, `RL`, `RW`
 - `DRIBBLE`, `NODRIBBLE`
 
-**Still missing**
+**Still intentionally narrower than Atari LOGO**
 
-- `ERF`, `CATALOG`, printer/file device handling
+- `ERF` and `CATALOG` use the host filesystem deterministically. Atari printer/device namespaces and device-specific behavior are not emulated.
 
 ### 11. Special primitives
 
@@ -253,19 +250,12 @@ The Atari manual organizes features into these areas:
 These are the most important Atari-manual-driven gaps currently not exposed in
 DynaLOGO:
 
-1. **Turtle addressing and event primitives**
-   - `ASK`, `TELL`, `EACH`, `WHO`, `OVER`, `TOUCHING`, `WHEN`
-2. **Remaining workspace management work**
-   - editor integration (`NODES`, `RECYCLE`, and bury/unbury are now implemented)
-3. **File and device follow-through**
-   - printer/catalog/device-specific surface beyond `LOAD`/`SAVE`/streams
-4. **Remaining Atari type/text helper audit**
-   - verify any adjacent helper surface beyond `REALWORDP`, `RANK`, `RANPICK`, `EVENP`, `DIVISORP`, `FACTORIAL`, `ASCII`, `CHAR`, `LOWERCASE`, and `REV`
-5. **Graphics/screen extras**
-   - `SETBG`, `SETC`, `SETX`, `SETY`, `SHAPE`, `SETSH`, `GETSH`, `PUTSH`, `SETSP`
-   - `PX`'s reverse/XOR pixel compositing (needs a persistent raster canvas the current vector event-replay renderers don't have)
-6. **Remaining Atari outside-world features**
-   - any deeper printer/device hooks beyond `KEYP`, joystick/paddle input, `TOOT`, `SETENV`, and cursor/text-screen primitives already integrated
+1. **Low-level Atari-only special primitives**
+   - `.DEPOSIT`, `EXAMINE`, likely `.CALL`, and related memory/system primitives remain intentionally outside the portable DynaLOGO runtime unless a future Atari-emulation target needs them.
+2. **Device-specific fidelity**
+   - printer/device namespaces, physical joystick/paddle timing, and Atari display-list/cursor rendering are represented by portable VM state or host services rather than emulated hardware.
+3. **Remaining manual wording/parsing audit**
+   - continue growing compatibility fixtures for edge-case parser wording, instruction-list errors, and manual examples as needed.
 
 ## Notes
 

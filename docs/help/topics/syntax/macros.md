@@ -5,7 +5,7 @@ kind: "syntax"
 category: "syntax"
 summary: "Macro definitions and expansion for programs that transform Logo code."
 tags: ["macros", "syntax", "expansion"]
-see_also: ["macros-editing", "procedures"]
+see_also: ["macros-editing", "procedure-definitions"]
 status: "implemented"
 ---
 

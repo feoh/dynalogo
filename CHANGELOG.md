@@ -5,23 +5,50 @@
 All notable user-facing changes to DynaLOGO are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and the project follows [Semantic Versioning](https://semver.org/) once it
-reaches 1.0. Before 1.0, minor versions (`0.x.0`) may include breaking
-changes; see [docs/versioning.md](docs/versioning.md) for details.
+and the project follows [Semantic Versioning](https://semver.org/); see
+[docs/versioning.md](docs/versioning.md) for details.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-13
+
 ### Added
 
+- Added remaining Atari/UCBLogo surface primitives `SETBG`, `SETC`, `SETSP`,
+  `CT`, `READLINE`, `ERF`, and `CATALOG`, with deterministic VM regression
+  coverage.
 - Added file-backed `EDIT "program.lgo` behavior that opens a Logo source file
   in the system editor, creates the file if needed, and evaluates the edited
   source when the editor exits. `EDIT` with no input now opens a blank source
   buffer when there is no previous workspace edit session.
+- Added `$EDITOR`-driven `EDNS` and `EDSH` coverage for editing visible
+  variables and shape definitions through the existing editor flow.
+- Added deterministic Computer Science Logo Style application coverage for file
+  diff, Solitaire, BASIC compiler, Pattern Matcher/Doctor, Cryptographer's
+  Helper, Fourier plotting, and curated Volume 3 language/AI examples.
+- Added dynaturtle visual/audio snapshot coverage, including shape rendering,
+  motion, collision/audio (`TOOT`) state, and headless transcript validation.
 
 ### Changed
 
 - `EDIT`/`ED` now use `$EDITOR`, then `$VISUAL`, with a Windows `notepad`
   fallback; existing workspace contents-list editing remains supported.
+- Updated Atari LOGO validation and ROADMAP documentation to distinguish
+  implemented portable compatibility from intentionally non-emulated Atari
+  hardware/display-list/editor details.
+- Expanded generated help/reference documentation and primitive inventory to
+  cover the final 1.0 compatibility surface.
+
+### Fixed
+
+- Implemented true software-raster `PX` reverse/XOR compositing so a second
+  reverse pass restores the prior background/pixel state.
+- Fixed EOF behavior for `READCHAR`, `READLIST`, `READWORD`, and `READLINE` to
+  return `[]` consistently in deterministic file/input fixtures.
+- Fixed command-position `CATCH` handling so caught values are consumed in
+  command contexts while reporter contexts still return the caught value.
+- Allowed user-defined procedures to shadow primitive names at call time, which
+  is required by several CSLS application examples.
 
 ## [0.1.4] - 2026-07-13
 
@@ -131,7 +158,8 @@ Logo interpreter, native frontends, browser demo, and compatibility surface.
 - Browser/WASM demo published via GitHub Pages.
 - CI workflow running `cargo fmt`, `cargo clippy`, and `cargo test`.
 
-[Unreleased]: https://github.com/feoh/dynalogo/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/feoh/dynalogo/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/feoh/dynalogo/compare/v0.1.4...v1.0.0
 [0.1.4]: https://github.com/feoh/dynalogo/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/feoh/dynalogo/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/feoh/dynalogo/compare/v0.1.1...v0.1.2

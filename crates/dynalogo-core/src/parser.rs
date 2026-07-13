@@ -139,6 +139,7 @@ impl ArityTable {
             ("RL", 0),
             ("READWORD", 0),
             ("RW", 0),
+            ("READLINE", 0),
             ("EOFP", 0),
             ("OPENREAD", 1),
             ("OPENWRITE", 1),
@@ -148,6 +149,7 @@ impl ArityTable {
             ("WRITER", 0),
             ("DRIBBLE", 1),
             ("NODRIBBLE", 0),
+            ("ERF", 1),
             ("KEYP", 0),
             ("JOY", 1),
             ("JOYB", 1),
@@ -163,6 +165,7 @@ impl ArityTable {
             ("SETCURSOR", 2),
             ("SETPOSN", 2),
             ("SETENV", 4),
+            ("CT", 0),
             ("MAKE", 2),
             ("NAME", 2),
             ("LOCALMAKE", 2),
@@ -248,7 +251,10 @@ impl ArityTable {
             ("PC", 1),
             ("SETPENCOLOR", 1),
             ("SETPC", 1),
+            ("SETC", 1),
+            ("SETBG", 1),
             ("SETPENSIZE", 1),
+            ("SETSP", 1),
             ("SETSCRUNCH", 2),
             ("SETSCR", 2),
             ("SETLABELHEIGHT", 1),
@@ -289,6 +295,7 @@ impl ArityTable {
         }
         table.insert("HELP", Arity::Between { min: 0, max: 1 });
         table.insert("DEFINE", Arity::Between { min: 2, max: 3 });
+        table.insert("CATALOG", Arity::Between { min: 0, max: 1 });
         table.insert("EDIT", Arity::Between { min: 0, max: 1 });
         table.insert("ED", Arity::Between { min: 0, max: 1 });
         table

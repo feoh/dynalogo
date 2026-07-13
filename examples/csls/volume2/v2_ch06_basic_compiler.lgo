@@ -1,0 +1,21 @@
+; Source: Computer Science Logo Style, Volume 2 Chapter 6, "BASIC Compiler".
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch6/basic.html
+; Program source URL: https://people.eecs.berkeley.edu/~bh/v2ch6/basic.lg
+; Modeled deterministic fixture: compiles a curated tiny BASIC program into
+; Logo procedures using DEFINE, then prints the generated procedure source.
+
+to emit.basic.line :number :body
+local "name
+make "name word "basic% :number
+define :name sentence [[]] :body
+show fulltext :name
+end
+
+to compile.sample.basic
+emit.basic.line 10 [[print [Table of Squares]] [basic%20]]
+emit.basic.line 20 [[print []] [basic%30]]
+emit.basic.line 30 [[type [How many values would you like?]] [basic%40]]
+emit.basic.line 40 [[stop]]
+end
+
+compile.sample.basic

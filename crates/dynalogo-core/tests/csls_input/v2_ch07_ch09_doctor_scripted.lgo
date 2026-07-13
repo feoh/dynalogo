@@ -1,0 +1,30 @@
+; Source: Computer Science Logo Style, Volume 2 Chapter 7 Pattern Matcher
+; and Chapter 9 Doctor.
+; Source URLs:
+; - https://people.eecs.berkeley.edu/~bh/v2ch7/match.html
+; - https://people.eecs.berkeley.edu/~bh/v2ch9/doctor.html
+; Modeled deterministic fixture: drives a tiny Doctor-style responder with
+; scripted multi-turn input and stable transcript normalization.
+
+to doctor.demo
+print [Doctor is listening.]
+catch "done [forever [doctor.turn]]
+end
+
+to doctor.turn
+local "line
+make "line readlist
+if equalp :line [bye] [print [Goodbye.] throw "done "bye]
+print respond :line
+end
+
+to respond :line
+if equalp :line [hello] [output [How do you do?]]
+if and equalp first :line "i equalp first butfirst :line "need ~
+   [output sentence [Why do you need] sentence butfirst butfirst :line [?]]
+if and equalp first :line "i equalp first butfirst :line "feel ~
+   [output sentence [Do you often feel] sentence butfirst butfirst :line [?]]
+output [Please go on.]
+end
+
+doctor.demo

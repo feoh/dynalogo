@@ -5,7 +5,7 @@ kind: "syntax"
 category: "syntax"
 summary: "Logo-style dynamic variable lookup through the current call stack."
 tags: ["scope", "variables", "procedures"]
-see_also: ["procedures", "workspace"]
+see_also: ["procedure-definitions", "workspace"]
 status: "implemented"
 ---
 

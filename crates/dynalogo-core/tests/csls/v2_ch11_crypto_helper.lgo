@@ -1,0 +1,25 @@
+; Source: Computer Science Logo Style, Volume 2 Chapter 11,
+; "Cryptographer's Helper".
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch11/crypto.html
+; Modeled deterministic fixture: solve a small substitution-cipher sample with
+; a canonical mapping inspired by the chapter's cryptogram discussion.
+
+make "cipher [L B R A T Y]
+make "clear [t o b e r n]
+
+to decode.word :word
+if emptyp :word [output "]
+local [ch pos rest]
+make "ch first :word
+make "rest decode.word butfirst :word
+if memberp :ch :cipher [make "pos which :ch :cipher output word item :pos :clear :rest]
+output word :ch :rest
+end
+
+to decode.sentence :words
+if emptyp :words [output []]
+output fput decode.word first :words decode.sentence butfirst :words
+end
+
+print decode.word "YBL
+print decode.sentence [LB RA BT YBL LB RA]

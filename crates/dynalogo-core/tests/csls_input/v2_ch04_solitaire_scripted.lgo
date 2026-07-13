@@ -1,0 +1,66 @@
+; Source: Computer Science Logo Style, Volume 2 Chapter 4, "Solitaire".
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch4/solitaire.html
+; Program source URL: https://people.eecs.berkeley.edu/~bh/v2ch4/solitaire.lg
+; Modeled deterministic fixture: exercises the chapter's nested solitaire
+; command-loop structure with scripted single-character input. The complete
+; CSLS game is large and graphical; this pins the interactive CATCH/THROW
+; control pattern using a stable transcript.
+
+to solitaire.demo
+print [Welcome to solitaire]
+instruct
+catch "exit [forever [onegame]]
+print [Back at Logo]
+end
+
+to onegame
+print [New game]
+make "pile []
+catch "endgame [forever [catch "bell [parsecmd]]]
+end
+
+to instruct
+print [Commands:]
+print [+ deal three cards]
+print [R redisplay board]
+print [? retype help]
+print [G give up and start a new game]
+print [X exit to Logo]
+end
+
+to parsecmd
+local "char
+make "char readchar
+if memberp :char [+ =] [hand3 stop]
+if equalp :char "R [redisplay stop]
+if equalp :char "? [instruct stop]
+if equalp :char "G [giveup]
+if equalp :char "X [exitgame]
+bell
+end
+
+to giveup
+print [Giving up]
+throw "endgame "newgame
+end
+
+to exitgame
+print [Exit command]
+throw "exit "done
+end
+
+to hand3
+make "pile sentence :pile [card card card]
+print sentence [Pile has] count :pile
+end
+
+to redisplay
+print sentence [Board pile:] :pile
+end
+
+to bell
+print [Illegal command]
+throw "bell "error
+end
+
+solitaire.demo

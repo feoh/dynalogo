@@ -1,0 +1,4 @@
+[[to basic%10] [print [ Table of Squares ]] [basic%20] [end]]
+[[to basic%20] [print [ ]] [basic%30] [end]]
+[[to basic%30] [type [ How many values would you like? ]] [basic%40] [end]]
+[[to basic%40] [stop] [end]]

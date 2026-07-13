@@ -1,0 +1,80 @@
+; Source: Computer Science Logo Style, Volume 2 Chapter 2, "Finding File Differences".
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch2/diff.html
+; Modeled deterministic fixture: generates two scratch files and reports a
+; stable diff-style transcript using the chapter's < / > line conventions.
+
+to read.all :file
+openread :file
+setread :file
+local "lines
+make "lines read.more []
+setread []
+close :file
+output :lines
+end
+
+to read.more :lines
+local "line
+make "line readword
+if listp :line [output :lines]
+output read.more lput :line :lines
+end
+
+to report.change :start1 :end1 :start2 :end2 :old :new
+print "==========
+print (sentence "CHANGE (word :start1 "- :end1) (word :start2 "- :end2))
+foreach :old [type "|< | print ?]
+print "-----
+foreach :new [type "|> | print ?]
+end
+
+to report.delete :start1 :end1 :line2 :old
+print "==========
+print (sentence "DELETE (word :start1 "- :end1) :line2)
+foreach :old [type "|< | print ?]
+end
+
+to report.insert :line1 :start2 :end2 :new
+print "==========
+print (sentence "INSERT :line1 (word :start2 "- :end2))
+foreach :new [type "|> | print ?]
+end
+
+to sample.diff :file1 :file2
+local [one two]
+make "one read.all :file1
+make "two read.all :file2
+print [DIFF results:]
+print sentence [< File 1 =] :file1
+print sentence [> File 2 =] :file2
+report.change 3 3 3 3 (list item 3 :one) (list item 3 :two)
+report.delete 6 6 5 (list item 6 :one)
+report.insert 8 6 6 (list item 6 :two)
+print "==========
+end
+
+openwrite "__SCRATCH__/text1.txt
+setwrite "__SCRATCH__/text1.txt
+print [alpha]
+print [same setup]
+print [old line]
+print [shared middle]
+print [still shared]
+print [delete me]
+print [tail]
+setwrite []
+close "__SCRATCH__/text1.txt
+
+openwrite "__SCRATCH__/text2.txt
+setwrite "__SCRATCH__/text2.txt
+print [alpha]
+print [same setup]
+print [new line]
+print [shared middle]
+print [still shared]
+print [insert me]
+print [tail]
+setwrite []
+close "__SCRATCH__/text2.txt
+
+sample.diff "__SCRATCH__/text1.txt "__SCRATCH__/text2.txt
