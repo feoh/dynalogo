@@ -11,6 +11,18 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 
 ## [Unreleased]
 
+### Added
+
+- Added file-backed `EDIT "program.lgo` behavior that opens a Logo source file
+  in the system editor, creates the file if needed, and evaluates the edited
+  source when the editor exits. `EDIT` with no input now opens a blank source
+  buffer when there is no previous workspace edit session.
+
+### Changed
+
+- `EDIT`/`ED` now use `$EDITOR`, then `$VISUAL`, with a Windows `notepad`
+  fallback; existing workspace contents-list editing remains supported.
+
 ## [0.1.4] - 2026-07-13
 
 ### Added

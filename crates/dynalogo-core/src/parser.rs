@@ -177,8 +177,6 @@ impl ArityTable {
             ("MACROP", 1),
             ("MACRO?", 1),
             ("MACROEXPAND", 1),
-            ("EDIT", 1),
-            ("ED", 1),
             ("EDNS", 0),
             ("EDSH", 0),
             ("PO", 1),
@@ -274,6 +272,8 @@ impl ArityTable {
             table.insert(name, Arity::Exact(arity));
         }
         table.insert("HELP", Arity::Between { min: 0, max: 1 });
+        table.insert("EDIT", Arity::Between { min: 0, max: 1 });
+        table.insert("ED", Arity::Between { min: 0, max: 1 });
         table
     }
 
@@ -743,6 +743,23 @@ mod tests {
             panic!("expected HELP");
         };
         assert_eq!(sym_name(&interner, *callee), "help");
+        assert_eq!(args.len(), 1);
+    }
+
+    #[test]
+    fn parses_edit_with_optional_file_or_contents_input() {
+        let (program, interner) = parse("edit");
+        let Expr::Call { callee, args, .. } = &program.expressions()[0] else {
+            panic!("expected EDIT");
+        };
+        assert_eq!(sym_name(&interner, *callee), "edit");
+        assert!(args.is_empty());
+
+        let (program, interner) = parse("edit \"program.lgo");
+        let Expr::Call { callee, args, .. } = &program.expressions()[0] else {
+            panic!("expected EDIT");
+        };
+        assert_eq!(sym_name(&interner, *callee), "edit");
         assert_eq!(args.len(), 1);
     }
 

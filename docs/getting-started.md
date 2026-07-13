@@ -318,6 +318,17 @@ Run a file in the terminal frontend:
 cargo run -p dynalogo --bin dynalogo < examples/spiral.lgo
 ```
 
+From inside DynaLOGO, load, save, or edit source files with Logo commands:
+
+```logo
+load "examples/square.lgo
+save "my-workspace.lgo
+edit "my-workspace.lgo
+```
+
+`EDIT` uses `$EDITOR`, then `$VISUAL`; Windows falls back to Notepad. When the
+editor exits, DynaLOGO evaluates the edited source.
+
 Inspect the example list:
 
 ```bash

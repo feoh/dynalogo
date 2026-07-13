@@ -264,7 +264,15 @@ counts of workspace objects (procedures, variables, property lists, turtles)
 rather than fake memory-allocator statistics, and `RECYCLE` is a documented
 no-op — there is no manual reclaim step for it to perform.
 
-`EDIT`/`ED` keep their current contents-list-driven behavior through `$EDITOR`.
+`EDIT`/`ED` keep their contents-list-driven workspace behavior through the
+system editor. They also accept filesystem-looking source paths such as `EDIT
+"program.lgo`, creating the file if needed, opening it in the system editor, and
+evaluating the edited source when the editor exits. With no input, `EDIT` opens
+a blank source buffer unless there is an existing workspace edit session to
+revisit. Editor selection uses `$EDITOR`, then `$VISUAL`, with a Windows
+`notepad` fallback; tests and embedding code can override it with
+`Vm::set_editor_command(...)`.
+
 `EDNS` uses the same editor session machinery, but seeds the buffer from the
 currently visible global variables instead of a contents list. `EDSH` uses that
 same editor session machinery for shape definitions: it renders current shapes
@@ -278,10 +286,14 @@ Implemented console-oriented commands:
 - `PRINT`/`PR`
 - `SHOW`
 - `TYPE`
-- `READLIST`/`RL`
+- `LOAD`, `SAVE`
+- `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, `CLOSE`
+- `READCHAR`/`RC`, `READLIST`/`RL`, `READWORD`/`RW`
 
 `PRINT` adds a newline. `TYPE` writes output without forcing the same printed
-representation style as `SHOW`.
+representation style as `SHOW`. `LOAD "file.lgo` reads Logo source from the
+filesystem and evaluates it. `SAVE "file.lgo` writes currently visible workspace
+procedures back out as Logo source.
 
 ## 9. Classic turtle graphics
 

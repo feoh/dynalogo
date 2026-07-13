@@ -240,7 +240,9 @@ window."#,
             r#"READWORD"#,
             r#"RW"#,
         ],
-        signature: Some(r#"PRINT value; LOAD filename; OPENREAD filename; READWORD"#),
+        signature: Some(
+            r#"PRINT value; LOAD filename; SAVE filename; OPENREAD filename; READWORD"#,
+        ),
         aliases: &[],
         summary: r#"Print output, load/save Logo files, manage reader/writer streams, and read input."#,
         tags: &[
@@ -252,14 +254,16 @@ window."#,
         ],
         see_also: &[r#"browser-filesystem"#, r#"window-input"#],
         status: r#"implemented"#,
-        body: r#"Console primitives write text to the current frontend output path. File
-primitives are available in native builds; browser builds have filesystem
-limits documented separately.
+        body: r#"Console primitives write text to the current frontend output path. `LOAD` reads
+Logo source from a file and evaluates it. `SAVE` writes the visible workspace
+procedures as Logo source. File primitives are available in native builds;
+browser builds have filesystem limits documented separately.
 
 ```logo
 print "hello
 show [a b c]
 load "examples/square.lgo
+save "my-workspace.lgo
 ```"#,
     },
     GeneratedHelpTopic {
@@ -677,18 +681,23 @@ print macroexpand [example 1 2]
             r#"EDNS"#,
             r#"EDSH"#,
         ],
-        signature: Some(r#".DEFMACRO name inputs body; EDIT name; EDSH"#),
+        signature: Some(r#".DEFMACRO name inputs body; EDIT [name-or-file]; EDSH"#),
         aliases: &[],
         summary: r#"Define macros and open text/shape editing surfaces where supported."#,
         tags: &[r#"macros"#, r#"editor"#, r#"procedures"#, r#"shapes"#],
         see_also: &[r#"macros"#, r#"shapes"#, r#"workspace"#],
         status: r#"implemented"#,
-        body: r#"Macro primitives expand Logo code before evaluation. Editor primitives use
-the current frontend's editor support for procedures, names, and shapes.
+        body: r#"Macro primitives expand Logo code before evaluation. Editor primitives use the
+current frontend's editor support for procedures, names, shapes, and source
+files. `EDIT "square` edits a workspace procedure named `square`; `EDIT
+"program.lgo` opens that source file in the system editor and evaluates it when
+the editor exits. `EDIT` with no input opens a blank source buffer unless there
+is an existing workspace edit session to revisit.
 
 ```logo
 print macrop "repeat
 edit "square
+edit "program.lgo
 edsh
 ```"#,
     },

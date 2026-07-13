@@ -119,10 +119,13 @@ A large share of “nothing happened” bugs are really selection or state bugs.
 
 For editor-driven commands:
 
-- `EDIT`/`ED` require `$EDITOR` or `Vm::set_editor_command(...)`
+- `EDIT`/`ED` use `$EDITOR`, then `$VISUAL`, or `Vm::set_editor_command(...)`;
+  Windows falls back to `notepad`
 - `EDNS` uses the same editor flow for visible global variables
 - `EDSH` uses the same editor flow for shape definitions, rendering them as
   editable `PUTSH` commands; browser users can also use the shape-editor panel
+- `EDIT "program.lgo` opens a source file in the editor, creates it if needed,
+  and evaluates the edited source when the editor exits
 
 In browser/WASM frontends, filesystem/editor-backed flows are not available in
 any meaningful way.

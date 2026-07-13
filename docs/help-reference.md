@@ -472,18 +472,20 @@ helpon "lists
 - Status: `implemented`
 - Source: `docs/help/topics/primitives/console-files.md`
 - Names: `PRINT`, `PR`, `SHOW`, `TYPE`, `LOAD`, `SAVE`, `SETREAD`, `SETWRITE`, `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, `CLOSE`, `READER`, `WRITER`, `DRIBBLE`, `NODRIBBLE`, `READCHAR`, `RC`, `READLIST`, `RL`, `READWORD`, `RW`
-- Signature: `PRINT value; LOAD filename; OPENREAD filename; READWORD`
+- Signature: `PRINT value; LOAD filename; SAVE filename; OPENREAD filename; READWORD`
 - Tags: `print`, `console`, `files`, `input`, `output`
 - See also: `browser-filesystem`, `window-input`
 
-Console primitives write text to the current frontend output path. File
-primitives are available in native builds; browser builds have filesystem
-limits documented separately.
+Console primitives write text to the current frontend output path. `LOAD` reads
+Logo source from a file and evaluates it. `SAVE` writes the visible workspace
+procedures as Logo source. File primitives are available in native builds;
+browser builds have filesystem limits documented separately.
 
 ```logo
 print "hello
 show [a b c]
 load "examples/square.lgo
+save "my-workspace.lgo
 ```
 
 ## library-procedures
@@ -781,16 +783,21 @@ print pos
 - Status: `implemented`
 - Source: `docs/help/topics/primitives/macros-editing.md`
 - Names: `.DEFMACRO`, `MACROP`, `MACRO?`, `MACROEXPAND`, `EDIT`, `ED`, `EDNS`, `EDSH`
-- Signature: `.DEFMACRO name inputs body; EDIT name; EDSH`
+- Signature: `.DEFMACRO name inputs body; EDIT [name-or-file]; EDSH`
 - Tags: `macros`, `editor`, `procedures`, `shapes`
 - See also: `macros`, `shapes`, `workspace`
 
-Macro primitives expand Logo code before evaluation. Editor primitives use
-the current frontend's editor support for procedures, names, and shapes.
+Macro primitives expand Logo code before evaluation. Editor primitives use the
+current frontend's editor support for procedures, names, shapes, and source
+files. `EDIT "square` edits a workspace procedure named `square`; `EDIT
+"program.lgo` opens that source file in the system editor and evaluates it when
+the editor exits. `EDIT` with no input opens a blank source buffer unless there
+is an existing workspace edit session to revisit.
 
 ```logo
 print macrop "repeat
 edit "square
+edit "program.lgo
 edsh
 ```
 

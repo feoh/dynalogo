@@ -11,7 +11,7 @@ use std::f64::consts::PI;
 use std::fmt;
 use std::fs;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
@@ -2539,22 +2539,56 @@ impl Vm {
                 args.len()
             )));
         }
-        let (contents, buffer_text) = match args.into_iter().next() {
-            Some(value) => {
-                let contents = contentslist_input(&value, &self.interner)?;
-                let text = self.render_edit_buffer(&contents)?;
-                (contents, text)
-            }
-            None => {
-                let session = self
-                    .edit_buffer
-                    .clone()
-                    .ok_or_else(|| VmError::new("EDIT needs a contents list to edit"))?;
-                (session.contents, session.text)
-            }
+        let Some(value) = args.into_iter().next() else {
+            return match self.edit_buffer.clone() {
+                Some(session) => self.edit_session(session.contents, session.text),
+                None => self.edit_source_text(String::new()),
+            };
         };
 
-        self.edit_session(contents, buffer_text)
+        if let Some(path) = self.edit_file_path(&value) {
+            return self.edit_source_file(path);
+        }
+
+        let contents = contentslist_input(&value, &self.interner)?;
+        let text = self.render_edit_buffer(&contents)?;
+        self.edit_session(contents, text)
+    }
+
+    fn edit_file_path(&self, value: &Value) -> Option<PathBuf> {
+        let text = edit_file_path_text(value, &self.interner)?;
+        if is_filesystem_edit_target(
+            &text,
+            self.procedures.contains_key(&text.to_ascii_lowercase()),
+        ) {
+            Some(PathBuf::from(text))
+        } else {
+            None
+        }
+    }
+
+    fn edit_source_file(&mut self, path: PathBuf) -> Result<PrimitiveResult, VmError> {
+        if !path.exists() {
+            fs::write(&path, "")
+                .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        }
+        self.run_editor_on_path(&path)?;
+        let source = fs::read_to_string(&path)
+            .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
+        self.eval_edited_source(&source)
+    }
+
+    fn edit_source_text(&mut self, text: String) -> Result<PrimitiveResult, VmError> {
+        let edited = self.run_editor_on(&text)?;
+        self.eval_edited_source(&edited)
+    }
+
+    fn eval_edited_source(&mut self, source: &str) -> Result<PrimitiveResult, VmError> {
+        let result = self.eval_source(source)?;
+        match result.control {
+            ControlFlow::None => Ok(PrimitiveResult::NoValue),
+            control => Ok(PrimitiveResult::Control(control)),
+        }
     }
 
     fn edns(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2666,27 +2700,42 @@ impl Vm {
     }
 
     fn run_editor_on(&self, text: &str) -> Result<String, VmError> {
-        let editor = resolve_editor_command(self.editor_override.as_deref(), env::var("EDITOR"))?;
-        let mut parts = editor.split_whitespace();
-        let program = parts
-            .next()
-            .ok_or_else(|| VmError::new("EDITOR is set but empty"))?;
         let path = edit_temp_path();
         fs::write(&path, text)
             .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
 
-        Command::new(program)
-            .args(parts)
-            .arg(&path)
-            .status()
-            .map_err(|error| {
-                VmError::new(format!("failed to launch EDITOR `{editor}`: {error}"))
-            })?;
+        self.run_editor_on_path(&path)?;
 
         let edited = fs::read_to_string(&path)
             .map_err(|error| VmError::new(format!("{}: {error}", path.display())))?;
         let _ = fs::remove_file(&path);
         Ok(edited)
+    }
+
+    fn run_editor_on_path(&self, path: &Path) -> Result<(), VmError> {
+        let editor = resolve_editor_command(
+            self.editor_override.as_deref(),
+            env::var("EDITOR"),
+            env::var("VISUAL"),
+        )?;
+        let mut parts = editor.split_whitespace();
+        let program = parts
+            .next()
+            .ok_or_else(|| VmError::new("EDITOR is set but empty"))?;
+
+        let status = Command::new(program)
+            .args(parts)
+            .arg(path)
+            .status()
+            .map_err(|error| {
+                VmError::new(format!("failed to launch EDITOR `{editor}`: {error}"))
+            })?;
+        if !status.success() {
+            return Err(VmError::new(format!(
+                "EDITOR `{editor}` exited with status {status}"
+            )));
+        }
+        Ok(())
     }
 
     fn visible_variable_names(&self) -> Vec<String> {
@@ -4320,6 +4369,25 @@ fn source_text_input(value: &Value, interner: &Interner) -> String {
     }
 }
 
+fn edit_file_path_text(value: &Value, interner: &Interner) -> Option<String> {
+    match value {
+        Value::Word(symbol) | Value::BareWord(symbol) => {
+            Some(interner.spelling(*symbol).to_string())
+        }
+        _ => None,
+    }
+}
+
+fn is_filesystem_edit_target(text: &str, workspace_procedure_exists: bool) -> bool {
+    if text.contains('/') || text.contains('\\') {
+        return true;
+    }
+    if text.ends_with(".lgo") || text.ends_with(".logo") {
+        return true;
+    }
+    Path::new(text).exists() && !workspace_procedure_exists
+}
+
 fn ranged_byte_input(
     value: &Value,
     interner: &Interner,
@@ -4673,12 +4741,29 @@ fn edit_temp_path() -> PathBuf {
 
 fn resolve_editor_command(
     override_command: Option<&str>,
-    env_lookup: Result<String, env::VarError>,
+    editor_lookup: Result<String, env::VarError>,
+    visual_lookup: Result<String, env::VarError>,
 ) -> Result<String, VmError> {
-    if let Some(command) = override_command {
+    if let Some(command) = override_command.filter(|command| !command.trim().is_empty()) {
         return Ok(command.to_string());
     }
-    env_lookup.map_err(|_| VmError::new("EDIT requires the EDITOR environment variable to be set"))
+    if let Ok(command) = editor_lookup {
+        if !command.trim().is_empty() {
+            return Ok(command);
+        }
+    }
+    if let Ok(command) = visual_lookup {
+        if !command.trim().is_empty() {
+            return Ok(command);
+        }
+    }
+    if cfg!(windows) {
+        Ok("notepad".to_string())
+    } else {
+        Err(VmError::new(
+            "EDIT requires EDITOR or VISUAL to be set, or Vm::set_editor_command(...) to be configured",
+        ))
+    }
 }
 
 fn procedure_text(
@@ -5235,11 +5320,39 @@ fn template_binding_name(text: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::turtle::{PenMode, Point, TurtleEvent};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn run(source: &str) -> Result<(RunResult, Vm), VmError> {
         let mut vm = Vm::new();
         let result = vm.eval_source(source)?;
         Ok((result, vm))
+    }
+
+    fn unique_temp_path(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time is before UNIX_EPOCH")
+            .as_nanos();
+        env::temp_dir().join(format!(
+            "dynalogo-test-{}-{nanos}-{name}",
+            std::process::id()
+        ))
+    }
+
+    fn logo_path(path: &Path) -> String {
+        path.to_string_lossy().replace('\\', "/")
+    }
+
+    fn editor_script(contents: &str) -> PathBuf {
+        let path = unique_temp_path("editor.sh");
+        fs::write(
+            &path,
+            format!(
+                "#!/bin/sh\ncat > \"$1\" <<'DYNALOGO_EDIT_EOF'\n{contents}\nDYNALOGO_EDIT_EOF\n"
+            ),
+        )
+        .unwrap();
+        path
     }
 
     #[test]
@@ -5787,6 +5900,74 @@ mod tests {
         vm.clear_output();
         vm.dynaturtle_tick(0.0).unwrap();
         assert_eq!(vm.output(), "hit\n");
+    }
+
+    #[test]
+    fn load_reads_source_file_and_evaluates_it() {
+        let path = unique_temp_path("load.lgo");
+        fs::write(
+            &path,
+            "to double :x\noutput product :x 2\nend\nprint double 21\n",
+        )
+        .unwrap();
+
+        let mut vm = Vm::new();
+        let result = vm
+            .eval_source(&format!("load \"{}", logo_path(&path)))
+            .unwrap();
+        assert_eq!(result.output, "42\n");
+        assert!(vm.procedures().contains_key("double"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn save_writes_visible_workspace_procedures_to_source_file() {
+        let path = unique_temp_path("save.lgo");
+        let mut vm = Vm::new();
+        vm.eval_source("to square :size\nrepeat 4 [fd :size rt 90]\nend")
+            .unwrap();
+
+        vm.eval_source(&format!("save \"{}", logo_path(&path)))
+            .unwrap();
+        let saved = fs::read_to_string(&path).unwrap();
+        assert!(saved.contains("to square :size"));
+        assert!(saved.contains("repeat 4 [fd :size rt 90]"));
+        assert!(saved.contains("end"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn edit_file_invokes_editor_then_loads_edited_source() {
+        let source_path = unique_temp_path("edited.lgo");
+        let script = editor_script("to edited\nprint \"fromfile\nend\nedited");
+        let mut vm = Vm::new();
+        vm.set_editor_command(format!("sh {}", logo_path(&script)));
+
+        let result = vm
+            .eval_source(&format!("edit \"{}", logo_path(&source_path)))
+            .unwrap();
+        assert_eq!(result.output, "fromfile\n");
+        assert!(vm.procedures().contains_key("edited"));
+        assert!(fs::read_to_string(&source_path)
+            .unwrap()
+            .contains("to edited"));
+
+        let _ = fs::remove_file(source_path);
+        let _ = fs::remove_file(script);
+    }
+
+    #[test]
+    fn edit_without_inputs_opens_blank_source_buffer() {
+        let script = editor_script("print \"blankedit");
+        let mut vm = Vm::new();
+        vm.set_editor_command(format!("sh {}", logo_path(&script)));
+
+        let result = vm.eval_source("edit").unwrap();
+        assert_eq!(result.output, "blankedit\n");
+
+        let _ = fs::remove_file(script);
     }
 
     #[test]
