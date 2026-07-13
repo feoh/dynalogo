@@ -188,6 +188,10 @@ The window shows:
 - a small command log at the bottom
 - a prompt where you can type or paste Logo commands
 
+The prompt supports normal single-line editing: Left/Right move the cursor,
+Home/End jump to the start/end, Backspace and Delete edit around the cursor,
+and Up/Down browse command history.
+
 Paste this into the window prompt:
 
 ```logo

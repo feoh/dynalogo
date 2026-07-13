@@ -11,6 +11,14 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 
 ## [Unreleased]
 
+### Added
+
+- Added native/window command-line cursor editing with Left/Right, Home/End,
+  insertion at the cursor, Backspace before the cursor, and Delete at the
+  cursor.
+- Added a source-of-truth design and Witan task breakdown for a future
+  interactive `HELP` facility.
+
 ## [0.1.3] - 2026-07-13
 
 ### Added

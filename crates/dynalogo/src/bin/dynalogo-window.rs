@@ -132,6 +132,21 @@ impl App {
         if is_key_pressed(KeyCode::Down) {
             events.push(InputEvent::HistoryNext);
         }
+        if is_key_pressed(KeyCode::Left) {
+            events.push(InputEvent::CursorLeft);
+        }
+        if is_key_pressed(KeyCode::Right) {
+            events.push(InputEvent::CursorRight);
+        }
+        if is_key_pressed(KeyCode::Delete) {
+            events.push(InputEvent::Delete);
+        }
+        if is_key_pressed(KeyCode::Home) {
+            events.push(InputEvent::CursorHome);
+        }
+        if is_key_pressed(KeyCode::End) {
+            events.push(InputEvent::CursorEnd);
+        }
         if ctrl_down && is_key_pressed(KeyCode::Q) {
             self.request_quit();
         }
@@ -407,18 +422,28 @@ impl App {
             draw_text(line, 12.0, y, LOG_FONT_SIZE, LIGHTGRAY);
         }
 
-        let cursor = if ((get_time() * 2.0) as i64) % 2 == 0 {
-            "_"
-        } else {
-            ""
-        };
+        let input_x = 12.0;
+        let prompt_text = format!("? {}", self.input.line());
         draw_text(
-            format!("? {}{cursor}", self.input.line()),
-            12.0,
+            &prompt_text,
+            input_x,
             layout.input_baseline,
             self.input_font_size,
             WHITE,
         );
+        if ((get_time() * 2.0) as i64) % 2 == 0 {
+            let prefix = format!("? {}", self.input.cursor_prefix());
+            let metrics = measure_text(&prefix, None, self.input_font_size.round() as u16, 1.0);
+            let cursor_x = input_x + metrics.width;
+            draw_line(
+                cursor_x,
+                layout.input_baseline - self.input_font_size,
+                cursor_x,
+                layout.input_baseline + 4.0,
+                1.5,
+                WHITE,
+            );
+        }
     }
 
     fn push_log(&mut self, line: String) {
@@ -572,8 +597,13 @@ fn blank_image(width: u16, height: u16) -> Image {
 enum InputEvent {
     Char(char),
     Backspace,
+    Delete,
     Submit,
     Cancel,
+    CursorLeft,
+    CursorRight,
+    CursorHome,
+    CursorEnd,
     HistoryPrevious,
     HistoryNext,
 }
@@ -581,6 +611,7 @@ enum InputEvent {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 struct InputState {
     line: String,
+    cursor: usize,
     history: Vec<String>,
     history_cursor: Option<usize>,
     history_draft: String,
@@ -589,6 +620,20 @@ struct InputState {
 impl InputState {
     fn line(&self) -> &str {
         &self.line
+    }
+
+    #[cfg(test)]
+    fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    fn cursor_prefix(&self) -> &str {
+        &self.line[..self.cursor]
+    }
+
+    fn set_line(&mut self, line: String) {
+        self.line = line;
+        self.cursor = self.line.len();
     }
 
     fn exit_history_edit(&mut self) {
@@ -600,6 +645,44 @@ impl InputState {
         if self.history.last().is_none_or(|last| last != command) {
             self.history.push(command.to_string());
         }
+    }
+
+    fn insert_char(&mut self, ch: char) {
+        self.line.insert(self.cursor, ch);
+        self.cursor += ch.len_utf8();
+    }
+
+    fn backspace(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+        let previous = previous_char_boundary(&self.line, self.cursor);
+        self.line.drain(previous..self.cursor);
+        self.cursor = previous;
+    }
+
+    fn delete(&mut self) {
+        if self.cursor == self.line.len() {
+            return;
+        }
+        let next = next_char_boundary(&self.line, self.cursor);
+        self.line.drain(self.cursor..next);
+    }
+
+    fn cursor_left(&mut self) {
+        self.cursor = previous_char_boundary(&self.line, self.cursor);
+    }
+
+    fn cursor_right(&mut self) {
+        self.cursor = next_char_boundary(&self.line, self.cursor);
+    }
+
+    fn cursor_home(&mut self) {
+        self.cursor = 0;
+    }
+
+    fn cursor_end(&mut self) {
+        self.cursor = self.line.len();
     }
 
     fn history_previous(&mut self) {
@@ -614,7 +697,7 @@ impl InputState {
             }
         };
         self.history_cursor = Some(index);
-        self.line = self.history[index].clone();
+        self.set_line(self.history[index].clone());
     }
 
     fn history_next(&mut self) {
@@ -624,12 +707,27 @@ impl InputState {
         if index + 1 < self.history.len() {
             let next = index + 1;
             self.history_cursor = Some(next);
-            self.line = self.history[next].clone();
+            self.set_line(self.history[next].clone());
         } else {
             self.history_cursor = None;
-            self.line = std::mem::take(&mut self.history_draft);
+            let draft = std::mem::take(&mut self.history_draft);
+            self.set_line(draft);
         }
     }
+}
+
+fn previous_char_boundary(value: &str, cursor: usize) -> usize {
+    value[..cursor]
+        .char_indices()
+        .last()
+        .map_or(0, |(index, _)| index)
+}
+
+fn next_char_boundary(value: &str, cursor: usize) -> usize {
+    value[cursor..]
+        .char_indices()
+        .nth(1)
+        .map_or(value.len(), |(index, _)| cursor + index)
 }
 
 #[cfg(test)]
@@ -637,8 +735,10 @@ fn process_input_events(
     input: &mut String,
     events: impl IntoIterator<Item = InputEvent>,
 ) -> Vec<String> {
+    let line = std::mem::take(input);
     let mut state = InputState {
-        line: std::mem::take(input),
+        cursor: line.len(),
+        line,
         ..InputState::default()
     };
     let commands = process_input_state_events(&mut state, events);
@@ -655,15 +755,20 @@ fn process_input_state_events(
         match event {
             InputEvent::Char(ch) => {
                 input.exit_history_edit();
-                input.line.push(ch);
+                input.insert_char(ch);
             }
             InputEvent::Backspace => {
                 input.exit_history_edit();
-                input.line.pop();
+                input.backspace();
+            }
+            InputEvent::Delete => {
+                input.exit_history_edit();
+                input.delete();
             }
             InputEvent::Submit => {
                 let command = input.line.trim().to_string();
                 input.line.clear();
+                input.cursor = 0;
                 input.exit_history_edit();
                 if !command.is_empty() {
                     input.remember_command(&command);
@@ -672,8 +777,13 @@ fn process_input_state_events(
             }
             InputEvent::Cancel => {
                 input.line.clear();
+                input.cursor = 0;
                 input.exit_history_edit();
             }
+            InputEvent::CursorLeft => input.cursor_left(),
+            InputEvent::CursorRight => input.cursor_right(),
+            InputEvent::CursorHome => input.cursor_home(),
+            InputEvent::CursorEnd => input.cursor_end(),
             InputEvent::HistoryPrevious => input.history_previous(),
             InputEvent::HistoryNext => input.history_next(),
         }
@@ -1307,6 +1417,94 @@ mod tests {
     }
 
     #[test]
+    fn cursor_left_allows_insertion_inside_command() {
+        let mut input = String::new();
+        let commands = process_input_events(
+            &mut input,
+            [
+                InputEvent::Char('f'),
+                InputEvent::Char('d'),
+                InputEvent::Char(' '),
+                InputEvent::Char('1'),
+                InputEvent::Char('0'),
+                InputEvent::CursorLeft,
+                InputEvent::Char('0'),
+                InputEvent::Submit,
+            ],
+        );
+        assert_eq!(commands, vec!["fd 100".to_string()]);
+    }
+
+    #[test]
+    fn backspace_removes_character_before_cursor() {
+        let mut input = String::new();
+        process_input_events(
+            &mut input,
+            [
+                InputEvent::Char('f'),
+                InputEvent::Char('x'),
+                InputEvent::Char('d'),
+                InputEvent::CursorLeft,
+                InputEvent::Backspace,
+            ],
+        );
+        assert_eq!(input, "fd");
+    }
+
+    #[test]
+    fn delete_removes_character_at_cursor() {
+        let mut input = String::new();
+        process_input_events(
+            &mut input,
+            [
+                InputEvent::Char('f'),
+                InputEvent::Char('x'),
+                InputEvent::Char('d'),
+                InputEvent::CursorHome,
+                InputEvent::CursorRight,
+                InputEvent::Delete,
+            ],
+        );
+        assert_eq!(input, "fd");
+    }
+
+    #[test]
+    fn home_and_end_move_to_command_boundaries() {
+        let mut input = String::new();
+        process_input_events(
+            &mut input,
+            [
+                InputEvent::Char('d'),
+                InputEvent::Char(' '),
+                InputEvent::CursorHome,
+                InputEvent::Char('f'),
+                InputEvent::CursorEnd,
+                InputEvent::Char('1'),
+            ],
+        );
+        assert_eq!(input, "fd 1");
+    }
+
+    #[test]
+    fn cursor_editing_respects_utf8_boundaries() {
+        let mut input = InputState::default();
+        process_input_state_events(
+            &mut input,
+            [
+                InputEvent::Char('λ'),
+                InputEvent::Char('x'),
+                InputEvent::CursorLeft,
+                InputEvent::Backspace,
+            ],
+        );
+        assert_eq!(input.line(), "x");
+        assert_eq!(input.cursor(), 0);
+        process_input_state_events(&mut input, [InputEvent::Delete]);
+        assert!(input.line().is_empty());
+        assert_eq!(input.cursor(), 0);
+    }
+
+    #[test]
     fn process_input_events_submit_ignores_blank_input() {
         let mut input = String::new();
         let commands = process_input_events(
@@ -1386,8 +1584,10 @@ mod tests {
 
         process_input_state_events(&mut input, [InputEvent::HistoryPrevious]);
         assert_eq!(input.line(), "fd 1");
+        assert_eq!(input.cursor(), input.line().len());
         process_input_state_events(&mut input, [InputEvent::HistoryNext]);
         assert_eq!(input.line(), "pr");
+        assert_eq!(input.cursor(), input.line().len());
     }
 
     #[test]

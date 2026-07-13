@@ -84,7 +84,8 @@ cargo run -p dynalogo --bin dynalogo-window
 ```
 
 The window frontend keeps a small command log at the bottom and renders turtle
-lines on a centered Cartesian canvas.
+lines on a centered Cartesian canvas. The prompt supports command editing with
+Left/Right, Home/End, Backspace, Delete, and Up/Down command history.
 
 ### Browser demo (WASM)
 

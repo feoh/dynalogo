@@ -13,6 +13,8 @@ Start here for user-facing documentation inside the repository.
   common failure modes, and error-handling guidance
 - [`developer-guide.md`](developer-guide.md) — contributor-oriented VM,
   parser, primitive, and dynaturtle internals
+- [`interactive-help-design.md`](interactive-help-design.md) — source-of-truth
+  design and task breakdown for the planned interactive `HELP` facility
 - [`wasm-and-browser.md`](wasm-and-browser.md) — WASM/browser build and
   embedding guidance beyond the user demo walkthrough
 
