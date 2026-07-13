@@ -38,8 +38,11 @@ Then paste a program into the prompt.
 ### Dynaturtle gallery
 
 - `shape_parade.lgo` — showcases turtle, dog, and ship sprite rendering
-- `dogs_in_the_park.lgo` — three dogs move toward the center, bark with
-  `TOOT`, and use `WHEN [TOUCHING ...]`
+- `dogs_in_the_park.lgo` — three dogs scatter to random starting spots in a
+  fenced, grassy park, bark and bounce off each other with
+  `WHEN [TOUCHING ...]`, and bounce off the fence and trees via a
+  turtle-over-pixel `WHEN [OVER ...]` collision against those obstacles'
+  pen color
 - `spaceship_thrust.lgo` — a small ship-thrust / inertia sketch
 - `bouncing_ball.lgo` — a moving ball that reverses direction on collision
 - `orbit_simulation.lgo` — scripted multi-body orbit-style trails

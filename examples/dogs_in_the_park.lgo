@@ -1,21 +1,93 @@
+; Three dogs roam a fenced park: green grass they can freely cross, and
+; trees/fence they can't. Obstacles are drawn as pen lines in dedicated
+; colors, and WHEN [OVER <color>] gives a turtle <-> pixel collision against
+; that color, so the dogs bounce off the fence and tree trunks but walk
+; right over the grass.
 make "barks 0
+make "bumps 0
 
-to bark :a :b
+to circle :radius
+  repeat 36 [forward (0.1745 * :radius) right 10]
+end
+
+; Give the active turtle a fresh random heading and back it off whatever it
+; just hit, so a collision doesn't just re-trigger every tick.
+to deflect
+  back 6
+  setheading random 360
+  setspeed 55
+end
+
+to bump.dogs
   make "barks sum :barks 1
   toot 0 (sum 70 :barks) 6 15
-  print :barks
+  print (sentence "Bark! :barks)
+  each [deflect]
+end
+
+to bump.obstacle
+  make "bumps sum :bumps 1
+  deflect
+end
+
+to plant.tree :x :y
+  ask 3 [
+    penup
+    setxy :x :y
+    setpencolor 6636321
+    setpensize 6
+    pendown
+    circle 20
+    penup
+    setxy :x :y
+    fill
+  ]
+end
+
+to fence.park
+  ask 3 [
+    penup
+    setxy -260 -190
+    setpencolor 9866360
+    setpensize 6
+    setheading 0
+    pendown
+    repeat 2 [forward 380 right 90 forward 520 right 90]
+    penup
+  ]
+end
+
+to setup.park
+  setbg 3968070
+  fence.park
+  plant.tree -120 90
+  plant.tree 110 -60
+  plant.tree 10 130
+  ask 3 [hideturtle]
+end
+
+to scatter :who
+  ask :who [
+    setshape "dog 12
+    setxy (difference (random 400) 200) (difference (random 300) 150)
+    setheading random 360
+    setspeed 55
+  ]
 end
 
 to setup.dogs
   tell [0 1 2]
-  ask 0 [setshape "dog 12 setxy 20 20 setheading 45 setspeed 55]
-  ask 1 [setshape "dog 12 setxy 220 20 setheading 315 setspeed 55]
-  ask 2 [setshape "dog 12 setxy 120 200 setheading 180 setspeed 55]
+  scatter 0
+  scatter 1
+  scatter 2
 
-  when [touching 0 1] [bark 0 1]
-  when [touching 0 2] [bark 0 2]
-  when [touching 1 2] [bark 1 2]
+  when [touching 0 1] [bump.dogs]
+  when [touching 0 2] [bump.dogs]
+  when [touching 1 2] [bump.dogs]
+  when [over 6636321] [bump.obstacle]
+  when [over 9866360] [bump.obstacle]
 end
 
+setup.park
 setup.dogs
-print "Dogs-are-loose!
+print [Dogs are loose in the park!]

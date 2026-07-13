@@ -450,6 +450,16 @@ impl Procedure {
     }
 }
 
+/// A process-varying seed for the RANDOM/RANPICK PRNG, drawn from
+/// `RandomState`'s OS-entropy-derived keys so a fresh `Vm` doesn't replay
+/// the same sequence on every launch. `RERANDOM` resets to a fixed constant
+/// deliberately, for reproducible runs; this only affects the cold start.
+fn entropy_seed() -> u64 {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    RandomState::new().build_hasher().finish()
+}
+
 impl Default for Vm {
     fn default() -> Self {
         Self {
@@ -478,7 +488,7 @@ impl Default for Vm {
             call_stack: Vec::new(),
             pause_depth: 0,
             pause_inputs: VecDeque::new(),
-            random_seed: 0x4d595df4d0f33173,
+            random_seed: entropy_seed(),
             last_toot: None,
             edit_buffer: None,
             editor_override: None,

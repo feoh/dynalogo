@@ -41,7 +41,7 @@ async fn main() {
     let mut app = App::new().await;
 
     loop {
-        clear_background(CANVAS_BACKGROUND);
+        clear_background(app.canvas_background());
         app.handle_input();
         app.handle_browser_commands();
         app.poll_eval();
@@ -281,6 +281,13 @@ impl App {
     fn draw(&mut self) {
         self.draw_canvas();
         self.draw_prompt();
+    }
+
+    fn canvas_background(&self) -> Color {
+        match self.vm.background_color() {
+            0 => CANVAS_BACKGROUND,
+            color => logo_color(color),
+        }
     }
 
     fn draw_canvas(&mut self) {
