@@ -9,3 +9,12 @@ end
 opinion [Ice cream] "Cheese
 show text "opinion
 po "opinion
+
+define "opinion [[yes no] [print sentence :yes [is yummy.]]
+                           [print sentence :no [is yucky.]]]
+run [opinion [Ice cream] "Cheese]
+po "opinion
+
+define "opinion (lput [print sentence :no "stinks!] ~
+                      butlast text "opinion)
+run [opinion "Logo "Basic]

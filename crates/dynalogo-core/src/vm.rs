@@ -998,6 +998,7 @@ impl Vm {
             "emptyp" | "empty?" => self.emptyp(args),
             "memberp" | "member?" => self.memberp(args),
             "member" => self.member(args),
+            "remove" => self.remove(args),
             "substringp" => self.substringp(args),
             "find" => self.find(args),
             "first" => self.first(args),
@@ -1559,6 +1560,31 @@ impl Vm {
         Ok(PrimitiveResult::Value(
             found.unwrap_or_else(|| self.logo_bool(false)),
         ))
+    }
+
+    fn remove(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("remove", &args, 2)?;
+        let value = match &args[1] {
+            Value::List(list) => Value::List(List::from_values(
+                list_values(list)
+                    .into_iter()
+                    .filter(|value| !args[0].equalp(value, &self.interner)),
+            )),
+            Value::Array(array) => Value::List(List::from_values(
+                list_values(&array.to_list())
+                    .into_iter()
+                    .filter(|value| !args[0].equalp(value, &self.interner)),
+            )),
+            Value::Word(symbol) | Value::BareWord(symbol) => {
+                let needle = args[0].show(&self.interner);
+                let text = self.interner.spelling(*symbol).replace(&needle, "");
+                Value::word(&mut self.interner, text)
+            }
+            Value::Number(_) => {
+                return Err(doesnt_like_as_input("remove", &args[1], &self.interner));
+            }
+        };
+        Ok(PrimitiveResult::Value(value))
     }
 
     fn substringp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2585,10 +2611,21 @@ impl Vm {
     }
 
     fn define_from_data(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
-        expect_arity("define", &args, 3)?;
+        if !(2..=3).contains(&args.len()) {
+            return Err(VmError::new(format!(
+                "define expected 2 or 3 input(s), got {}",
+                args.len()
+            )));
+        }
         let name = variable_name_input(&args[0], &self.interner)?;
-        let params = parameter_names_input(&args[1], &self.interner)?;
-        let body_lines = define_body_input(&args[2], &self.interner, &self.arities)?;
+        let (params, body_lines) = if args.len() == 2 {
+            define_text_input(&args[1], &self.interner, &self.arities)?
+        } else {
+            (
+                parameter_names_input(&args[1], &self.interner)?,
+                define_body_input(&args[2], &self.interner, &self.arities)?,
+            )
+        };
         self.define_procedure(name, params, &body_lines.join("\n"))?;
         Ok(PrimitiveResult::NoValue)
     }
@@ -5276,6 +5313,27 @@ fn normalize_parameter_name(name: &str) -> Result<String, VmError> {
     }
 }
 
+fn define_text_input(
+    value: &Value,
+    interner: &Interner,
+    arities: &ArityTable,
+) -> Result<(Vec<String>, Vec<String>), VmError> {
+    let Value::List(text) = value else {
+        return Err(VmError::new(format!(
+            "{} is not a procedure text list",
+            value.show(interner)
+        )));
+    };
+    let values = list_values(text);
+    let Some(formals) = values.first() else {
+        return Err(VmError::new("procedure text list cannot be empty"));
+    };
+    let params = parameter_names_input(formals, interner)?;
+    let body = Value::List(List::from_values(values.into_iter().skip(1)));
+    let body_lines = define_body_input(&body, interner, arities)?;
+    Ok((params, body_lines))
+}
+
 fn define_body_input(
     value: &Value,
     interner: &Interner,
@@ -5421,7 +5479,11 @@ fn procedure_text(
     interner: &mut Interner,
     include_end: bool,
 ) -> Result<List, VmError> {
-    let mut lines = vec![procedure_header_line(procedure, interner)];
+    let mut lines = if include_end {
+        vec![procedure_header_line(procedure, interner)]
+    } else {
+        vec![procedure_formals_line(procedure, interner)]
+    };
     for line in procedure.body_source().lines() {
         lines.push(parse_source_line(line, interner)?);
     }
@@ -5429,6 +5491,18 @@ fn procedure_text(
         lines.push(parse_source_line("end", interner)?);
     }
     Ok(List::from_values(lines.into_iter().map(Value::List)))
+}
+
+fn procedure_formals_line(procedure: &Procedure, interner: &mut Interner) -> List {
+    let names = procedure
+        .input_specs()
+        .iter()
+        .map(|input| {
+            let name = interner.spelling(input.name).to_string();
+            Value::bare_word(interner, name)
+        })
+        .collect::<Vec<_>>();
+    List::from_values(names)
 }
 
 fn procedure_header_line(procedure: &Procedure, interner: &mut Interner) -> List {
@@ -5481,6 +5555,7 @@ fn primitive_names() -> &'static [&'static str] {
         "memberp",
         "member?",
         "member",
+        "remove",
         "substringp",
         "find",
         "first",
@@ -6809,7 +6884,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             result.output,
-            "[to square :x] [output product :x :x]\n[to square :x] [output product :x :x] [end]\n"
+            "[x] [output product :x :x]\n[to square :x] [output product :x :x] [end]\n"
         );
     }
 
@@ -7005,7 +7080,7 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
         )
         .unwrap();
         let result = vm.eval_source("print quad 6 print text \"quad").unwrap();
-        assert_eq!(result.output, "36\n[to quad :x] [output product :x :x]\n");
+        assert_eq!(result.output, "36\n[x] [output product :x :x]\n");
         assert!(vm.procedures().contains_key("quad"));
     }
 
@@ -7017,10 +7092,7 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
         let result = vm
             .eval_source("print square 5 print text \"square")
             .unwrap();
-        assert_eq!(
-            result.output,
-            "25\n[to square :size] [output product :size :size]\n"
-        );
+        assert_eq!(result.output, "25\n[size] [output product :size :size]\n");
     }
 
     #[test]

@@ -1,7 +1,7 @@
 ; Examples from Computer Science Logo Style, Volume 2, Chapter 10: Iteration, Templates, and Tools
 ; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch10/iter.html
 
-foreach [print (sentence [I like] ?)] [chocolate [rum raisin] pumpkin]
+foreach [chocolate [rum raisin] pumpkin] [print (sentence [I like] ?)]
 print apply [sum ? 3] [5]
 print apply [word (first ?1) (first ?2)] [Peter Dickinson]
 show map [product ? ?] [1 2 3 4]
@@ -12,5 +12,6 @@ output list last :pair first :pair
 end
 
 show map [swap ?] [[Sherlock Holmes] [James Pibble] [Nero Wolfe]]
+show map.se [swap ?] [[Sherlock Holmes] [James Pibble] [Nero Wolfe]]
 print count [how now brown cow]
 

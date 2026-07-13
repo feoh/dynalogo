@@ -18,11 +18,18 @@ The following DynaLOGO-specific adaptations were removed after parser/template/c
 - `v3_ch02_combinatorics.lgo`
   - Restored original `fact` template: `[# * ?]`.
   - Restored original infix permutation expression: `(fact :n)/(fact (:n-:r))`.
+- `v2_ch05_program_as_data.lgo`
+  - Restored two-input UCBLogo `DEFINE "name [[inputs] body...]` forms and `TEXT`-driven redefinition examples.
+  - Note: calls to newly `DEFINE`d procedures are wrapped in `RUN [...]` in this whole-file fixture so DynaLOGO's batch parser can resolve arity after runtime definition; interactive CSLS sessions do not need that wrapper.
+- `v2_ch08_property_lists.lgo`
+  - Restored the book's family-tree property-list procedures using data-first `FOREACH`, `LOCALMAKE`, `CATCH`, `MAP.SE`, `FILTER`, and `REMOVE`.
+- `v2_ch10_iteration_templates.lgo`
+  - Restored data-first `FOREACH` argument order and the omitted `MAP.SE` contrast example.
 - `v3_ch04_language_design.lgo`
   - Restored original recursive factorial body: `output :n * fact :n-1`.
   - Restored original Hanoi recursive calls using `:number-1`.
 
-During the audit, restoring omitted-step `FOR` exposed a real control-library grouping bug. `FOR` now parenthesizes `ITEM` calls in its comparisons and `__FORLOOP` invocations so the original CSLS forms run correctly.
+During the audit, restoring omitted-step `FOR`, UCBLogo `DEFINE`/`TEXT`, and family-tree examples exposed real compatibility gaps. `FOR` now parenthesizes `ITEM` calls in its comparisons and `__FORLOOP` invocations, `TEXT` now returns UCBLogo-style `[[inputs] body...]` while `FULLTEXT` retains full source lines, `DEFINE` accepts both UCBLogo two-input text lists and the existing three-input form, and `REMOVE` is available for CSLS list/word filtering.
 
 ## Non-verbatim fixtures retained intentionally
 
@@ -37,4 +44,4 @@ Most fixtures in `tests/csls/` are direct or near-verbatim executable examples f
 
 ## Validation
 
-`cargo test --test csls_examples` passed after the source restorations. The full suite was last run immediately before this audit task and passed; rerun the full suite before final delivery if more code changes follow.
+`cargo test --test csls_examples` passed after the source restorations. The full `cargo test` suite also passed after the additional fixture rewrites and compatibility fixes.

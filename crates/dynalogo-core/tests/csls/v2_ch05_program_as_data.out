@@ -1,7 +1,15 @@
 Ice cream is yummy.
 Cheese is yucky.
-[[to opinion :yes :no] [print sentence :yes [ is yummy. ]] [print sentence :no [ is yucky. ]]]
+[[yes no] [print sentence :yes [ is yummy. ]] [print sentence :no [ is yucky. ]]]
 [to opinion :yes :no]
 [print sentence :yes [ is yummy. ]]
 [print sentence :no [ is yucky. ]]
 [end]
+Ice cream is yummy.
+Cheese is yucky.
+[to opinion :yes :no]
+[print sentence :yes [ is yummy. ]]
+[print sentence :no [ is yucky. ]]
+[end]
+Logo is yummy.
+Basic stinks!

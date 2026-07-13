@@ -78,6 +78,7 @@ impl ArityTable {
             (".SETFIRST", 2),
             (".SETBF", 2),
             ("MEMBER", 2),
+            ("REMOVE", 2),
             ("FIND", 2),
             ("MAP.SE", 2),
             ("QUEUE", 2),
@@ -287,6 +288,7 @@ impl ArityTable {
             table.insert(name, Arity::Exact(arity));
         }
         table.insert("HELP", Arity::Between { min: 0, max: 1 });
+        table.insert("DEFINE", Arity::Between { min: 2, max: 3 });
         table.insert("EDIT", Arity::Between { min: 0, max: 1 });
         table.insert("ED", Arity::Between { min: 0, max: 1 });
         table
