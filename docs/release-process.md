@@ -12,6 +12,22 @@ turtle window) frontends and attaches them to a GitHub Release:
 Each archive bundles the two binaries alongside `README.md`, `LICENSE`, and
 the `examples/` directory.
 
+## Installing a release package
+
+Download the latest archive from the
+[GitHub Releases page](https://github.com/feoh/dynalogo/releases/latest):
+
+- `dynalogo-x86_64-unknown-linux-gnu.tar.gz` for Linux x86_64
+- `dynalogo-aarch64-apple-darwin.zip` for Apple-silicon macOS
+- `dynalogo-x86_64-pc-windows-msvc.zip` for Windows x86_64
+
+Extract the archive and run `dynalogo` for the terminal REPL or
+`dynalogo-window` for the native turtle window. The
+[Getting Started installation guide](getting-started.md#use-a-packaged-release)
+has platform-specific extraction commands and first-run examples. These are
+plain unsigned archives, not installers; macOS and Windows may show their
+usual security warnings.
+
 The workflow can also be run manually via `workflow_dispatch` to sanity-check
 the build matrix without publishing a release (the publish job only runs on
 tag pushes).

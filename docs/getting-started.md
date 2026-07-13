@@ -1,7 +1,7 @@
 # Getting Started with DynaLOGO
 
-This tutorial gets you from a fresh checkout to running Logo programs in both
-DynaLOGO frontends:
+This tutorial gets you from either a downloaded release package or a fresh
+source checkout to running Logo programs in both DynaLOGO frontends:
 
 - the **terminal REPL**
 - the **native turtle window**
@@ -12,15 +12,71 @@ It also introduces the two big ideas in the current implementation:
 - **dynaturtles** — turtles with velocity, collision detection, and `WHEN`
   event handlers
 
-## Prerequisites
+## Installation
 
-You need a working Rust toolchain with Cargo installed.
+### Use a packaged release
 
-From the repository root, build everything once:
+Most users should download the latest release from the
+[GitHub Releases page](https://github.com/feoh/dynalogo/releases/latest).
+Choose the archive for your platform:
+
+- **Linux x86_64:** `dynalogo-x86_64-unknown-linux-gnu.tar.gz`
+- **macOS Apple silicon:** `dynalogo-aarch64-apple-darwin.zip`
+- **Windows x86_64:** `dynalogo-x86_64-pc-windows-msvc.zip`
+
+Each archive contains both `dynalogo` (the terminal REPL) and
+`dynalogo-window` (the native turtle window), plus the examples and license.
+There are no installers; extract the archive and run the executable directly.
+
+On Linux, extract and start the REPL with:
+
+```bash
+tar -xzf dynalogo-x86_64-unknown-linux-gnu.tar.gz
+cd dynalogo-x86_64-unknown-linux-gnu
+./dynalogo
+```
+
+On macOS, extract the Apple-silicon archive with Finder or `unzip`, then run:
+
+```bash
+unzip dynalogo-aarch64-apple-darwin.zip
+cd dynalogo-aarch64-apple-darwin
+./dynalogo
+```
+
+macOS packages are unsigned, so macOS may require approval in **System
+Settings → Privacy & Security** before the executable can run.
+
+On Windows PowerShell, extract the archive and start the REPL with:
+
+```powershell
+Expand-Archive .\dynalogo-x86_64-pc-windows-msvc.zip -DestinationPath .
+Set-Location .\dynalogo-x86_64-pc-windows-msvc
+.\dynalogo.exe
+```
+
+Windows packages are unsigned and may receive a SmartScreen warning. The
+window frontend is the sibling executable: `./dynalogo-window` on Linux/macOS
+or `.\dynalogo-window.exe` on Windows. To use the commands from any
+terminal, add the extracted directory to your `PATH`.
+
+For the package contents, supported platforms, and current release limitations,
+see [`release-process.md`](release-process.md).
+
+### Build from source instead
+
+A source build requires a working Rust toolchain with Cargo installed. From
+the repository root, build everything once:
 
 ```bash
 cargo build
 ```
+
+The commands below use `cargo run` so they work from a source checkout. If you
+installed a release package, replace the corresponding `cargo run ... dynalogo`
+command with `dynalogo` (or `./dynalogo`), and replace
+`cargo run ... dynalogo-window` with `dynalogo-window` (or
+`./dynalogo-window`).
 
 ## 1. Start the terminal REPL
 

@@ -170,6 +170,13 @@ Dynaturtle examples:
 
 ## Releases
 
+Download the latest prebuilt packages from the
+[GitHub Releases page](https://github.com/feoh/dynalogo/releases/latest).
+Packages include both the `dynalogo` terminal REPL and `dynalogo-window`
+native turtle frontend. See the
+[Getting Started installation guide](docs/getting-started.md#use-a-packaged-release)
+for extraction and first-run commands.
+
 Tagged pushes (`v*.*.*`) trigger a GitHub Actions workflow that builds native
 `dynalogo`/`dynalogo-window` binaries for Linux, macOS (arm64), and Windows
 and attaches them to a GitHub Release. See
