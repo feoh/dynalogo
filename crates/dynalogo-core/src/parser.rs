@@ -54,6 +54,7 @@ impl ArityTable {
             ("CASCADE", 3),
             ("CASCADE.2", 5),
             ("TRANSFER", 3),
+            ("`", 1),
             ("REPCOUNT", 0),
             ("TEST", 1),
             ("IFTRUE", 1),

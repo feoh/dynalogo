@@ -18,3 +18,30 @@ exclaim "hello
 print macrop "double
 print macrop "shout
 print macroexpand [double 5]
+
+show `[start ,[list "a "b] middle ,@[list "a "b] end]
+
+.macro localmake :name :value
+output `[local ,[word "" :name] apply "make [,[:name] ,[:value]]]
+end
+
+to trial
+localmake "fred 87
+print :fred
+end
+
+trial
+show macroexpand [localmake "bar 99]
+
+.macro stopnow
+output [stop print "after-stop]
+end
+
+to caller
+print "before-stop
+stopnow
+print "after-caller
+end
+
+caller
+print "after-top

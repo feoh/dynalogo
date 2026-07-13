@@ -1,0 +1,39 @@
+; Examples from Computer Science Logo Style, Volume 2, Chapter 12: Macros
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch12/macro.html
+
+.macro localmake :name :value
+output (list "local (word "" :name) "make (word "" :name) :value)
+end
+
+to lmake :name :value
+output (list "local (word "" :name) "make (word "" :name) :value)
+end
+
+show lmake "fred 87
+
+.macro qlocalmake :name :value
+output `[local ,[word "" :name] apply "make [,[:name] ,[:value]]]
+end
+
+show `[start ,[list "a "b] middle ,@[list "a "b] end]
+show macroexpand [qlocalmake "bar 99]
+
+to trial
+qlocalmake "fred 87
+print :fred
+end
+
+trial
+
+.macro stopnow
+output [stop print "after-stop]
+end
+
+to caller
+print "before-stop
+stopnow
+print "after-caller
+end
+
+caller
+print "after-top

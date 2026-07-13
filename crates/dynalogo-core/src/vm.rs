@@ -1121,7 +1121,7 @@ impl Vm {
             "runresult" => self.runresult(args),
             "parse" => self.parse(args),
             "runparse" => self.runparse(args),
-            "apply" => self.apply(args),
+            "apply" => self.apply(args, expects_value),
             "foreach" => self.foreach(args),
             "map" => self.map(args),
             "map.se" => self.map_se(args),
@@ -1130,6 +1130,7 @@ impl Vm {
             "cascade" => self.cascade(args),
             "cascade.2" => self.cascade2(args),
             "transfer" => self.transfer(args),
+            "`" => self.backquote(args),
             "repcount" => self.repcount(args),
             "test" => self.test(args),
             "iftrue" | "ift" => self.iftrue(args),
@@ -3356,14 +3357,25 @@ impl Vm {
         result_value(self.run(&chunk)?).map(PrimitiveResult::Value)
     }
 
-    fn apply(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+    fn apply(
+        &mut self,
+        args: Vec<Value>,
+        expects_value: bool,
+    ) -> Result<PrimitiveResult, VmError> {
         expect_min_arity("apply", &args, 2)?;
         let mut values = Vec::new();
         for input in &args[1..] {
             values.extend(self.iteration_values(input, "APPLY")?.values);
         }
-        self.invoke_template_value(&args[0], values)
-            .map(PrimitiveResult::Value)
+        if expects_value {
+            self.invoke_template_value(&args[0], values)
+                .map(PrimitiveResult::Value)
+        } else {
+            match self.invoke_template_effect_with_bindings(&args[0], values, &[])? {
+                ControlFlow::None => Ok(PrimitiveResult::NoValue),
+                control => Ok(PrimitiveResult::Control(control)),
+            }
+        }
     }
 
     fn foreach(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -3651,6 +3663,70 @@ impl Vm {
                 .expect("cascade always has at least one start value"),
         };
         Ok(PrimitiveResult::Value(output))
+    }
+
+    fn backquote(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("`", &args, 1)?;
+        let list = list_input(&args[0], "`", &self.interner)?.clone();
+        Ok(PrimitiveResult::Value(Value::List(
+            self.expand_backquote(&list)?,
+        )))
+    }
+
+    fn expand_backquote(&mut self, list: &List) -> Result<List, VmError> {
+        let values = list_values(list);
+        let mut expanded = Vec::new();
+        let mut index = 0;
+        while index < values.len() {
+            match self.backquote_marker(&values[index]) {
+                Some(",") => {
+                    let expression = values
+                        .get(index + 1)
+                        .ok_or_else(|| VmError::new("backquote comma requires an expression"))?;
+                    let expression = list_input(expression, ",", &self.interner)?;
+                    let value = result_value(self.execute_instruction_list_result(expression)?)?;
+                    expanded.push(value);
+                    index += 2;
+                }
+                Some(",@") => {
+                    let expression = values
+                        .get(index + 1)
+                        .ok_or_else(|| VmError::new("backquote comma-at requires an expression"))?;
+                    let expression = list_input(expression, ",@", &self.interner)?;
+                    let value = result_value(self.execute_instruction_list_result(expression)?)?;
+                    let Value::List(splice) = value else {
+                        return Err(VmError::new("backquote comma-at expression must output a list"));
+                    };
+                    expanded.extend(list_values(&splice));
+                    index += 2;
+                }
+                _ => {
+                    match &values[index] {
+                        Value::Word(symbol) => {
+                            let quoted = format!("\"{}", self.interner.spelling(*symbol));
+                            expanded.push(Value::bare_word(&mut self.interner, quoted));
+                        }
+                        Value::List(inner) => {
+                            expanded.push(Value::List(self.expand_backquote(inner)?));
+                        }
+                        value => expanded.push(value.clone()),
+                    }
+                    index += 1;
+                }
+            }
+        }
+        Ok(List::from_values(expanded))
+    }
+
+    fn backquote_marker(&self, value: &Value) -> Option<&str> {
+        match value {
+            Value::Word(symbol) | Value::BareWord(symbol) => match self.interner.spelling(*symbol) {
+                "," => Some(","),
+                ",@" => Some(",@"),
+                _ => None,
+            },
+            Value::Number(_) | Value::List(_) | Value::Array(_) => None,
+        }
     }
 
     fn cascade_round(
@@ -5549,6 +5625,7 @@ fn primitive_names() -> &'static [&'static str] {
         "cascade",
         "cascade.2",
         "transfer",
+        "`",
         "repcount",
         "test",
         "iftrue",
