@@ -24,36 +24,45 @@ Choose the archive for your platform:
 - **macOS Apple silicon:** `dynalogo-aarch64-apple-darwin.zip`
 - **Windows x86_64:** `dynalogo-x86_64-pc-windows-msvc.zip`
 
-Each archive contains both `dynalogo` (the terminal REPL) and
-`dynalogo-window` (the native turtle window), plus the examples and license.
+Each archive contains both `dynalogo-window` (the graphical native turtle
+window) and `dynalogo` (the terminal REPL), plus the examples and license.
 There are no installers; extract the archive and run the executable directly.
 
-On Linux, extract and start the REPL with:
+On Linux, extract and start the graphical turtle window with:
 
 ```bash
 tar -xzf dynalogo-x86_64-unknown-linux-gnu.tar.gz
 cd dynalogo-x86_64-unknown-linux-gnu
-./dynalogo
+./dynalogo-window
 ```
 
-On macOS, extract the Apple-silicon archive with Finder or `unzip`, then run:
+To start the terminal REPL instead, run `./dynalogo` from the same directory.
+
+On macOS, extract the Apple-silicon archive with Finder or `unzip`, then
+start the graphical turtle window:
 
 ```bash
 unzip dynalogo-aarch64-apple-darwin.zip
 cd dynalogo-aarch64-apple-darwin
-./dynalogo
+./dynalogo-window
 ```
+
+To start the terminal REPL instead, run `./dynalogo` from the same directory.
 
 macOS packages are unsigned, so macOS may require approval in **System
 Settings → Privacy & Security** before the executable can run.
 
-On Windows PowerShell, extract the archive and start the REPL with:
+On Windows PowerShell, extract the archive and start the graphical turtle
+window with:
 
 ```powershell
 Expand-Archive .\dynalogo-x86_64-pc-windows-msvc.zip -DestinationPath .
 Set-Location .\dynalogo-x86_64-pc-windows-msvc
-.\dynalogo.exe
+.\dynalogo-window.exe
 ```
+
+To start the terminal REPL instead, run `.\dynalogo.exe` from the same
+directory.
 
 Windows packages are unsigned and may receive a SmartScreen warning. The
 window frontend is the sibling executable: `./dynalogo-window` on Linux/macOS
