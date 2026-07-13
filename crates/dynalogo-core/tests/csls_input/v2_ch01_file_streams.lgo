@@ -1,0 +1,34 @@
+; Source: Computer Science Logo Style, Volume 2 file/input examples.
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch1/files.html
+; Deterministic filesystem fixture for OPENWRITE/SETWRITE/OPENAPPEND/OPENREAD,
+; READWORD/READLIST/EOFP, CLOSE, and DRIBBLE using a per-test scratch directory.
+openwrite "__SCRATCH__/out.txt
+setwrite "__SCRATCH__/out.txt
+print "alpha
+print [1 2 three]
+setwrite []
+close "__SCRATCH__/out.txt
+
+openappend "__SCRATCH__/out.txt
+setwrite "__SCRATCH__/out.txt
+print "omega
+setwrite []
+close "__SCRATCH__/out.txt
+
+openread "__SCRATCH__/out.txt
+setread "__SCRATCH__/out.txt
+print readword
+show readlist
+print readword
+print eofp
+setread []
+print eofp
+close "__SCRATCH__/out.txt
+
+dribble "__SCRATCH__/dribble.txt
+print "screen
+nodribble
+openread "__SCRATCH__/dribble.txt
+setread "__SCRATCH__/dribble.txt
+print readword
+close "__SCRATCH__/dribble.txt

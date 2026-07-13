@@ -1,5 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use dynalogo_core::vm::{ControlFlow, Vm};
 
@@ -26,10 +28,16 @@ fn fixture_inputs() -> Vec<PathBuf> {
 fn run_fixture(input_path: &Path) {
     let script_path = input_path.with_extension("in");
     let stdout_path = input_path.with_extension("out");
+    let scratch_dir = unique_scratch_dir(input_path);
+    fs::create_dir_all(&scratch_dir)
+        .unwrap_or_else(|error| panic!("failed to create {}: {error}", scratch_dir.display()));
+    let scratch = logo_path(&scratch_dir);
     let source = fs::read_to_string(input_path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", input_path.display()));
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", input_path.display()))
+        .replace("__SCRATCH__", &scratch);
     let script = fs::read_to_string(&script_path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", script_path.display()));
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", script_path.display()))
+        .replace("__SCRATCH__", &scratch);
     let expected = fs::read_to_string(&stdout_path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", stdout_path.display()));
 
@@ -50,4 +58,21 @@ fn run_fixture(input_path: &Path) {
         "fixture {} output mismatch",
         input_path.display()
     );
+    let _ = fs::remove_dir_all(scratch_dir);
+}
+
+fn unique_scratch_dir(input_path: &Path) -> PathBuf {
+    let stem = input_path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("csls-input");
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time before UNIX_EPOCH")
+        .as_nanos();
+    std::env::temp_dir().join(format!("dynalogo-{stem}-{}-{nanos}", process::id()))
+}
+
+fn logo_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
