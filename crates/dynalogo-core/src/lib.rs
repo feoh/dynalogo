@@ -2,6 +2,7 @@ pub mod bytecode;
 pub mod collision;
 pub mod demon;
 pub mod dynaturtle;
+pub mod generated_help;
 pub mod graphics;
 pub mod lexer;
 pub mod parser;

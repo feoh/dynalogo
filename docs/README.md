@@ -17,6 +17,8 @@ Start here for user-facing documentation inside the repository.
   design and task breakdown for the planned interactive `HELP` facility
 - [`help/`](help/) — canonical help topic schema, source layout, and starter
   topics for the planned runtime `HELP` / `APROPOS` facility
+- [`help-reference.md`](help-reference.md) — generated help reference built
+  from the canonical `docs/help/topics/` source files
 - [`wasm-and-browser.md`](wasm-and-browser.md) — WASM/browser build and
   embedding guidance beyond the user demo walkthrough
 

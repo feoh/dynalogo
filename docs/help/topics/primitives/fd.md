@@ -8,7 +8,7 @@ signature: FORWARD distance
 aliases: [FD]
 summary: Move the selected turtle or turtles forward by a distance.
 tags: [turtle, movement, graphics]
-see_also: [bk, lt, rt, setxy]
+see_also: []
 status: implemented
 ---
 

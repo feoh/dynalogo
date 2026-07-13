@@ -22,6 +22,9 @@ jobs:
       - name: Validate workflow YAML
         run: ruby scripts/validate_workflows.rb
 
+      - name: Validate generated help docs
+        run: ruby scripts/build_help_docs.rb --check
+
       - name: Install Rust components
         run: rustup component add rustfmt clippy
 

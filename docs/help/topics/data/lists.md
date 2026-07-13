@@ -5,7 +5,7 @@ kind: data-type
 category: data
 summary: Lists are bracketed sequences used for data and instruction lists.
 tags: [data, list, instruction-list]
-see_also: [words, templates, repeat]
+see_also: [expressions]
 status: implemented
 ---
 

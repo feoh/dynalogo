@@ -9,8 +9,14 @@ The goal is to write help content once and use it in two places:
 2. compile-time embedded runtime help data for terminal, native window,
    release-package, and browser/WASM builds
 
-Runtime help must not read these files from the filesystem. A future generator
-will parse this tree and emit embedded help data under `crates/dynalogo-core`.
+Runtime help must not read these files from the filesystem. The generator in
+`scripts/build_help_docs.rb` parses this tree and emits:
+
+- `docs/help-reference.md`
+- `crates/dynalogo-core/src/generated_help.rs`
+
+Run `ruby scripts/build_help_docs.rb --check` to verify generated outputs are
+current.
 
 ## Source layout
 

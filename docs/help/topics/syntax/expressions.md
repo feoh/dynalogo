@@ -5,7 +5,7 @@ kind: syntax
 category: syntax
 summary: Logo expressions are parsed by command arity, inputs, and infix operators.
 tags: [syntax, evaluation, expressions, infix]
-see_also: [words, lists, procedures, templates]
+see_also: [lists]
 status: implemented
 ---
 

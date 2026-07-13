@@ -20,6 +20,8 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
   interactive `HELP` facility.
 - Added the canonical `docs/help/` topic schema, source layout, and starter
   topics for future runtime `HELP` / `APROPOS` content.
+- Added a help-topic generator that emits `docs/help-reference.md` and embedded
+  Rust help data from the canonical topic files, with CI drift checking.
 
 ### Fixed
 
