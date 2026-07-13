@@ -160,15 +160,22 @@ mod tests {
 
     #[test]
     fn exact_lookup_accepts_ids_names_and_aliases() {
-        assert_eq!(topic("fd").unwrap().id, "fd");
-        assert_eq!(topic("FORWARD").unwrap().id, "fd");
-        assert_eq!(topic("\"FD").unwrap().id, "fd");
+        assert_eq!(topic("fd").map(|topic| topic.id), Some("fd"));
+        assert_eq!(topic("FORWARD").map(|topic| topic.id), Some("fd"));
+        assert_eq!(topic("\"FD").map(|topic| topic.id), Some("fd"));
     }
 
     #[test]
     fn search_finds_tags_and_summaries() {
         let results = search("window");
         assert!(results.iter().any(|topic| topic.id == "window-input"));
+    }
+
+    #[test]
+    fn grouped_primitive_topics_are_lookup_targets() {
+        assert_eq!(topic("sum").map(|topic| topic.id), Some("arithmetic"));
+        assert_eq!(topic("print").map(|topic| topic.id), Some("console-files"));
+        assert_eq!(topic("tell").map(|topic| topic.id), Some("dynaturtles"));
     }
 
     #[test]

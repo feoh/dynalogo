@@ -1,12 +1,12 @@
 ---
-id: window-input
-title: Native window input
-kind: frontend
-category: frontends
-summary: The native window prompt supports editing, history, exit commands, and text scaling.
-tags: [window, input, history, font-size]
-see_also: [expressions]
-status: implemented
+id: "window-input"
+title: "Native window input"
+kind: "frontend"
+category: "frontends"
+summary: "The native window prompt supports editing, history, exit commands, and text scaling."
+tags: ["window", "input", "history", "font-size"]
+see_also: ["expressions"]
+status: "implemented"
 ---
 
 The native window prompt accepts Logo commands while the graphics canvas remains

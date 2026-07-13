@@ -156,7 +156,8 @@ Additional fields for command-like topics:
 
 The generator/validator should fail when:
 
-- a primitive or alias in `.PRIMITIVES` / primitive inventory has no topic
+- a primitive or alias exposed by `.PRIMITIVES` has no primitive-topic lookup
+  coverage
 - a topic references a missing `see_also` ID
 - two topics claim the same ID or alias without an explicit shared alias rule
 - generated runtime help or generated docs are stale

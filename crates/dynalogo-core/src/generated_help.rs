@@ -38,6 +38,162 @@ apropos "window
 ```"#,
     },
     GeneratedHelpTopic {
+        id: r#"arithmetic"#,
+        title: r#"Arithmetic and numeric primitives"#,
+        kind: r#"primitive"#,
+        category: r#"math"#,
+        names: &[
+            r#"SUM"#,
+            r#"+"#,
+            r#"DIFFERENCE"#,
+            r#"-"#,
+            r#"PRODUCT"#,
+            r#"*"#,
+            r#"QUOTIENT"#,
+            r#"/"#,
+            r#"REMAINDER"#,
+            r#"ABS"#,
+            r#"INT"#,
+            r#"ROUND"#,
+            r#"SQRT"#,
+            r#"SIN"#,
+            r#"COS"#,
+            r#"TAN"#,
+            r#"RANDOM"#,
+            r#"RERANDOM"#,
+            r#"FACTORIAL"#,
+            r#"DIVISORP"#,
+        ],
+        signature: Some(r#"SUM a b; DIFFERENCE a b; PRODUCT a b; QUOTIENT a b"#),
+        aliases: &[],
+        summary: r#"Compute numeric results, trigonometry, random values, and numeric divisibility helpers."#,
+        tags: &[
+            r#"math"#,
+            r#"arithmetic"#,
+            r#"numbers"#,
+            r#"random"#,
+            r#"trigonometry"#,
+        ],
+        see_also: &[r#"numbers"#, r#"logic-predicates"#],
+        status: r#"implemented"#,
+        body: r#"DynaLOGO numbers are floating-point values. Arithmetic primitives consume
+numeric inputs and output numeric results. The infix operators `+`, `-`,
+`*`, and `/` are aliases for the corresponding arithmetic operations.
+
+```logo
+print sum 2 3
+print 2 + 3 * 4
+print sqrt 81
+print random 10
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"array-values"#,
+        title: r#"Array values"#,
+        kind: r#"data-type"#,
+        category: r#"data"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Mutable indexed aggregate values created by ARRAY and converted to or from lists."#,
+        tags: &[r#"arrays"#, r#"data"#, r#"mutable"#],
+        see_also: &[r#"arrays"#, r#"lists"#],
+        status: r#"implemented"#,
+        body: r#"Arrays are useful when a program needs mutable indexed storage rather than
+list construction.
+
+```logo
+make "a array 2
+setitem 1 :a "cat
+print arraytolist :a
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"arrays"#,
+        title: r#"Array primitives"#,
+        kind: r#"primitive"#,
+        category: r#"data"#,
+        names: &[r#"ARRAY"#, r#"SETITEM"#, r#"LISTTOARRAY"#, r#"ARRAYTOLIST"#],
+        signature: Some(r#"ARRAY size; SETITEM index array value"#),
+        aliases: &[],
+        summary: r#"Create arrays, mutate indexed array slots, and convert between arrays and lists."#,
+        tags: &[r#"arrays"#, r#"data"#, r#"indexed"#, r#"mutable"#],
+        see_also: &[r#"lists"#],
+        status: r#"implemented"#,
+        body: r#"Arrays are indexed mutable aggregate values. Convert from lists when you
+want indexed storage, and convert back to inspect values as lists.
+
+```logo
+make "a array 3
+setitem 1 :a "red
+print arraytolist :a
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"atari-io-screen"#,
+        title: r#"Atari-style input and screen primitives"#,
+        kind: r#"primitive"#,
+        category: r#"frontends"#,
+        names: &[
+            r#"KEYP"#,
+            r#"JOY"#,
+            r#"JOYB"#,
+            r#"PADDLE"#,
+            r#"PADDLEB"#,
+            r#"TIMEOUT"#,
+            r#"TEXTSCREEN"#,
+            r#"TS"#,
+            r#"SPLITSCREEN"#,
+            r#"SS"#,
+            r#"FULLSCREEN"#,
+            r#"FS"#,
+            r#"SETCURSOR"#,
+            r#"SETENV"#,
+        ],
+        signature: Some(r#"KEYP; TEXTSCREEN; SPLITSCREEN; SETCURSOR row column"#),
+        aliases: &[],
+        summary: r#"Access compatibility input probes and switch text/graphics screen modes."#,
+        tags: &[
+            r#"atari"#,
+            r#"input"#,
+            r#"screen"#,
+            r#"text"#,
+            r#"graphics"#,
+            r#"compatibility"#,
+        ],
+        see_also: &[r#"window-input"#],
+        status: r#"implemented"#,
+        body: r#"These commands preserve Atari LOGO-inspired names for keyboard, joystick,
+paddle, timeout, cursor, and screen-mode behavior. Some hardware-specific
+probes are compatibility surfaces in modern frontends.
+
+```logo
+splitscreen
+textscreen
+print keyp
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"booleans"#,
+        title: r#"Booleans"#,
+        kind: r#"data-type"#,
+        category: r#"data"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"`true` and `false` values produced by predicates and consumed by conditionals."#,
+        tags: &[r#"booleans"#, r#"predicates"#, r#"conditionals"#],
+        see_also: &[r#"logic-predicates"#, r#"control-evaluation"#],
+        status: r#"implemented"#,
+        body: r#"Predicates output boolean values. Conditionals accept booleans from direct
+predicate calls or expressions.
+
+```logo
+print equalp 2 sum 1 1
+if true [print "yes]
+```"#,
+    },
+    GeneratedHelpTopic {
         id: r#"browser-filesystem"#,
         title: r#"Browser filesystem limits"#,
         kind: r#"compatibility"#,
@@ -54,6 +210,191 @@ execution does not provide a native filesystem. Primitives such as `LOAD`,
 `SAVE`, `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, and `DRIBBLE` may fail or be
 unavailable in the browser demo even when they work in the terminal or native
 window."#,
+    },
+    GeneratedHelpTopic {
+        id: r#"console-files"#,
+        title: r#"Console and file I/O primitives"#,
+        kind: r#"primitive"#,
+        category: r#"io"#,
+        names: &[
+            r#"PRINT"#,
+            r#"PR"#,
+            r#"SHOW"#,
+            r#"TYPE"#,
+            r#"LOAD"#,
+            r#"SAVE"#,
+            r#"SETREAD"#,
+            r#"SETWRITE"#,
+            r#"OPENREAD"#,
+            r#"OPENWRITE"#,
+            r#"OPENAPPEND"#,
+            r#"CLOSE"#,
+            r#"READER"#,
+            r#"WRITER"#,
+            r#"DRIBBLE"#,
+            r#"NODRIBBLE"#,
+            r#"READCHAR"#,
+            r#"RC"#,
+            r#"READLIST"#,
+            r#"RL"#,
+            r#"READWORD"#,
+            r#"RW"#,
+        ],
+        signature: Some(r#"PRINT value; LOAD filename; OPENREAD filename; READWORD"#),
+        aliases: &[],
+        summary: r#"Print output, load/save Logo files, manage reader/writer streams, and read input."#,
+        tags: &[
+            r#"print"#,
+            r#"console"#,
+            r#"files"#,
+            r#"input"#,
+            r#"output"#,
+        ],
+        see_also: &[r#"browser-filesystem"#, r#"window-input"#],
+        status: r#"implemented"#,
+        body: r#"Console primitives write text to the current frontend output path. File
+primitives are available in native builds; browser builds have filesystem
+limits documented separately.
+
+```logo
+print "hello
+show [a b c]
+load "examples/square.lgo
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"control-evaluation"#,
+        title: r#"Control and evaluation primitives"#,
+        kind: r#"primitive"#,
+        category: r#"control"#,
+        names: &[
+            r#"OUTPUT"#,
+            r#"OP"#,
+            r#"STOP"#,
+            r#"REPEAT"#,
+            r#"IF"#,
+            r#"IFELSE"#,
+            r#"RUN"#,
+            r#"RUNRESULT"#,
+            r#"PARSE"#,
+            r#"RUNPARSE"#,
+            r#"APPLY"#,
+            r#"FOREACH"#,
+            r#"MAP"#,
+            r#"FILTER"#,
+            r#"REDUCE"#,
+            r#"CASCADE"#,
+            r#"CASCADE.2"#,
+            r#"TRANSFER"#,
+            r#"REPCOUNT"#,
+            r#"TEST"#,
+            r#"IFTRUE"#,
+            r#"IFT"#,
+            r#"IFFALSE"#,
+            r#"IFF"#,
+            r#"WAIT"#,
+            r#"CATCH"#,
+            r#"THROW"#,
+            r#"ERROR"#,
+            r#"PAUSE"#,
+            r#"CONTINUE"#,
+        ],
+        signature: Some(
+            r#"REPEAT count instructions; IF condition instructions; RUN instructions"#,
+        ),
+        aliases: &[],
+        summary: r#"Control evaluation, run instruction lists, process collections, and handle errors or pauses."#,
+        tags: &[
+            r#"control"#,
+            r#"evaluation"#,
+            r#"lists"#,
+            r#"errors"#,
+            r#"pause"#,
+        ],
+        see_also: &[r#"instruction-lists"#, r#"templates"#, r#"procedures"#],
+        status: r#"implemented"#,
+        body: r#"Control primitives evaluate instruction lists, branch on conditions,
+process collections, and manage non-local control flow such as errors,
+pauses, `OUTPUT`, and `STOP`.
+
+```logo
+repeat 4 [fd 50 rt 90]
+if equalp 2 sum 1 1 [print "yes]
+print map "first [[a b] [c d]]
+catch "oops [throw "oops "handled]
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"dynamic-scope"#,
+        title: r#"Dynamic scope"#,
+        kind: r#"syntax"#,
+        category: r#"syntax"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Logo-style dynamic variable lookup through the current call stack."#,
+        tags: &[r#"scope"#, r#"variables"#, r#"procedures"#],
+        see_also: &[r#"procedures"#, r#"workspace"#],
+        status: r#"implemented"#,
+        body: r#"DynaLOGO follows classic Logo dynamic scope: variable lookup searches the
+current procedure call chain rather than lexical blocks.
+
+```logo
+make "size 40
+print :size
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"dynaturtles"#,
+        title: r#"Dynaturtle primitives"#,
+        kind: r#"primitive"#,
+        category: r#"dynaturtles"#,
+        names: &[
+            r#"TELL"#,
+            r#"ASK"#,
+            r#"EACH"#,
+            r#"WHO"#,
+            r#"SETVELOCITY"#,
+            r#"SETSPEED"#,
+            r#"SPEED"#,
+            r#"SETSHAPE"#,
+            r#"SHAPE"#,
+            r#"PUTSH"#,
+            r#"GETSH"#,
+            r#"BOUNCE"#,
+            r#"WRAP"#,
+            r#"FENCE"#,
+            r#"WINDOW"#,
+            r#"TOUCHING"#,
+            r#"OVER"#,
+            r#"WHEN"#,
+            r#"TOOT"#,
+        ],
+        signature: Some(
+            r#"TELL turtle-or-list; ASK turtles instructions; WHEN condition instructions"#,
+        ),
+        aliases: &[],
+        summary: r#"Select, animate, shape, collide, and coordinate multiple turtles."#,
+        tags: &[
+            r#"dynaturtles"#,
+            r#"turtles"#,
+            r#"sprites"#,
+            r#"collision"#,
+            r#"shapes"#,
+            r#"sound"#,
+        ],
+        see_also: &[r#"turtle-ids"#, r#"shapes"#, r#"fd"#],
+        status: r#"implemented"#,
+        body: r#"Dynaturtle primitives extend classic Logo with multiple turtles, velocity,
+shapes, collision checks, edge modes, per-turtle instructions, and sound
+events.
+
+```logo
+tell [0 1]
+ask [0 1] [fd 20]
+setshape 0 "dog
+when [touching 0 1] [toot 1 2 3 4]
+```"#,
     },
     GeneratedHelpTopic {
         id: r#"expressions"#,
@@ -121,6 +462,102 @@ helpon "lists
 ```"#,
     },
     GeneratedHelpTopic {
+        id: r#"infix"#,
+        title: r#"Infix operators"#,
+        kind: r#"syntax"#,
+        category: r#"syntax"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Arithmetic and comparison operators that can be written between expressions."#,
+        tags: &[r#"syntax"#, r#"infix"#, r#"arithmetic"#, r#"comparison"#],
+        see_also: &[r#"arithmetic"#, r#"expressions"#],
+        status: r#"implemented"#,
+        body: r#"Infix operators are parsed with precedence so arithmetic reads naturally.
+Multiplication and division bind tighter than addition and subtraction.
+
+```logo
+print 2 + 3 * 4
+print 10 >= 5
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"instruction-lists"#,
+        title: r#"Instruction lists"#,
+        kind: r#"syntax"#,
+        category: r#"syntax"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Lists of Logo instructions evaluated by control primitives such as REPEAT, IF, RUN, and ASK."#,
+        tags: &[r#"syntax"#, r#"lists"#, r#"control"#],
+        see_also: &[r#"lists"#, r#"control-evaluation"#],
+        status: r#"implemented"#,
+        body: r#"Instruction lists are list literals that contain code to evaluate later.
+Control and dynaturtle primitives use them for bodies.
+
+```logo
+repeat 4 [fd 50 rt 90]
+ask [0 1] [fd 20]
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"library-conditionals"#,
+        title: r#"Library conditional procedures"#,
+        kind: r#"library-procedure"#,
+        category: r#"library-procedures"#,
+        names: &[r#"CASE"#, r#"COND"#],
+        signature: Some(r#"CASE value clauses; COND clauses"#),
+        aliases: &[],
+        summary: r#"Select among multiple branches using library-level conditional helpers."#,
+        tags: &[r#"conditionals"#, r#"library"#, r#"control"#],
+        see_also: &[r#"control-evaluation"#],
+        status: r#"implemented"#,
+        body: r#"`CASE` and `COND` provide multi-way branching in the startup library.
+
+```logo
+cond [[true [print "matched]]]
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"list-operations"#,
+        title: r#"List and sequence primitives"#,
+        kind: r#"primitive"#,
+        category: r#"data"#,
+        names: &[
+            r#"FIRST"#,
+            r#"BUTFIRST"#,
+            r#"BF"#,
+            r#"LAST"#,
+            r#"BUTLAST"#,
+            r#"BL"#,
+            r#"FPUT"#,
+            r#"LPUT"#,
+            r#"SENTENCE"#,
+            r#"SE"#,
+            r#"LIST"#,
+            r#"COUNT"#,
+            r#"ITEM"#,
+            r#"RANK"#,
+            r#"RANPICK"#,
+        ],
+        signature: Some(r#"FIRST value; LIST a b; ITEM index aggregate; COUNT value"#),
+        aliases: &[],
+        summary: r#"Build, inspect, and select items from lists, words, and other Logo aggregates."#,
+        tags: &[r#"lists"#, r#"sequences"#, r#"aggregate"#, r#"selection"#],
+        see_also: &[r#"lists"#, r#"word-operations"#, r#"arrays"#],
+        status: r#"implemented"#,
+        body: r#"These primitives operate on Logo aggregates. Many work on both lists and
+words, matching classic Logo conventions.
+
+```logo
+print first [red green blue]
+print butfirst "logo
+print sentence [a b] [c d]
+print item 2 [red green blue]
+```"#,
+    },
+    GeneratedHelpTopic {
         id: r#"lists"#,
         title: r#"Lists"#,
         kind: r#"data-type"#,
@@ -139,6 +576,369 @@ depending on the command that receives them.
 print [a b c]
 repeat 4 [fd 100 rt 90]
 tell [0 1 2]
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"logic-predicates"#,
+        title: r#"Logic and predicate primitives"#,
+        kind: r#"primitive"#,
+        category: r#"data"#,
+        names: &[
+            r#"AND"#,
+            r#"OR"#,
+            r#"NOT"#,
+            r#"EQUALP"#,
+            r#"EQUAL?"#,
+            r#"EMPTYP"#,
+            r#"EMPTY?"#,
+            r#"MEMBERP"#,
+            r#"MEMBER?"#,
+            r#"WORDP"#,
+            r#"REALWORDP"#,
+            r#"LISTP"#,
+            r#"NUMBERP"#,
+            r#"INTP"#,
+            r#"DECIMALP"#,
+            r#"EVENP"#,
+        ],
+        signature: Some(r#"EQUALP a b; MEMBERP value aggregate; NUMBERP value"#),
+        aliases: &[],
+        summary: r#"Test boolean conditions, equality, membership, and value types."#,
+        tags: &[
+            r#"predicate"#,
+            r#"boolean"#,
+            r#"types"#,
+            r#"equality"#,
+            r#"membership"#,
+        ],
+        see_also: &[r#"booleans"#, r#"words"#, r#"lists"#, r#"numbers"#],
+        status: r#"implemented"#,
+        body: r#"Predicates output `true` or `false`. They are useful in `IF`, `IFELSE`,
+`TEST`, and higher-level library procedures.
+
+```logo
+print equalp 3 sum 1 2
+print memberp "b [a b c]
+if numberp 42 [print "number]
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"looping"#,
+        title: r#"Library looping procedures"#,
+        kind: r#"library-procedure"#,
+        category: r#"library-procedures"#,
+        names: &[r#"FOR"#, r#"WHILE"#, r#"UNTIL"#, r#"DO.WHILE"#],
+        signature: Some(r#"FOR control-list body; WHILE test body"#),
+        aliases: &[],
+        summary: r#"Loop using Logo library procedures loaded at startup."#,
+        tags: &[r#"loops"#, r#"library"#, r#"control"#],
+        see_also: &[r#"control-evaluation"#],
+        status: r#"implemented"#,
+        body: r#"DynaLOGO loads several control helpers as Logo procedures at VM startup.
+They are written in Logo rather than Rust primitives.
+
+```logo
+for [i 1 4] [print :i]
+while [:x < 10] [make "x sum :x 1]
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"macros"#,
+        title: r#"Macros"#,
+        kind: r#"syntax"#,
+        category: r#"syntax"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Macro definitions and expansion for programs that transform Logo code."#,
+        tags: &[r#"macros"#, r#"syntax"#, r#"expansion"#],
+        see_also: &[r#"macros-editing"#, r#"procedures"#],
+        status: r#"implemented"#,
+        body: r#"Macros are advanced workspace entries that expand into Logo code before the
+resulting expression is evaluated.
+
+```logo
+print macrop "example
+print macroexpand [example 1 2]
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"macros-editing"#,
+        title: r#"Macro and editor primitives"#,
+        kind: r#"primitive"#,
+        category: r#"workspace"#,
+        names: &[
+            r#".DEFMACRO"#,
+            r#"MACROP"#,
+            r#"MACRO?"#,
+            r#"MACROEXPAND"#,
+            r#"EDIT"#,
+            r#"ED"#,
+            r#"EDNS"#,
+            r#"EDSH"#,
+        ],
+        signature: Some(r#".DEFMACRO name inputs body; EDIT name; EDSH"#),
+        aliases: &[],
+        summary: r#"Define macros and open text/shape editing surfaces where supported."#,
+        tags: &[r#"macros"#, r#"editor"#, r#"procedures"#, r#"shapes"#],
+        see_also: &[r#"macros"#, r#"shapes"#, r#"workspace"#],
+        status: r#"implemented"#,
+        body: r#"Macro primitives expand Logo code before evaluation. Editor primitives use
+the current frontend's editor support for procedures, names, and shapes.
+
+```logo
+print macrop "repeat
+edit "square
+edsh
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"numbers"#,
+        title: r#"Numbers"#,
+        kind: r#"data-type"#,
+        category: r#"data"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Floating-point numeric values used by arithmetic, turtle motion, and simulation commands."#,
+        tags: &[r#"numbers"#, r#"math"#, r#"arithmetic"#],
+        see_also: &[r#"arithmetic"#],
+        status: r#"implemented"#,
+        body: r#"Numbers are Logo values such as `3`, `-4`, and `10.5`. Arithmetic and
+movement commands validate numeric inputs and report Logo-style errors when
+another value type is supplied.
+
+```logo
+print 2 + 3
+fd 100
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"procedures"#,
+        title: r#"Procedures"#,
+        kind: r#"syntax"#,
+        category: r#"syntax"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"User-defined TO ... END procedures with Logo-style dynamic inputs."#,
+        tags: &[r#"procedures"#, r#"syntax"#, r#"workspace"#],
+        see_also: &[r#"workspace"#, r#"dynamic-scope"#],
+        status: r#"implemented"#,
+        body: r#"Define procedures with `TO`, input names, a body, and `END`. Call the
+procedure by name after it is loaded or defined.
+
+```logo
+to square :size
+  repeat 4 [fd :size rt 90]
+end
+square 80
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"property-lists"#,
+        title: r#"Property lists"#,
+        kind: r#"data-type"#,
+        category: r#"data"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Named key/value bags managed with PPROP, GPROP, REMPROP, and PLIST."#,
+        tags: &[r#"properties"#, r#"workspace"#, r#"data"#],
+        see_also: &[r#"workspace"#],
+        status: r#"implemented"#,
+        body: r#"Property lists attach keyed values to a word. They are useful for storing
+metadata without creating many separate variable names.
+
+```logo
+pprop "sprite "color "blue
+print gprop "sprite "color
+print plist "sprite
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"quoting"#,
+        title: r#"Quoting and variable references"#,
+        kind: r#"syntax"#,
+        category: r#"syntax"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"How quoted words, colon references, and bare words become Logo values or procedure calls."#,
+        tags: &[r#"syntax"#, r#"words"#, r#"variables"#, r#"quoting"#],
+        see_also: &[r#"words"#, r#"workspace"#, r#"expressions"#],
+        status: r#"implemented"#,
+        body: r#"A leading quote creates a literal word. A leading colon reads a variable.
+Bare words are parsed as known primitives/procedures when arity is known,
+otherwise as literal bare words in data contexts.
+
+```logo
+make "size 50
+print :size
+print "size
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"shapes"#,
+        title: r#"Shape data"#,
+        kind: r#"data-type"#,
+        category: r#"data"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Named turtle shape data manipulated by SETSHAPE, PUTSH, GETSH, EDSH, and shape editors."#,
+        tags: &[r#"shapes"#, r#"sprites"#, r#"editor"#, r#"dynaturtles"#],
+        see_also: &[r#"dynaturtles"#, r#"macros-editing"#],
+        status: r#"implemented"#,
+        body: r#"Shape data controls how turtles are drawn in graphical frontends. DynaLOGO
+supports shape storage and editor workflows for native/window and browser
+usage.
+
+```logo
+putsh "dog [triangle]
+setshape 0 "dog
+print getsh "dog
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"templates"#,
+        title: r#"Templates"#,
+        kind: r#"syntax"#,
+        category: r#"syntax"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Template variables such as ?, ?1, ?IN, and ?OUT used by higher-order primitives."#,
+        tags: &[r#"templates"#, r#"higher-order"#, r#"syntax"#],
+        see_also: &[r#"control-evaluation"#, r#"lists"#],
+        status: r#"implemented"#,
+        body: r#"Higher-order commands such as `MAP`, `FILTER`, `REDUCE`, `CASCADE`, and
+`TRANSFER` use Logo template variables to refer to each input value.
+
+```logo
+print map [? * ?] [1 2 3]
+print filter [? > 2] [1 2 3]
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"turtle-ids"#,
+        title: r#"Turtle IDs and selections"#,
+        kind: r#"data-type"#,
+        category: r#"data"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Numeric turtle IDs and lists used by TELL, ASK, EACH, and dynaturtle commands."#,
+        tags: &[r#"turtles"#, r#"dynaturtles"#, r#"ids"#, r#"selection"#],
+        see_also: &[r#"dynaturtles"#],
+        status: r#"implemented"#,
+        body: r#"Dynaturtle commands select turtles by numeric ID or lists of IDs. `WHO`
+reports the current selection.
+
+```logo
+tell [0 1 2]
+ask [0 1] [fd 10]
+print who
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"turtle-motion"#,
+        title: r#"Turtle motion and position primitives"#,
+        kind: r#"primitive"#,
+        category: r#"turtle-graphics"#,
+        names: &[
+            r#"BACK"#,
+            r#"BK"#,
+            r#"LEFT"#,
+            r#"LT"#,
+            r#"RIGHT"#,
+            r#"RT"#,
+            r#"SETXY"#,
+            r#"SETPOS"#,
+            r#"SETHEADING"#,
+            r#"SETH"#,
+            r#"HOME"#,
+            r#"CLEARSCREEN"#,
+            r#"CS"#,
+        ],
+        signature: Some(r#"BACK distance; LEFT degrees; SETXY x y; CLEARSCREEN"#),
+        aliases: &[],
+        summary: r#"Move, rotate, position, home, and clear selected turtles."#,
+        tags: &[
+            r#"turtle"#,
+            r#"movement"#,
+            r#"graphics"#,
+            r#"position"#,
+            r#"heading"#,
+        ],
+        see_also: &[r#"fd"#, r#"turtle-pen-screen"#],
+        status: r#"implemented"#,
+        body: r#"Motion primitives change turtle position or heading. `CLEARSCREEN`/`CS`
+clears trails and homes turtles without drawing an extra home line.
+
+```logo
+repeat 4 [fd 80 rt 90]
+setxy 10 20
+setheading 90
+cs
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"turtle-pen-screen"#,
+        title: r#"Turtle pen, drawing, and query primitives"#,
+        kind: r#"primitive"#,
+        category: r#"turtle-graphics"#,
+        names: &[
+            r#"PENUP"#,
+            r#"PU"#,
+            r#"PENDOWN"#,
+            r#"PD"#,
+            r#"PE"#,
+            r#"PX"#,
+            r#"PEN"#,
+            r#"PN"#,
+            r#"SETPN"#,
+            r#"PC"#,
+            r#"SETPENCOLOR"#,
+            r#"SETPC"#,
+            r#"SETPENSIZE"#,
+            r#"SETSCRUNCH"#,
+            r#"SETSCR"#,
+            r#"SETLABELHEIGHT"#,
+            r#"LABEL"#,
+            r#"FILL"#,
+            r#"FILLED"#,
+            r#"HIDETURTLE"#,
+            r#"HT"#,
+            r#"SHOWTURTLE"#,
+            r#"ST"#,
+            r#"POS"#,
+            r#"HEADING"#,
+            r#"XCOR"#,
+            r#"YCOR"#,
+        ],
+        signature: Some(r#"PENUP; PENDOWN; SETPENCOLOR color; LABEL text; POS"#),
+        aliases: &[],
+        summary: r#"Control pen modes, colors, labels, fills, turtle visibility, and turtle state queries."#,
+        tags: &[
+            r#"turtle"#,
+            r#"pen"#,
+            r#"drawing"#,
+            r#"color"#,
+            r#"label"#,
+            r#"fill"#,
+        ],
+        see_also: &[r#"fd"#, r#"turtle-motion"#],
+        status: r#"implemented"#,
+        body: r#"Pen and drawing primitives control whether movement draws, how lines are
+styled, labels and fills, visibility, and queries for turtle state.
+
+```logo
+penup
+setpc 2
+pendown
+label "hello
+print pos
 ```"#,
     },
     GeneratedHelpTopic {
@@ -168,6 +968,117 @@ Editing controls:
 
 ```logo
 repeat 36 [fd 120 rt 170]
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"word-operations"#,
+        title: r#"Word primitives"#,
+        kind: r#"primitive"#,
+        category: r#"data"#,
+        names: &[r#"WORD"#, r#"ASCII"#, r#"CHAR"#, r#"LOWERCASE"#, r#"REV"#],
+        signature: Some(r#"WORD a b; ASCII word; CHAR code"#),
+        aliases: &[],
+        summary: r#"Construct and transform Logo words and characters."#,
+        tags: &[r#"words"#, r#"text"#, r#"characters"#],
+        see_also: &[r#"words"#, r#"list-operations"#],
+        status: r#"implemented"#,
+        body: r#"Words are atomic text values. These primitives concatenate words, convert
+between character codes and one-character words, lowercase text, and
+reverse text.
+
+```logo
+print word "dy "nalogo
+print char 65
+print lowercase "HELLO
+print rev "logo
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"words"#,
+        title: r#"Words"#,
+        kind: r#"data-type"#,
+        category: r#"data"#,
+        names: &[],
+        signature: None,
+        aliases: &[],
+        summary: r#"Atomic text values used for names, symbols, booleans, and quoted inputs."#,
+        tags: &[r#"words"#, r#"symbols"#, r#"text"#],
+        see_also: &[r#"word-operations"#, r#"quoting"#],
+        status: r#"implemented"#,
+        body: r#"A word is an atomic value. A leading quote creates a literal word; a colon
+reads the value stored under a word name.
+
+```logo
+print "hello
+make "name "DynaLOGO
+print :name
+```"#,
+    },
+    GeneratedHelpTopic {
+        id: r#"workspace"#,
+        title: r#"Variables, workspace, and property-list primitives"#,
+        kind: r#"primitive"#,
+        category: r#"workspace"#,
+        names: &[
+            r#"MAKE"#,
+            r#"NAME"#,
+            r#"THING"#,
+            r#"LOCAL"#,
+            r#"NAMEP"#,
+            r#"DEFINEDP"#,
+            r#"DEFINED?"#,
+            r#"PRIMITIVEP"#,
+            r#"PRIMITIVE?"#,
+            r#"TEXT"#,
+            r#"FULLTEXT"#,
+            r#"COPYDEF"#,
+            r#"DEFINE"#,
+            r#"PO"#,
+            r#"POALL"#,
+            r#"PONS"#,
+            r#"POPS"#,
+            r#"POTS"#,
+            r#"POPLS"#,
+            r#".PRIMITIVES"#,
+            r#"ERASE"#,
+            r#"ER"#,
+            r#"ERN"#,
+            r#"ERNS"#,
+            r#"ERPS"#,
+            r#"ERPL"#,
+            r#"ERALL"#,
+            r#"NODES"#,
+            r#"RECYCLE"#,
+            r#"BURY"#,
+            r#"UNBURY"#,
+            r#"BURIEDP"#,
+            r#"PPROP"#,
+            r#"GPROP"#,
+            r#"REMPROP"#,
+            r#"PLIST"#,
+        ],
+        signature: Some(r#"MAKE name value; THING name; DEFINE name text; PPROP plist key value"#),
+        aliases: &[],
+        summary: r#"Create variables, inspect definitions, manage procedure text, and use property lists."#,
+        tags: &[
+            r#"workspace"#,
+            r#"variables"#,
+            r#"procedures"#,
+            r#"properties"#,
+            r#"definitions"#,
+        ],
+        see_also: &[r#"procedures"#, r#"dynamic-scope"#, r#"property-lists"#],
+        status: r#"implemented"#,
+        body: r#"Workspace primitives manage names, variables, procedures, buried names,
+property lists, and introspection. `MAKE` assigns a value, while `THING`
+retrieves one by name.
+
+```logo
+make "size 80
+print thing "size
+print primitivep "fd
+pprop "sprite "color "red
+print plist "sprite
 ```"#,
     },
 ];

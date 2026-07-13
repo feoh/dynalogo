@@ -1,13 +1,13 @@
 ---
-id: browser-filesystem
-title: Browser filesystem limits
-kind: compatibility
-category: compatibility
-summary: Browser/WASM builds cannot use native filesystem-backed primitives.
-tags: [browser, wasm, filesystem, compatibility]
-see_also: [window-input]
-status: documented-limit
-compatibility: [browser-limit]
+id: "browser-filesystem"
+title: "Browser filesystem limits"
+kind: "compatibility"
+category: "compatibility"
+summary: "Browser/WASM builds cannot use native filesystem-backed primitives."
+tags: ["browser", "wasm", "filesystem", "compatibility"]
+see_also: ["window-input"]
+status: "documented-limit"
+compatibility: ["browser-limit"]
 examples_required: false
 ---
 

@@ -24,6 +24,9 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
   Rust help data from the canonical topic files, with CI drift checking.
 - Added core `HELP`/`HELPON` and `APROPOS` primitives backed by the generated
   embedded help index.
+- Expanded source-of-truth help coverage for primitive groups, data types,
+  expression syntax, library procedures, and language features; the help
+  generator now validates that every implemented primitive has topic coverage.
 
 ### Fixed
 

@@ -126,8 +126,7 @@ The future generator should fail when:
 - a primitive/library-procedure topic lacks at least one `logo` example unless
   `examples_required: false` is set
 - generated runtime help or generated docs are stale
-- implemented primitive inventory entries lack topics, after the coverage task
-  turns that check on
+- implemented primitive inventory entries lack primitive-topic lookup coverage
 
 ## Resolved design choices
 
@@ -142,3 +141,5 @@ The schema task resolves these choices from
   added later without changing the source schema.
 - Make `APROPOS` initially search IDs, titles, names, aliases, summaries,
   categories, and tags. Full body-text search can be added later.
+- Validate that every implemented primitive name exposed by `.PRIMITIVES` is
+  covered by at least one primitive help topic.

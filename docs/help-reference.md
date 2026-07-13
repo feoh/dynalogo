@@ -10,17 +10,52 @@ editing this file directly.
 
 - **compatibility**
   - [`browser-filesystem`](#browser-filesystem) — Browser/WASM builds cannot use native filesystem-backed primitives.
+- **control**
+  - [`control-evaluation`](#control-evaluation) — Control evaluation, run instruction lists, process collections, and handle errors or pauses.
 - **data**
+  - [`array-values`](#array-values) — Mutable indexed aggregate values created by ARRAY and converted to or from lists.
+  - [`arrays`](#arrays) — Create arrays, mutate indexed array slots, and convert between arrays and lists.
+  - [`booleans`](#booleans) — `true` and `false` values produced by predicates and consumed by conditionals.
+  - [`list-operations`](#list-operations) — Build, inspect, and select items from lists, words, and other Logo aggregates.
   - [`lists`](#lists) — Lists are bracketed sequences used for data and instruction lists.
+  - [`logic-predicates`](#logic-predicates) — Test boolean conditions, equality, membership, and value types.
+  - [`numbers`](#numbers) — Floating-point numeric values used by arithmetic, turtle motion, and simulation commands.
+  - [`property-lists`](#property-lists) — Named key/value bags managed with PPROP, GPROP, REMPROP, and PLIST.
+  - [`shapes`](#shapes) — Named turtle shape data manipulated by SETSHAPE, PUTSH, GETSH, EDSH, and shape editors.
+  - [`turtle-ids`](#turtle-ids) — Numeric turtle IDs and lists used by TELL, ASK, EACH, and dynaturtle commands.
+  - [`word-operations`](#word-operations) — Construct and transform Logo words and characters.
+  - [`words`](#words) — Atomic text values used for names, symbols, booleans, and quoted inputs.
+- **dynaturtles**
+  - [`dynaturtles`](#dynaturtles) — Select, animate, shape, collide, and coordinate multiple turtles.
 - **frontends**
+  - [`atari-io-screen`](#atari-io-screen) — Access compatibility input probes and switch text/graphics screen modes.
   - [`window-input`](#window-input) — The native window prompt supports editing, history, exit commands, and text scaling.
 - **help**
   - [`apropos`](#apropos) — Search help topic IDs, names, aliases, summaries, categories, and tags.
   - [`help`](#help) — Show interactive help topics from DynaLOGO's embedded help index.
+- **io**
+  - [`console-files`](#console-files) — Print output, load/save Logo files, manage reader/writer streams, and read input.
+- **library-procedures**
+  - [`library-conditionals`](#library-conditionals) — Select among multiple branches using library-level conditional helpers.
+  - [`looping`](#looping) — Loop using Logo library procedures loaded at startup.
+- **math**
+  - [`arithmetic`](#arithmetic) — Compute numeric results, trigonometry, random values, and numeric divisibility helpers.
 - **syntax**
+  - [`dynamic-scope`](#dynamic-scope) — Logo-style dynamic variable lookup through the current call stack.
   - [`expressions`](#expressions) — Logo expressions are parsed by command arity, inputs, and infix operators.
+  - [`infix`](#infix) — Arithmetic and comparison operators that can be written between expressions.
+  - [`instruction-lists`](#instruction-lists) — Lists of Logo instructions evaluated by control primitives such as REPEAT, IF, RUN, and ASK.
+  - [`macros`](#macros) — Macro definitions and expansion for programs that transform Logo code.
+  - [`procedures`](#procedures) — User-defined TO ... END procedures with Logo-style dynamic inputs.
+  - [`quoting`](#quoting) — How quoted words, colon references, and bare words become Logo values or procedure calls.
+  - [`templates`](#templates) — Template variables such as ?, ?1, ?IN, and ?OUT used by higher-order primitives.
 - **turtle-graphics**
   - [`fd`](#fd) — Move the selected turtle or turtles forward by a distance.
+  - [`turtle-motion`](#turtle-motion) — Move, rotate, position, home, and clear selected turtles.
+  - [`turtle-pen-screen`](#turtle-pen-screen) — Control pen modes, colors, labels, fills, turtle visibility, and turtle state queries.
+- **workspace**
+  - [`macros-editing`](#macros-editing) — Define macros and open text/shape editing surfaces where supported.
+  - [`workspace`](#workspace) — Create variables, inspect definitions, manage procedure text, and use property lists.
 
 ## compatibility
 
@@ -40,7 +75,112 @@ execution does not provide a native filesystem. Primitives such as `LOAD`,
 unavailable in the browser demo even when they work in the terminal or native
 window.
 
+## control
+
+### control-evaluation
+
+**Control and evaluation primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/control-evaluation.md`
+- Names: `OUTPUT`, `OP`, `STOP`, `REPEAT`, `IF`, `IFELSE`, `RUN`, `RUNRESULT`, `PARSE`, `RUNPARSE`, `APPLY`, `FOREACH`, `MAP`, `FILTER`, `REDUCE`, `CASCADE`, `CASCADE.2`, `TRANSFER`, `REPCOUNT`, `TEST`, `IFTRUE`, `IFT`, `IFFALSE`, `IFF`, `WAIT`, `CATCH`, `THROW`, `ERROR`, `PAUSE`, `CONTINUE`
+- Signature: `REPEAT count instructions; IF condition instructions; RUN instructions`
+- Tags: `control`, `evaluation`, `lists`, `errors`, `pause`
+- See also: `instruction-lists`, `templates`, `procedures`
+
+Control primitives evaluate instruction lists, branch on conditions,
+process collections, and manage non-local control flow such as errors,
+pauses, `OUTPUT`, and `STOP`.
+
+```logo
+repeat 4 [fd 50 rt 90]
+if equalp 2 sum 1 1 [print "yes]
+print map "first [[a b] [c d]]
+catch "oops [throw "oops "handled]
+```
+
 ## data
+
+### array-values
+
+**Array values**
+
+- Kind: `data-type`
+- Status: `implemented`
+- Source: `docs/help/topics/data/arrays.md`
+- Tags: `arrays`, `data`, `mutable`
+- See also: `arrays`, `lists`
+
+Arrays are useful when a program needs mutable indexed storage rather than
+list construction.
+
+```logo
+make "a array 2
+setitem 1 :a "cat
+print arraytolist :a
+```
+
+### arrays
+
+**Array primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/arrays.md`
+- Names: `ARRAY`, `SETITEM`, `LISTTOARRAY`, `ARRAYTOLIST`
+- Signature: `ARRAY size; SETITEM index array value`
+- Tags: `arrays`, `data`, `indexed`, `mutable`
+- See also: `lists`
+
+Arrays are indexed mutable aggregate values. Convert from lists when you
+want indexed storage, and convert back to inspect values as lists.
+
+```logo
+make "a array 3
+setitem 1 :a "red
+print arraytolist :a
+```
+
+### booleans
+
+**Booleans**
+
+- Kind: `data-type`
+- Status: `implemented`
+- Source: `docs/help/topics/data/booleans.md`
+- Tags: `booleans`, `predicates`, `conditionals`
+- See also: `logic-predicates`, `control-evaluation`
+
+Predicates output boolean values. Conditionals accept booleans from direct
+predicate calls or expressions.
+
+```logo
+print equalp 2 sum 1 1
+if true [print "yes]
+```
+
+### list-operations
+
+**List and sequence primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/list-operations.md`
+- Names: `FIRST`, `BUTFIRST`, `BF`, `LAST`, `BUTLAST`, `BL`, `FPUT`, `LPUT`, `SENTENCE`, `SE`, `LIST`, `COUNT`, `ITEM`, `RANK`, `RANPICK`
+- Signature: `FIRST value; LIST a b; ITEM index aggregate; COUNT value`
+- Tags: `lists`, `sequences`, `aggregate`, `selection`
+- See also: `lists`, `word-operations`, `arrays`
+
+These primitives operate on Logo aggregates. Many work on both lists and
+words, matching classic Logo conventions.
+
+```logo
+print first [red green blue]
+print butfirst "logo
+print sentence [a b] [c d]
+print item 2 [red green blue]
+```
 
 ### lists
 
@@ -61,7 +201,194 @@ repeat 4 [fd 100 rt 90]
 tell [0 1 2]
 ```
 
+### logic-predicates
+
+**Logic and predicate primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/logic-predicates.md`
+- Names: `AND`, `OR`, `NOT`, `EQUALP`, `EQUAL?`, `EMPTYP`, `EMPTY?`, `MEMBERP`, `MEMBER?`, `WORDP`, `REALWORDP`, `LISTP`, `NUMBERP`, `INTP`, `DECIMALP`, `EVENP`
+- Signature: `EQUALP a b; MEMBERP value aggregate; NUMBERP value`
+- Tags: `predicate`, `boolean`, `types`, `equality`, `membership`
+- See also: `booleans`, `words`, `lists`, `numbers`
+
+Predicates output `true` or `false`. They are useful in `IF`, `IFELSE`,
+`TEST`, and higher-level library procedures.
+
+```logo
+print equalp 3 sum 1 2
+print memberp "b [a b c]
+if numberp 42 [print "number]
+```
+
+### numbers
+
+**Numbers**
+
+- Kind: `data-type`
+- Status: `implemented`
+- Source: `docs/help/topics/data/numbers.md`
+- Tags: `numbers`, `math`, `arithmetic`
+- See also: `arithmetic`
+
+Numbers are Logo values such as `3`, `-4`, and `10.5`. Arithmetic and
+movement commands validate numeric inputs and report Logo-style errors when
+another value type is supplied.
+
+```logo
+print 2 + 3
+fd 100
+```
+
+### property-lists
+
+**Property lists**
+
+- Kind: `data-type`
+- Status: `implemented`
+- Source: `docs/help/topics/data/property-lists.md`
+- Tags: `properties`, `workspace`, `data`
+- See also: `workspace`
+
+Property lists attach keyed values to a word. They are useful for storing
+metadata without creating many separate variable names.
+
+```logo
+pprop "sprite "color "blue
+print gprop "sprite "color
+print plist "sprite
+```
+
+### shapes
+
+**Shape data**
+
+- Kind: `data-type`
+- Status: `implemented`
+- Source: `docs/help/topics/data/shapes.md`
+- Tags: `shapes`, `sprites`, `editor`, `dynaturtles`
+- See also: `dynaturtles`, `macros-editing`
+
+Shape data controls how turtles are drawn in graphical frontends. DynaLOGO
+supports shape storage and editor workflows for native/window and browser
+usage.
+
+```logo
+putsh "dog [triangle]
+setshape 0 "dog
+print getsh "dog
+```
+
+### turtle-ids
+
+**Turtle IDs and selections**
+
+- Kind: `data-type`
+- Status: `implemented`
+- Source: `docs/help/topics/data/turtle-ids.md`
+- Tags: `turtles`, `dynaturtles`, `ids`, `selection`
+- See also: `dynaturtles`
+
+Dynaturtle commands select turtles by numeric ID or lists of IDs. `WHO`
+reports the current selection.
+
+```logo
+tell [0 1 2]
+ask [0 1] [fd 10]
+print who
+```
+
+### word-operations
+
+**Word primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/word-operations.md`
+- Names: `WORD`, `ASCII`, `CHAR`, `LOWERCASE`, `REV`
+- Signature: `WORD a b; ASCII word; CHAR code`
+- Tags: `words`, `text`, `characters`
+- See also: `words`, `list-operations`
+
+Words are atomic text values. These primitives concatenate words, convert
+between character codes and one-character words, lowercase text, and
+reverse text.
+
+```logo
+print word "dy "nalogo
+print char 65
+print lowercase "HELLO
+print rev "logo
+```
+
+### words
+
+**Words**
+
+- Kind: `data-type`
+- Status: `implemented`
+- Source: `docs/help/topics/data/words.md`
+- Tags: `words`, `symbols`, `text`
+- See also: `word-operations`, `quoting`
+
+A word is an atomic value. A leading quote creates a literal word; a colon
+reads the value stored under a word name.
+
+```logo
+print "hello
+make "name "DynaLOGO
+print :name
+```
+
+## dynaturtles
+
+### dynaturtles
+
+**Dynaturtle primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/dynaturtles.md`
+- Names: `TELL`, `ASK`, `EACH`, `WHO`, `SETVELOCITY`, `SETSPEED`, `SPEED`, `SETSHAPE`, `SHAPE`, `PUTSH`, `GETSH`, `BOUNCE`, `WRAP`, `FENCE`, `WINDOW`, `TOUCHING`, `OVER`, `WHEN`, `TOOT`
+- Signature: `TELL turtle-or-list; ASK turtles instructions; WHEN condition instructions`
+- Tags: `dynaturtles`, `turtles`, `sprites`, `collision`, `shapes`, `sound`
+- See also: `turtle-ids`, `shapes`, `fd`
+
+Dynaturtle primitives extend classic Logo with multiple turtles, velocity,
+shapes, collision checks, edge modes, per-turtle instructions, and sound
+events.
+
+```logo
+tell [0 1]
+ask [0 1] [fd 20]
+setshape 0 "dog
+when [touching 0 1] [toot 1 2 3 4]
+```
+
 ## frontends
+
+### atari-io-screen
+
+**Atari-style input and screen primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/atari-io-screen.md`
+- Names: `KEYP`, `JOY`, `JOYB`, `PADDLE`, `PADDLEB`, `TIMEOUT`, `TEXTSCREEN`, `TS`, `SPLITSCREEN`, `SS`, `FULLSCREEN`, `FS`, `SETCURSOR`, `SETENV`
+- Signature: `KEYP; TEXTSCREEN; SPLITSCREEN; SETCURSOR row column`
+- Tags: `atari`, `input`, `screen`, `text`, `graphics`, `compatibility`
+- See also: `window-input`
+
+These commands preserve Atari LOGO-inspired names for keyboard, joystick,
+paddle, timeout, cursor, and screen-mode behavior. Some hardware-specific
+probes are compatibility surfaces in modern frontends.
+
+```logo
+splitscreen
+textscreen
+print keyp
+```
 
 ### window-input
 
@@ -135,7 +462,114 @@ help "fd
 helpon "lists
 ```
 
+## io
+
+### console-files
+
+**Console and file I/O primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/console-files.md`
+- Names: `PRINT`, `PR`, `SHOW`, `TYPE`, `LOAD`, `SAVE`, `SETREAD`, `SETWRITE`, `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, `CLOSE`, `READER`, `WRITER`, `DRIBBLE`, `NODRIBBLE`, `READCHAR`, `RC`, `READLIST`, `RL`, `READWORD`, `RW`
+- Signature: `PRINT value; LOAD filename; OPENREAD filename; READWORD`
+- Tags: `print`, `console`, `files`, `input`, `output`
+- See also: `browser-filesystem`, `window-input`
+
+Console primitives write text to the current frontend output path. File
+primitives are available in native builds; browser builds have filesystem
+limits documented separately.
+
+```logo
+print "hello
+show [a b c]
+load "examples/square.lgo
+```
+
+## library-procedures
+
+### library-conditionals
+
+**Library conditional procedures**
+
+- Kind: `library-procedure`
+- Status: `implemented`
+- Source: `docs/help/topics/library-procedures/conditionals.md`
+- Names: `CASE`, `COND`
+- Signature: `CASE value clauses; COND clauses`
+- Tags: `conditionals`, `library`, `control`
+- See also: `control-evaluation`
+
+`CASE` and `COND` provide multi-way branching in the startup library.
+
+```logo
+cond [[true [print "matched]]]
+```
+
+### looping
+
+**Library looping procedures**
+
+- Kind: `library-procedure`
+- Status: `implemented`
+- Source: `docs/help/topics/library-procedures/looping.md`
+- Names: `FOR`, `WHILE`, `UNTIL`, `DO.WHILE`
+- Signature: `FOR control-list body; WHILE test body`
+- Tags: `loops`, `library`, `control`
+- See also: `control-evaluation`
+
+DynaLOGO loads several control helpers as Logo procedures at VM startup.
+They are written in Logo rather than Rust primitives.
+
+```logo
+for [i 1 4] [print :i]
+while [:x < 10] [make "x sum :x 1]
+```
+
+## math
+
+### arithmetic
+
+**Arithmetic and numeric primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/arithmetic.md`
+- Names: `SUM`, `+`, `DIFFERENCE`, `-`, `PRODUCT`, `*`, `QUOTIENT`, `/`, `REMAINDER`, `ABS`, `INT`, `ROUND`, `SQRT`, `SIN`, `COS`, `TAN`, `RANDOM`, `RERANDOM`, `FACTORIAL`, `DIVISORP`
+- Signature: `SUM a b; DIFFERENCE a b; PRODUCT a b; QUOTIENT a b`
+- Tags: `math`, `arithmetic`, `numbers`, `random`, `trigonometry`
+- See also: `numbers`, `logic-predicates`
+
+DynaLOGO numbers are floating-point values. Arithmetic primitives consume
+numeric inputs and output numeric results. The infix operators `+`, `-`,
+`*`, and `/` are aliases for the corresponding arithmetic operations.
+
+```logo
+print sum 2 3
+print 2 + 3 * 4
+print sqrt 81
+print random 10
+```
+
 ## syntax
+
+### dynamic-scope
+
+**Dynamic scope**
+
+- Kind: `syntax`
+- Status: `implemented`
+- Source: `docs/help/topics/syntax/dynamic-scope.md`
+- Tags: `scope`, `variables`, `procedures`
+- See also: `procedures`, `workspace`
+
+DynaLOGO follows classic Logo dynamic scope: variable lookup searches the
+current procedure call chain rather than lexical blocks.
+
+```logo
+make "size 40
+print :size
+```
 
 ### expressions
 
@@ -155,6 +589,118 @@ operators can be used inside expressions.
 print sum 2 3
 print 2 + 3 * 4
 if :x > 10 [print "big]
+```
+
+### infix
+
+**Infix operators**
+
+- Kind: `syntax`
+- Status: `implemented`
+- Source: `docs/help/topics/syntax/infix.md`
+- Tags: `syntax`, `infix`, `arithmetic`, `comparison`
+- See also: `arithmetic`, `expressions`
+
+Infix operators are parsed with precedence so arithmetic reads naturally.
+Multiplication and division bind tighter than addition and subtraction.
+
+```logo
+print 2 + 3 * 4
+print 10 >= 5
+```
+
+### instruction-lists
+
+**Instruction lists**
+
+- Kind: `syntax`
+- Status: `implemented`
+- Source: `docs/help/topics/syntax/instruction-lists.md`
+- Tags: `syntax`, `lists`, `control`
+- See also: `lists`, `control-evaluation`
+
+Instruction lists are list literals that contain code to evaluate later.
+Control and dynaturtle primitives use them for bodies.
+
+```logo
+repeat 4 [fd 50 rt 90]
+ask [0 1] [fd 20]
+```
+
+### macros
+
+**Macros**
+
+- Kind: `syntax`
+- Status: `implemented`
+- Source: `docs/help/topics/syntax/macros.md`
+- Tags: `macros`, `syntax`, `expansion`
+- See also: `macros-editing`, `procedures`
+
+Macros are advanced workspace entries that expand into Logo code before the
+resulting expression is evaluated.
+
+```logo
+print macrop "example
+print macroexpand [example 1 2]
+```
+
+### procedures
+
+**Procedures**
+
+- Kind: `syntax`
+- Status: `implemented`
+- Source: `docs/help/topics/syntax/procedures.md`
+- Tags: `procedures`, `syntax`, `workspace`
+- See also: `workspace`, `dynamic-scope`
+
+Define procedures with `TO`, input names, a body, and `END`. Call the
+procedure by name after it is loaded or defined.
+
+```logo
+to square :size
+  repeat 4 [fd :size rt 90]
+end
+square 80
+```
+
+### quoting
+
+**Quoting and variable references**
+
+- Kind: `syntax`
+- Status: `implemented`
+- Source: `docs/help/topics/syntax/quoting.md`
+- Tags: `syntax`, `words`, `variables`, `quoting`
+- See also: `words`, `workspace`, `expressions`
+
+A leading quote creates a literal word. A leading colon reads a variable.
+Bare words are parsed as known primitives/procedures when arity is known,
+otherwise as literal bare words in data contexts.
+
+```logo
+make "size 50
+print :size
+print "size
+```
+
+### templates
+
+**Templates**
+
+- Kind: `syntax`
+- Status: `implemented`
+- Source: `docs/help/topics/syntax/templates.md`
+- Tags: `templates`, `higher-order`, `syntax`
+- See also: `control-evaluation`, `lists`
+
+Higher-order commands such as `MAP`, `FILTER`, `REDUCE`, `CASCADE`, and
+`TRANSFER` use Logo template variables to refer to each input value.
+
+```logo
+print map [? * ?] [1 2 3]
+print filter [? > 2] [1 2 3]
 ```
 
 ## turtle-graphics
@@ -178,5 +724,97 @@ pen is down, DynaLOGO draws a line as the turtle moves.
 fd 100
 forward 50
 repeat 4 [fd 80 rt 90]
+```
+
+### turtle-motion
+
+**Turtle motion and position primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/turtle-motion.md`
+- Names: `BACK`, `BK`, `LEFT`, `LT`, `RIGHT`, `RT`, `SETXY`, `SETPOS`, `SETHEADING`, `SETH`, `HOME`, `CLEARSCREEN`, `CS`
+- Signature: `BACK distance; LEFT degrees; SETXY x y; CLEARSCREEN`
+- Tags: `turtle`, `movement`, `graphics`, `position`, `heading`
+- See also: `fd`, `turtle-pen-screen`
+
+Motion primitives change turtle position or heading. `CLEARSCREEN`/`CS`
+clears trails and homes turtles without drawing an extra home line.
+
+```logo
+repeat 4 [fd 80 rt 90]
+setxy 10 20
+setheading 90
+cs
+```
+
+### turtle-pen-screen
+
+**Turtle pen, drawing, and query primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/turtle-pen-screen.md`
+- Names: `PENUP`, `PU`, `PENDOWN`, `PD`, `PE`, `PX`, `PEN`, `PN`, `SETPN`, `PC`, `SETPENCOLOR`, `SETPC`, `SETPENSIZE`, `SETSCRUNCH`, `SETSCR`, `SETLABELHEIGHT`, `LABEL`, `FILL`, `FILLED`, `HIDETURTLE`, `HT`, `SHOWTURTLE`, `ST`, `POS`, `HEADING`, `XCOR`, `YCOR`
+- Signature: `PENUP; PENDOWN; SETPENCOLOR color; LABEL text; POS`
+- Tags: `turtle`, `pen`, `drawing`, `color`, `label`, `fill`
+- See also: `fd`, `turtle-motion`
+
+Pen and drawing primitives control whether movement draws, how lines are
+styled, labels and fills, visibility, and queries for turtle state.
+
+```logo
+penup
+setpc 2
+pendown
+label "hello
+print pos
+```
+
+## workspace
+
+### macros-editing
+
+**Macro and editor primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/macros-editing.md`
+- Names: `.DEFMACRO`, `MACROP`, `MACRO?`, `MACROEXPAND`, `EDIT`, `ED`, `EDNS`, `EDSH`
+- Signature: `.DEFMACRO name inputs body; EDIT name; EDSH`
+- Tags: `macros`, `editor`, `procedures`, `shapes`
+- See also: `macros`, `shapes`, `workspace`
+
+Macro primitives expand Logo code before evaluation. Editor primitives use
+the current frontend's editor support for procedures, names, and shapes.
+
+```logo
+print macrop "repeat
+edit "square
+edsh
+```
+
+### workspace
+
+**Variables, workspace, and property-list primitives**
+
+- Kind: `primitive`
+- Status: `implemented`
+- Source: `docs/help/topics/primitives/workspace.md`
+- Names: `MAKE`, `NAME`, `THING`, `LOCAL`, `NAMEP`, `DEFINEDP`, `DEFINED?`, `PRIMITIVEP`, `PRIMITIVE?`, `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`, `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `POPLS`, `.PRIMITIVES`, `ERASE`, `ER`, `ERN`, `ERNS`, `ERPS`, `ERPL`, `ERALL`, `NODES`, `RECYCLE`, `BURY`, `UNBURY`, `BURIEDP`, `PPROP`, `GPROP`, `REMPROP`, `PLIST`
+- Signature: `MAKE name value; THING name; DEFINE name text; PPROP plist key value`
+- Tags: `workspace`, `variables`, `procedures`, `properties`, `definitions`
+- See also: `procedures`, `dynamic-scope`, `property-lists`
+
+Workspace primitives manage names, variables, procedures, buried names,
+property lists, and introspection. `MAKE` assigns a value, while `THING`
+retrieves one by name.
+
+```logo
+make "size 80
+print thing "size
+print primitivep "fd
+pprop "sprite "color "red
+print plist "sprite
 ```
 

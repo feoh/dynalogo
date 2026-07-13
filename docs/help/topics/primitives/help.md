@@ -1,15 +1,15 @@
 ---
-id: help
-title: HELP / HELPON
-kind: primitive
-category: help
-names: [HELP, HELPON]
-signature: HELP [topic]
-aliases: [HELPON]
-summary: Show interactive help topics from DynaLOGO's embedded help index.
-tags: [help, documentation, topics]
-see_also: [apropos]
-status: implemented
+id: "help"
+title: "HELP / HELPON"
+kind: "primitive"
+category: "help"
+names: ["HELP", "HELPON"]
+signature: "HELP [topic]"
+aliases: ["HELPON"]
+summary: "Show interactive help topics from DynaLOGO's embedded help index."
+tags: ["help", "documentation", "topics"]
+see_also: ["apropos"]
+status: "implemented"
 ---
 
 `HELP` with no input lists available help categories and starter examples.

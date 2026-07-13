@@ -1,15 +1,15 @@
 ---
-id: fd
-title: FORWARD / FD
-kind: primitive
-category: turtle-graphics
-names: [FORWARD, FD]
-signature: FORWARD distance
-aliases: [FD]
-summary: Move the selected turtle or turtles forward by a distance.
-tags: [turtle, movement, graphics]
+id: "fd"
+title: "FORWARD / FD"
+kind: "primitive"
+category: "turtle-graphics"
+names: ["FORWARD", "FD"]
+signature: "FORWARD distance"
+aliases: ["FD"]
+summary: "Move the selected turtle or turtles forward by a distance."
+tags: ["turtle", "movement", "graphics"]
 see_also: []
-status: implemented
+status: "implemented"
 ---
 
 Move the selected turtle or turtles forward by `distance` turtle units. If the

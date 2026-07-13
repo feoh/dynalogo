@@ -1,12 +1,12 @@
 ---
-id: expressions
-title: Expressions and evaluation
-kind: syntax
-category: syntax
-summary: Logo expressions are parsed by command arity, inputs, and infix operators.
-tags: [syntax, evaluation, expressions, infix]
-see_also: [lists]
-status: implemented
+id: "expressions"
+title: "Expressions and evaluation"
+kind: "syntax"
+category: "syntax"
+summary: "Logo expressions are parsed by command arity, inputs, and infix operators."
+tags: ["syntax", "evaluation", "expressions", "infix"]
+see_also: ["lists"]
+status: "implemented"
 ---
 
 DynaLOGO parses expressions using command arity and Logo evaluation rules.

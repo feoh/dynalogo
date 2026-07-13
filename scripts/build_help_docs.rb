@@ -164,6 +164,50 @@ class Builder
         error(topic.path, "see_also references missing topic #{id.inspect}") unless ids.include?(id)
       end
     end
+
+    validate_primitive_coverage(topics)
+  end
+
+  def validate_primitive_coverage(topics)
+    implemented = implemented_primitive_names
+    covered = topics
+      .select { |topic| topic.kind == "primitive" }
+      .flat_map { |topic| [topic.id] + topic.names + topic.aliases }
+      .compact
+      .map(&:downcase)
+      .to_set
+
+    missing = implemented.reject { |name| covered.include?(name) }
+    if missing.any?
+      error(
+        "crates/dynalogo-core/src/vm.rs",
+        "primitive help coverage missing for: #{missing.join(', ')}"
+      )
+    end
+
+    claimed = topics
+      .select { |topic| topic.kind == "primitive" }
+      .flat_map { |topic| topic.names + topic.aliases }
+      .map(&:downcase)
+      .to_set
+    unknown = claimed.reject { |name| implemented.include?(name) }
+    if unknown.any?
+      error(
+        "docs/help/topics",
+        "primitive help topics claim unknown primitive names: #{unknown.to_a.sort.join(', ')}"
+      )
+    end
+  end
+
+  def implemented_primitive_names
+    vm_path = File.join(ROOT, "crates", "dynalogo-core", "src", "vm.rs")
+    source = File.read(vm_path)
+    body = source[/fn primitive_names\(\).*?&\[(.*?)\n    \]/m, 1]
+    unless body
+      error("crates/dynalogo-core/src/vm.rs", "could not find primitive_names() table")
+      return Set.new
+    end
+    body.scan(/"([^"]+)"/).flatten.map(&:downcase).to_set
   end
 
   def validate_required(topic)
@@ -337,11 +381,21 @@ class Builder
   end
 
   def rust_array(values)
-    "&[#{values.map { |value| rust_string(value) }.join(', ')}]"
+    rendered = values.map { |value| rust_string(value) }
+    inline = "&[#{rendered.join(', ')}]"
+    return inline if rendered.length <= 4 || inline.length <= 61
+
+    "&[\n#{rendered.map { |value| "            #{value}," }.join("\n")}\n        ]"
   end
 
   def rust_option(value)
-    value.nil? || value == "" ? "None" : "Some(#{rust_string(value)})"
+    return "None" if value.nil? || value == ""
+
+    rendered = rust_string(value)
+    inline = "Some(#{rendered})"
+    return inline if inline.length <= 80
+
+    "Some(\n            #{rendered},\n        )"
   end
 
   def rust_string(value)
