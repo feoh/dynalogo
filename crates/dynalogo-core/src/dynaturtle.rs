@@ -266,11 +266,15 @@ impl TurtleStore {
     }
 
     /// Erases the canvas and sends `ids` home, matching classic CLEARSCREEN
-    /// broadcast to the active turtle selection.
+    /// broadcast to the active turtle selection. Unlike `HOME`, this must not
+    /// draw a line from each turtle's current position back to the origin.
     pub fn clearscreen(&mut self, ids: &[TurtleId]) {
         self.events.push(TurtleEvent::Clear);
         for &id in ids {
-            self.home(id);
+            self.ensure(id);
+            let i = id.index();
+            self.positions[i] = Point::new(0.0, 0.0);
+            self.headings[i] = 0.0;
         }
     }
 
@@ -410,7 +414,7 @@ impl TurtleStore {
 
     pub fn snapshots(&self) -> Vec<TurtleState> {
         (0..self.len())
-            .map(|index| self.state(TurtleId(index)).expect("index in range"))
+            .filter_map(|index| self.state(TurtleId(index)))
             .collect()
     }
 
@@ -575,10 +579,15 @@ mod tests {
         let mut store = TurtleStore::new();
         store.set_heading(TurtleId::new(0), 90.0);
         store.set_speed(TurtleId::new(0), 20.0);
-        let velocity = store.velocity(TurtleId::new(0)).unwrap();
+        let Some(velocity) = store.velocity(TurtleId::new(0)) else {
+            panic!("turtle velocity should exist");
+        };
         assert!((velocity.x - 20.0).abs() < 1e-9);
         assert!(velocity.y.abs() < 1e-9);
-        assert!((store.speed(TurtleId::new(0)).unwrap() - 20.0).abs() < 1e-9);
+        let Some(speed) = store.speed(TurtleId::new(0)) else {
+            panic!("turtle speed should exist");
+        };
+        assert!((speed - 20.0).abs() < 1e-9);
     }
 
     #[test]
@@ -673,10 +682,7 @@ mod tests {
         store.clearscreen(&[id]);
         assert_eq!(store.state(id).unwrap().position, Point::new(0.0, 0.0));
         assert_eq!(store.state(id).unwrap().heading, 0.0);
-        assert!(store
-            .events()
-            .iter()
-            .any(|event| matches!(event, TurtleEvent::Clear)));
+        assert_eq!(store.events().last(), Some(&TurtleEvent::Clear));
     }
 
     #[test]

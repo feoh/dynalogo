@@ -43,6 +43,10 @@ async fn main() {
         app.update_sim();
         app.update_audio();
         app.draw();
+        if app.should_quit {
+            macroquad::miniquad::window::quit();
+            break;
+        }
         next_frame().await;
     }
 }
@@ -59,7 +63,7 @@ fn window_conf() -> Conf {
 
 struct App {
     vm: Vm,
-    input: String,
+    input: InputState,
     log: Vec<String>,
     bark_sound: Option<Sound>,
     last_toot: Option<[u8; 4]>,
@@ -68,13 +72,14 @@ struct App {
     trail_texture: TrailTexture,
     command_queue: VecDeque<String>,
     eval_worker: EvalWorker,
+    should_quit: bool,
 }
 
 impl App {
     async fn new() -> Self {
         let app = Self {
             vm: Vm::new(),
-            input: String::new(),
+            input: InputState::default(),
             log: vec![
                 "Type Logo commands, then Enter. Try: tell [0 1 2] each [setshape \"dog 12]"
                     .to_string(),
@@ -86,6 +91,7 @@ impl App {
             trail_texture: TrailTexture::new(1, 1),
             command_queue: VecDeque::new(),
             eval_worker: EvalWorker::idle(),
+            should_quit: false,
         };
         sync_browser_log(&app.log);
         app
@@ -107,14 +113,34 @@ impl App {
         if is_key_pressed(KeyCode::Escape) {
             events.push(InputEvent::Cancel);
         }
+        if is_key_pressed(KeyCode::Up) {
+            events.push(InputEvent::HistoryPrevious);
+        }
+        if is_key_pressed(KeyCode::Down) {
+            events.push(InputEvent::HistoryNext);
+        }
+        if is_key_down(KeyCode::LeftControl) && is_key_pressed(KeyCode::Q)
+            || is_key_down(KeyCode::RightControl) && is_key_pressed(KeyCode::Q)
+        {
+            self.request_quit();
+        }
 
-        for command in process_input_events(&mut self.input, events) {
-            self.enqueue_command(command);
+        for command in process_input_state_events(&mut self.input, events) {
+            self.handle_command(command);
         }
     }
 
     fn handle_browser_commands(&mut self) {
         for command in process_browser_commands(drain_browser_commands()) {
+            self.handle_command(command);
+        }
+    }
+
+    fn handle_command(&mut self, command: String) {
+        if is_exit_command(&command) {
+            self.push_log(format!("? {command}"));
+            self.request_quit();
+        } else {
             self.enqueue_command(command);
         }
     }
@@ -123,6 +149,10 @@ impl App {
         self.push_log(format!("? {command}"));
         self.command_queue.push_back(command);
         self.start_next_eval();
+    }
+
+    fn request_quit(&mut self) {
+        self.should_quit = true;
     }
 
     fn poll_eval(&mut self) {
@@ -350,7 +380,7 @@ impl App {
             ""
         };
         draw_text(
-            format!("? {}{cursor}", self.input),
+            format!("? {}{cursor}", self.input.line()),
             12.0,
             layout.input_baseline,
             INPUT_FONT_SIZE,
@@ -511,30 +541,118 @@ enum InputEvent {
     Backspace,
     Submit,
     Cancel,
+    HistoryPrevious,
+    HistoryNext,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct InputState {
+    line: String,
+    history: Vec<String>,
+    history_cursor: Option<usize>,
+    history_draft: String,
+}
+
+impl InputState {
+    fn line(&self) -> &str {
+        &self.line
+    }
+
+    fn exit_history_edit(&mut self) {
+        self.history_cursor = None;
+        self.history_draft.clear();
+    }
+
+    fn remember_command(&mut self, command: &str) {
+        if self.history.last().is_none_or(|last| last != command) {
+            self.history.push(command.to_string());
+        }
+    }
+
+    fn history_previous(&mut self) {
+        if self.history.is_empty() {
+            return;
+        }
+        let index = match self.history_cursor {
+            Some(index) => index.saturating_sub(1),
+            None => {
+                self.history_draft = self.line.clone();
+                self.history.len() - 1
+            }
+        };
+        self.history_cursor = Some(index);
+        self.line = self.history[index].clone();
+    }
+
+    fn history_next(&mut self) {
+        let Some(index) = self.history_cursor else {
+            return;
+        };
+        if index + 1 < self.history.len() {
+            let next = index + 1;
+            self.history_cursor = Some(next);
+            self.line = self.history[next].clone();
+        } else {
+            self.history_cursor = None;
+            self.line = std::mem::take(&mut self.history_draft);
+        }
+    }
+}
+
+#[cfg(test)]
 fn process_input_events(
     input: &mut String,
+    events: impl IntoIterator<Item = InputEvent>,
+) -> Vec<String> {
+    let mut state = InputState {
+        line: std::mem::take(input),
+        ..InputState::default()
+    };
+    let commands = process_input_state_events(&mut state, events);
+    *input = state.line;
+    commands
+}
+
+fn process_input_state_events(
+    input: &mut InputState,
     events: impl IntoIterator<Item = InputEvent>,
 ) -> Vec<String> {
     let mut commands = Vec::new();
     for event in events {
         match event {
-            InputEvent::Char(ch) => input.push(ch),
+            InputEvent::Char(ch) => {
+                input.exit_history_edit();
+                input.line.push(ch);
+            }
             InputEvent::Backspace => {
-                input.pop();
+                input.exit_history_edit();
+                input.line.pop();
             }
             InputEvent::Submit => {
-                let command = input.trim().to_string();
-                input.clear();
+                let command = input.line.trim().to_string();
+                input.line.clear();
+                input.exit_history_edit();
                 if !command.is_empty() {
+                    input.remember_command(&command);
                     commands.push(command);
                 }
             }
-            InputEvent::Cancel => input.clear(),
+            InputEvent::Cancel => {
+                input.line.clear();
+                input.exit_history_edit();
+            }
+            InputEvent::HistoryPrevious => input.history_previous(),
+            InputEvent::HistoryNext => input.history_next(),
         }
     }
     commands
+}
+
+fn is_exit_command(command: &str) -> bool {
+    matches!(
+        command.trim().to_ascii_lowercase().as_str(),
+        "exit" | "quit" | "bye"
+    )
 }
 
 fn process_browser_commands(commands: Vec<String>) -> Vec<String> {
@@ -1120,6 +1238,87 @@ mod tests {
             ],
         );
         assert_eq!(commands, vec!["fd".to_string()]);
+    }
+
+    #[test]
+    fn input_history_steps_back_and_forward_through_commands() {
+        let mut input = InputState::default();
+        assert_eq!(
+            process_input_state_events(
+                &mut input,
+                [
+                    InputEvent::Char('f'),
+                    InputEvent::Char('d'),
+                    InputEvent::Char(' '),
+                    InputEvent::Char('1'),
+                    InputEvent::Submit,
+                    InputEvent::Char('r'),
+                    InputEvent::Char('t'),
+                    InputEvent::Char(' '),
+                    InputEvent::Char('9'),
+                    InputEvent::Char('0'),
+                    InputEvent::Submit,
+                ],
+            ),
+            vec!["fd 1".to_string(), "rt 90".to_string()]
+        );
+
+        process_input_state_events(&mut input, [InputEvent::HistoryPrevious]);
+        assert_eq!(input.line(), "rt 90");
+        process_input_state_events(&mut input, [InputEvent::HistoryPrevious]);
+        assert_eq!(input.line(), "fd 1");
+        process_input_state_events(&mut input, [InputEvent::HistoryNext]);
+        assert_eq!(input.line(), "rt 90");
+    }
+
+    #[test]
+    fn input_history_restores_in_progress_draft() {
+        let mut input = InputState::default();
+        process_input_state_events(
+            &mut input,
+            [
+                InputEvent::Char('f'),
+                InputEvent::Char('d'),
+                InputEvent::Char(' '),
+                InputEvent::Char('1'),
+                InputEvent::Submit,
+                InputEvent::Char('p'),
+                InputEvent::Char('r'),
+            ],
+        );
+
+        process_input_state_events(&mut input, [InputEvent::HistoryPrevious]);
+        assert_eq!(input.line(), "fd 1");
+        process_input_state_events(&mut input, [InputEvent::HistoryNext]);
+        assert_eq!(input.line(), "pr");
+    }
+
+    #[test]
+    fn input_history_editing_selected_command_exits_history_mode() {
+        let mut input = InputState::default();
+        process_input_state_events(
+            &mut input,
+            [
+                InputEvent::Char('f'),
+                InputEvent::Char('d'),
+                InputEvent::Submit,
+                InputEvent::HistoryPrevious,
+                InputEvent::Char(' '),
+                InputEvent::Char('5'),
+            ],
+        );
+
+        assert_eq!(input.line(), "fd 5");
+        process_input_state_events(&mut input, [InputEvent::HistoryNext]);
+        assert_eq!(input.line(), "fd 5");
+    }
+
+    #[test]
+    fn exit_command_recognizes_window_exit_aliases() {
+        assert!(is_exit_command("exit"));
+        assert!(is_exit_command(" QUIT "));
+        assert!(is_exit_command("Bye"));
+        assert!(!is_exit_command("print \"bye"));
     }
 
     #[test]

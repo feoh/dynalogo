@@ -11,7 +11,15 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 
 ## [Unreleased]
 
-No changes yet.
+### Added
+
+- Added native/window command history navigation with Up/Down arrows.
+- Added native/window exit aliases (`exit`, `quit`, `bye`) and Ctrl+Q.
+
+### Fixed
+
+- Fixed `CLEARSCREEN`/`CS` so it returns turtles home without drawing an
+  unintended line from the previous turtle position to the origin.
 
 ## [0.1.2] - 2026-07-13
 
