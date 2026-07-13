@@ -1,3 +1,8 @@
+use std::collections::VecDeque;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::mpsc::{self, Receiver};
+#[cfg(not(target_arch = "wasm32"))]
+use std::thread;
 use std::time::Duration;
 
 use dynalogo_core::dynaturtle::TurtleId;
@@ -5,7 +10,7 @@ use dynalogo_core::graphics::{scale_event, scale_point, RasterCache};
 use dynalogo_core::sim::{FixedTimestep, SimConfig};
 use dynalogo_core::turtle::{events_since_clear, Point, TurtleEvent, TurtleState};
 use dynalogo_core::value::{List, Value};
-use dynalogo_core::vm::{ControlFlow, Vm};
+use dynalogo_core::vm::{ControlFlow, RunResult, Vm, VmError};
 use macroquad::audio::{load_sound_from_bytes, play_sound_once, Sound};
 use macroquad::prelude::*;
 
@@ -34,6 +39,7 @@ async fn main() {
         clear_background(CANVAS_BACKGROUND);
         app.handle_input();
         app.handle_browser_commands();
+        app.poll_eval();
         app.update_sim();
         app.update_audio();
         app.draw();
@@ -60,6 +66,8 @@ struct App {
     bark_flash_until: f64,
     timestep: FixedTimestep,
     trail_texture: TrailTexture,
+    command_queue: VecDeque<String>,
+    eval_worker: EvalWorker,
 }
 
 impl App {
@@ -76,6 +84,8 @@ impl App {
             bark_flash_until: 0.0,
             timestep: FixedTimestep::new(SimConfig::default()),
             trail_texture: TrailTexture::new(1, 1),
+            command_queue: VecDeque::new(),
+            eval_worker: EvalWorker::idle(),
         };
         sync_browser_log(&app.log);
         app
@@ -99,19 +109,42 @@ impl App {
         }
 
         for command in process_input_events(&mut self.input, events) {
-            self.eval_command(command);
+            self.enqueue_command(command);
         }
     }
 
     fn handle_browser_commands(&mut self) {
         for command in process_browser_commands(drain_browser_commands()) {
-            self.eval_command(command);
+            self.enqueue_command(command);
         }
     }
 
-    fn eval_command(&mut self, command: String) {
+    fn enqueue_command(&mut self, command: String) {
         self.push_log(format!("? {command}"));
-        match self.vm.eval_source(&command) {
+        self.command_queue.push_back(command);
+        self.start_next_eval();
+    }
+
+    fn poll_eval(&mut self) {
+        if let Some(outcome) = self.eval_worker.try_recv() {
+            self.vm = outcome.vm;
+            self.handle_eval_result(outcome.result);
+            self.start_next_eval();
+        }
+    }
+
+    fn start_next_eval(&mut self) {
+        if self.eval_worker.is_running() {
+            return;
+        }
+        let Some(command) = self.command_queue.pop_front() else {
+            return;
+        };
+        self.eval_worker.start(self.vm.clone(), command);
+    }
+
+    fn handle_eval_result(&mut self, result: Result<RunResult, VmError>) {
+        match result {
             Ok(result) => {
                 let output = result.output;
                 for line in output.lines() {
@@ -127,6 +160,10 @@ impl App {
     }
 
     fn update_sim(&mut self) {
+        if self.eval_worker.is_running() {
+            return;
+        }
+
         let elapsed = Duration::from_secs_f32(get_frame_time().max(0.0));
         let mut timestep = std::mem::take(&mut self.timestep);
         let tick_seconds = timestep.config().tick.as_secs_f64();
@@ -324,6 +361,79 @@ impl App {
     fn push_log(&mut self, line: String) {
         append_log_line(&mut self.log, line, LOG_LINES);
         sync_browser_log(&self.log);
+    }
+}
+
+struct EvalOutcome {
+    vm: Vm,
+    result: Result<RunResult, VmError>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+enum EvalWorker {
+    Idle,
+    Running(Receiver<EvalOutcome>),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl EvalWorker {
+    fn idle() -> Self {
+        Self::Idle
+    }
+
+    fn is_running(&self) -> bool {
+        matches!(self, Self::Running(_))
+    }
+
+    fn start(&mut self, mut vm: Vm, command: String) {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let result = vm.eval_source(&command);
+            let _ = tx.send(EvalOutcome { vm, result });
+        });
+        *self = Self::Running(rx);
+    }
+
+    fn try_recv(&mut self) -> Option<EvalOutcome> {
+        let Self::Running(rx) = self else {
+            return None;
+        };
+        match rx.try_recv() {
+            Ok(outcome) => {
+                *self = Self::Idle;
+                Some(outcome)
+            }
+            Err(mpsc::TryRecvError::Empty) => None,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                *self = Self::Idle;
+                None
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+struct EvalWorker {
+    completed: Option<EvalOutcome>,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl EvalWorker {
+    fn idle() -> Self {
+        Self { completed: None }
+    }
+
+    fn is_running(&self) -> bool {
+        self.completed.is_some()
+    }
+
+    fn start(&mut self, mut vm: Vm, command: String) {
+        let result = vm.eval_source(&command);
+        self.completed = Some(EvalOutcome { vm, result });
+    }
+
+    fn try_recv(&mut self) -> Option<EvalOutcome> {
+        self.completed.take()
     }
 }
 
@@ -904,6 +1014,33 @@ mod tests {
         assert!((white.r - 1.0).abs() < 1e-3);
         assert!((white.g - 1.0).abs() < 1e-3);
         assert!((white.b - 1.0).abs() < 1e-3);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn eval_worker_returns_updated_vm_and_result() {
+        let mut worker = EvalWorker::idle();
+        worker.start(Vm::new(), "make \"x 42 print :x".to_string());
+        assert!(worker.is_running());
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let outcome = loop {
+            if let Some(outcome) = worker.try_recv() {
+                break outcome;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "eval worker timed out"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        };
+
+        let result = match outcome.result {
+            Ok(result) => result,
+            Err(error) => panic!("worker eval should succeed: {error}"),
+        };
+        assert_eq!(result.output, "42\n");
+        assert!(!worker.is_running());
     }
 
     #[test]
