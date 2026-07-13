@@ -19,6 +19,11 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 - Added a source-of-truth design and Witan task breakdown for a future
   interactive `HELP` facility.
 
+### Fixed
+
+- Fixed native/window text-size controls so command log and system output text
+  scale along with the live input line.
+
 ## [0.1.3] - 2026-07-13
 
 ### Added

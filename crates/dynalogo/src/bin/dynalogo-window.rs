@@ -416,10 +416,11 @@ impl App {
         );
         draw_line(0.0, layout.top, screen_width(), layout.top, 2.0, DARKGRAY);
 
+        let log_font_size = log_font_size_for_input(self.input_font_size);
         let start = self.log.len().saturating_sub(layout.log_lines);
         for (index, line) in self.log[start..].iter().enumerate() {
             let y = layout.log_start_y + index as f32 * layout.log_line_height;
-            draw_text(line, 12.0, y, LOG_FONT_SIZE, LIGHTGRAY);
+            draw_text(line, 12.0, y, log_font_size, LIGHTGRAY);
         }
 
         let input_x = 12.0;
@@ -821,11 +822,13 @@ fn prompt_layout(
 ) -> PromptLayout {
     let top = (screen_height - prompt_height).max(0.0);
     let input_baseline = (screen_height - INPUT_BASELINE_OFFSET).max(0.0);
-    let log_start_y = top + PROMPT_TOP_PADDING + LOG_FONT_SIZE;
+    let log_font_size = log_font_size_for_input(input_font_size);
+    let log_line_height = log_line_height_for_input(input_font_size);
+    let log_start_y = top + PROMPT_TOP_PADDING + log_font_size;
     let last_log_baseline = input_baseline - input_font_size - LOG_INPUT_GAP;
     let available_height = (last_log_baseline - log_start_y).max(0.0);
     let available_lines = if log_start_y <= last_log_baseline {
-        (available_height / LOG_LINE_HEIGHT).floor() as usize + 1
+        (available_height / log_line_height).floor() as usize + 1
     } else {
         0
     };
@@ -833,7 +836,7 @@ fn prompt_layout(
     PromptLayout {
         top,
         log_start_y,
-        log_line_height: LOG_LINE_HEIGHT,
+        log_line_height,
         log_lines: requested_log_lines.min(available_lines),
         input_baseline,
     }
@@ -896,6 +899,14 @@ fn input_font_char_step(ch: char) -> i32 {
         '-' | '_' => -1,
         _ => 0,
     }
+}
+
+fn log_font_size_for_input(input_font_size: f32) -> f32 {
+    input_font_size * (LOG_FONT_SIZE / DEFAULT_INPUT_FONT_SIZE)
+}
+
+fn log_line_height_for_input(input_font_size: f32) -> f32 {
+    input_font_size * (LOG_LINE_HEIGHT / DEFAULT_INPUT_FONT_SIZE)
 }
 
 fn adjust_input_font_size(current: f32, delta: f32) -> f32 {
@@ -1661,10 +1672,25 @@ mod tests {
         let normal = prompt_layout(768.0, PROMPT_HEIGHT, LOG_LINES, DEFAULT_INPUT_FONT_SIZE);
         let large = prompt_layout(768.0, PROMPT_HEIGHT, LOG_LINES, MAX_INPUT_FONT_SIZE);
         assert!(large.log_lines <= normal.log_lines);
+        assert!(large.log_line_height > normal.log_line_height);
 
         let last_log_baseline =
             large.log_start_y + large.log_lines.saturating_sub(1) as f32 * large.log_line_height;
         assert!(last_log_baseline + MAX_INPUT_FONT_SIZE + LOG_INPUT_GAP <= large.input_baseline);
+    }
+
+    #[test]
+    fn log_font_metrics_scale_with_input_font_size() {
+        assert_eq!(
+            log_font_size_for_input(DEFAULT_INPUT_FONT_SIZE),
+            LOG_FONT_SIZE
+        );
+        assert_eq!(
+            log_line_height_for_input(DEFAULT_INPUT_FONT_SIZE),
+            LOG_LINE_HEIGHT
+        );
+        assert!(log_font_size_for_input(MAX_INPUT_FONT_SIZE) > LOG_FONT_SIZE);
+        assert!(log_line_height_for_input(MAX_INPUT_FONT_SIZE) > LOG_LINE_HEIGHT);
     }
 
     #[test]
