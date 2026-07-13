@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/feoh/dynalogo/docs/help/topic.schema.json",
+  "title": "DynaLOGO help topic front matter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "kind", "category", "summary", "status"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$",
+      "description": "Stable lowercase topic lookup ID."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "primitive",
+        "library-procedure",
+        "data-type",
+        "syntax",
+        "frontend",
+        "compatibility",
+        "concept"
+      ]
+    },
+    "category": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "names": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z0-9.?_+-/*<>=]+$"
+      },
+      "uniqueItems": true
+    },
+    "signature": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z0-9.?_+-/*<>=]+$"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "see_also": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9.-]*$"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "status": {
+      "type": "string",
+      "enum": ["implemented", "partial", "planned", "documented-limit"]
+    },
+    "since": {
+      "type": "string",
+      "pattern": "^v?[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "compatibility": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "examples_required": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": ["primitive", "library-procedure"]
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["names", "signature", "aliases"]
+      }
+    }
+  ]
+}

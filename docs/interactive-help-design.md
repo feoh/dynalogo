@@ -188,13 +188,15 @@ Tracked under Witan project
 - `tk-integrate-interactive-help-with-terminal-and-win-5541da` — frontend
   integration and onboarding text
 
-## Open decisions
+## Resolved by the schema task
 
-- Whether to generate directly into `docs/reference-manual.md` or generate a
-  separate `docs/help-reference.md` linked from the reference manual.
-- Whether examples should live in topic front matter or be parsed from fenced
-  `logo` code blocks in the Markdown body.
-- Whether `HELP` output should include full topic bodies by default or a compact
-  summary with an option for long-form output later.
-- Whether `APROPOS` should search only IDs/titles/aliases/tags initially or also
-  full body text.
+[`help/topic-schema.md`](help/topic-schema.md) resolves the initial source-layout
+and schema decisions:
+
+- Generate a separate `docs/help-reference.md` first, then link it from the
+  reference manual.
+- Parse examples from fenced `logo` code blocks in the Markdown body.
+- Make `HELP` default to compact topic output; full-topic output can be added
+  later.
+- Make `APROPOS` initially search IDs, titles, names, aliases, summaries,
+  categories, and tags; full body-text search can be added later.

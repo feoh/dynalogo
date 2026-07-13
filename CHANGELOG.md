@@ -18,6 +18,8 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
   cursor.
 - Added a source-of-truth design and Witan task breakdown for a future
   interactive `HELP` facility.
+- Added the canonical `docs/help/` topic schema, source layout, and starter
+  topics for future runtime `HELP` / `APROPOS` content.
 
 ### Fixed
 

@@ -15,6 +15,8 @@ Start here for user-facing documentation inside the repository.
   parser, primitive, and dynaturtle internals
 - [`interactive-help-design.md`](interactive-help-design.md) — source-of-truth
   design and task breakdown for the planned interactive `HELP` facility
+- [`help/`](help/) — canonical help topic schema, source layout, and starter
+  topics for the planned runtime `HELP` / `APROPOS` facility
 - [`wasm-and-browser.md`](wasm-and-browser.md) — WASM/browser build and
   embedding guidance beyond the user demo walkthrough
 
