@@ -179,13 +179,13 @@ Tracked under Witan project
 - `tk-implement-source-of-truth-interactive-help-facil-d45278` — help epic
 - `tk-define-canonical-help-topic-schema-and-source-la-25de0b` — topic schema
   and canonical source layout
-- `tk-generate-reference-docs-and-runtime-help-data-fr-649efe` — generator,
+- `tk-generate-reference-docs-and-runtime-help-data-fr-c980ee` — generator,
   runtime data, and drift checks
-- `tk-add-core-help-primitives-and-topic-lookup-28797f` — VM primitives and
+- `tk-add-core-help-primitives-and-topic-lookup-a6e043` — VM primitives and
   lookup/search implementation
-- `tk-cover-primitives-data-types-expression-syntax-an-651ff1` — content
+- `tk-cover-primitives-data-types-expression-syntax-an-87d08e` — content
   coverage for primitives, data types, syntax, and language features
-- `tk-integrate-interactive-help-with-terminal-and-win-00781b` — frontend
+- `tk-integrate-interactive-help-with-terminal-and-win-5541da` — frontend
   integration and onboarding text
 
 ## Open decisions
