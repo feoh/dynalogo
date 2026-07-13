@@ -4,7 +4,7 @@
 //! circle-vs-circle narrow phase. Edge contacts are included because Atari LOGO
 //! style demons often trigger on screen boundaries.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::dynaturtle::{TurtleId, TurtleStore};
 use crate::turtle::Point;
@@ -100,22 +100,29 @@ impl SpatialHash {
     }
 
     pub fn candidate_pairs(&self) -> Vec<CollisionPair> {
-        let mut pairs = HashSet::new();
-        for (&cell, turtles) in &self.cells {
-            for neighbor in neighboring_cells(cell) {
+        let mut cells: Vec<_> = self.cells.iter().collect();
+        cells.sort_by_key(|(cell, _)| **cell);
+
+        let mut pairs = Vec::new();
+        for (&cell, turtles) in cells {
+            for (left_index, &a) in turtles.iter().enumerate() {
+                for &b in &turtles[left_index + 1..] {
+                    pairs.push(CollisionPair::new(a, b));
+                }
+            }
+
+            for neighbor in forward_neighboring_cells(cell) {
                 let Some(other_turtles) = self.cells.get(&neighbor) else {
                     continue;
                 };
                 for &a in turtles {
                     for &b in other_turtles {
-                        if a != b {
-                            pairs.insert(CollisionPair::new(a, b));
-                        }
+                        pairs.push(CollisionPair::new(a, b));
                     }
                 }
             }
         }
-        let mut pairs: Vec<CollisionPair> = pairs.into_iter().collect();
+
         pairs.sort_by_key(|pair| (pair.a.index(), pair.b.index()));
         pairs
     }
@@ -196,8 +203,10 @@ fn cell_for(point: Point, cell_size: f64) -> (i64, i64) {
     )
 }
 
-fn neighboring_cells((x, y): (i64, i64)) -> impl Iterator<Item = (i64, i64)> {
-    (-1..=1).flat_map(move |dx| (-1..=1).map(move |dy| (x + dx, y + dy)))
+fn forward_neighboring_cells((x, y): (i64, i64)) -> impl Iterator<Item = (i64, i64)> {
+    [(0, 1), (1, -1), (1, 0), (1, 1)]
+        .into_iter()
+        .map(move |(dx, dy)| (x + dx, y + dy))
 }
 
 fn distance_squared(a: Point, b: Point) -> f64 {
@@ -225,6 +234,29 @@ mod tests {
         assert_eq!(
             hash.candidate_pairs(),
             vec![CollisionPair::new(TurtleId::new(0), TurtleId::new(1))]
+        );
+    }
+
+    #[test]
+    fn spatial_hash_emits_adjacent_cell_candidates_once() {
+        let store = store_with_positions(&[
+            Point::new(1.0, 1.0),
+            Point::new(11.0, 1.0),
+            Point::new(1.0, 11.0),
+            Point::new(11.0, 11.0),
+        ]);
+        let hash = SpatialHash::rebuild(&store, 10.0);
+
+        assert_eq!(
+            hash.candidate_pairs(),
+            vec![
+                CollisionPair::new(TurtleId::new(0), TurtleId::new(1)),
+                CollisionPair::new(TurtleId::new(0), TurtleId::new(2)),
+                CollisionPair::new(TurtleId::new(0), TurtleId::new(3)),
+                CollisionPair::new(TurtleId::new(1), TurtleId::new(2)),
+                CollisionPair::new(TurtleId::new(1), TurtleId::new(3)),
+                CollisionPair::new(TurtleId::new(2), TurtleId::new(3)),
+            ]
         );
     }
 
