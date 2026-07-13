@@ -74,6 +74,12 @@ impl ArityTable {
             ("BL", 1),
             ("FPUT", 2),
             ("LPUT", 2),
+            ("MEMBER", 2),
+            ("FIND", 2),
+            ("MAP.SE", 2),
+            ("QUEUE", 2),
+            ("PUSH", 2),
+            ("POP", 1),
             ("SENTENCE", 2),
             ("SE", 2),
             ("LIST", 2),
@@ -129,6 +135,7 @@ impl ArityTable {
             ("RL", 0),
             ("READWORD", 0),
             ("RW", 0),
+            ("EOFP", 0),
             ("OPENREAD", 1),
             ("OPENWRITE", 1),
             ("OPENAPPEND", 1),
@@ -150,12 +157,15 @@ impl ArityTable {
             ("FULLSCREEN", 0),
             ("FS", 0),
             ("SETCURSOR", 2),
+            ("SETPOSN", 2),
             ("SETENV", 4),
             ("MAKE", 2),
             ("NAME", 2),
+            ("LOCALMAKE", 2),
             ("THING", 1),
             ("LOCAL", 1),
             ("NAMEP", 1),
+            ("BOUNDP", 1),
             ("WORDP", 1),
             ("REALWORDP", 1),
             ("LISTP", 1),
@@ -165,12 +175,14 @@ impl ArityTable {
             ("EVENP", 1),
             ("DIVISORP", 2),
             ("FACTORIAL", 1),
+            ("SUBSTRINGP", 2),
             ("DEFINEDP", 1),
             ("DEFINED?", 1),
             ("PRIMITIVEP", 1),
             ("PRIMITIVE?", 1),
             ("TEXT", 1),
             ("FULLTEXT", 1),
+            ("PROCEDURES", 0),
             ("COPYDEF", 2),
             ("DEFINE", 3),
             (".DEFMACRO", 3),
@@ -425,7 +437,7 @@ impl<'a> Parser<'a> {
             TokenKind::QuotedWord(word) => Ok(Expr::Literal(Value::word(self.interner, word))),
             TokenKind::ColonWord(word) => Ok(Expr::Thing(self.interner.intern(word))),
             TokenKind::LBracket => self.list_literal(token.line, token.col).map(Expr::Literal),
-            TokenKind::LParen => self.greedy_call(token.line, token.col),
+            TokenKind::LParen => self.parenthesized(token.line, token.col),
             TokenKind::Infix(InfixOp::Minus) => self.unary_minus(token.line, token.col),
             TokenKind::Infix(op) => {
                 Err(self.error_at(&token, format!("unexpected infix operator `{op}`")))
@@ -488,6 +500,18 @@ impl<'a> Parser<'a> {
                 greedy: false,
             }),
         }
+    }
+
+    fn parenthesized(&mut self, line: usize, col: usize) -> Result<Expr, ParseError> {
+        if let Some(TokenKind::Word(word)) = self.peek_kind() {
+            if parse_logo_number(word.as_str()).is_none() {
+                return self.greedy_call(line, col);
+            }
+        }
+
+        let expr = self.parse_expression(0)?;
+        self.expect(TokenKind::RParen, "expected `)` to close expression")?;
+        Ok(expr)
     }
 
     fn greedy_call(&mut self, line: usize, col: usize) -> Result<Expr, ParseError> {
@@ -832,6 +856,78 @@ mod tests {
         assert_eq!(sym_name(&interner, *callee), "sum");
         assert!(*greedy);
         assert_eq!(args.len(), 3);
+    }
+
+    #[test]
+    fn parses_parenthesized_expression_grouping() {
+        let (program, interner) = parse("print (:x + 1) * 2");
+        let Expr::Call { args, .. } = &program.expressions()[0] else {
+            panic!("expected PRINT");
+        };
+        let Expr::Infix { op, left, right } = &args[0] else {
+            panic!("expected outer product");
+        };
+        assert_eq!(*op, InfixOp::Star);
+        assert_eq!(**right, Expr::Literal(Value::number(2.0)));
+        let Expr::Infix { op, left, right } = &**left else {
+            panic!("expected grouped sum");
+        };
+        assert_eq!(*op, InfixOp::Plus);
+        let Expr::Thing(symbol) = **left else {
+            panic!("expected :x");
+        };
+        assert_eq!(sym_name(&interner, symbol), "x");
+        assert_eq!(**right, Expr::Literal(Value::number(1.0)));
+    }
+
+    #[test]
+    fn parses_numeric_parenthesized_expression_grouping() {
+        let (program, _) = parse("print (1 + 2) * 3");
+        let Expr::Call { args, .. } = &program.expressions()[0] else {
+            panic!("expected PRINT");
+        };
+        let Expr::Infix { op, left, right } = &args[0] else {
+            panic!("expected outer product");
+        };
+        assert_eq!(*op, InfixOp::Star);
+        assert_eq!(**right, Expr::Literal(Value::number(3.0)));
+        let Expr::Infix { op, left, right } = &**left else {
+            panic!("expected grouped sum");
+        };
+        assert_eq!(*op, InfixOp::Plus);
+        assert_eq!(**left, Expr::Literal(Value::number(1.0)));
+        assert_eq!(**right, Expr::Literal(Value::number(2.0)));
+    }
+
+    #[test]
+    fn parses_compact_infix_words() {
+        let (program, interner) = parse("print :n-1+last :items");
+        let Expr::Call { args, .. } = &program.expressions()[0] else {
+            panic!("expected PRINT");
+        };
+        let Expr::Infix { op, left, right } = &args[0] else {
+            panic!("expected sum");
+        };
+        assert_eq!(*op, InfixOp::Plus);
+        let Expr::Infix {
+            op,
+            left,
+            right: one,
+        } = &**left
+        else {
+            panic!("expected difference");
+        };
+        assert_eq!(*op, InfixOp::Minus);
+        let Expr::Thing(symbol) = **left else {
+            panic!("expected :n");
+        };
+        assert_eq!(sym_name(&interner, symbol), "n");
+        assert_eq!(**one, Expr::Literal(Value::number(1.0)));
+        let Expr::Call { callee, args, .. } = &**right else {
+            panic!("expected LAST call");
+        };
+        assert_eq!(sym_name(&interner, *callee), "last");
+        assert_eq!(args.len(), 1);
     }
 
     #[test]

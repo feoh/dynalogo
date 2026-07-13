@@ -54,9 +54,11 @@ UCBLOGO_BIN=/path/to/logo \
   cargo test -p dynalogo-core --test ucblogo_compatibility -- --nocapture
 ```
 
-## Intentional divergences
+## Additive extension cases
 
-The suite currently documents these intentional differences from UCBLogo:
+The compatibility target is no UCBLogo semantic differences. Differences from
+UCBLogo behavior should be treated as bugs or compatibility gaps unless they are
+strictly additive DynaLOGO features:
 
 - dynaturtle primitives such as `TELL`, `ASK`, `WHO`, velocity, collision, and
   `WHEN` are DynaLOGO extensions rather than UCBLogo surface
@@ -64,8 +66,8 @@ The suite currently documents these intentional differences from UCBLogo:
 - Atari/dynaturtle compatibility helpers may exist even when no direct UCBLogo
   counterpart exists
 
-As the compatibility corpus grows, additional divergences should be added here
-instead of being left implicit in test code.
+As the compatibility corpus grows, additive extension fixtures should remain
+separate from UCBLogo conformance fixtures or be clearly marked extension-only.
 
 Error-code behavior is pinned by the compatibility fixtures plus focused VM
 regression tests. Current coded families include wrong-type input (code 4),

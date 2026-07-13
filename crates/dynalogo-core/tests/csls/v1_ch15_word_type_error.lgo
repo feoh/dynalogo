@@ -1,0 +1,4 @@
+; Example from Computer Science Logo Style, Volume 1, Chapter 15: Debugging
+; Source URL: https://people.eecs.berkeley.edu/~bh/v1ch15/debug.html
+
+print word "hello, [old buddy]

@@ -1,0 +1,89 @@
+; Examples from Computer Science Logo Style, Volume 1, Chapter 11: Recursive Operations
+; Source URL: https://people.eecs.berkeley.edu/~bh/v1ch11/recops.html
+
+to codelet :letter :code
+output codematch :letter "abcdefghijklmnopqrstuvwxyz :code
+end
+
+to codematch :letter :clear :code
+if emptyp :clear [output :letter]
+if equalp :letter first :clear [output first :code]
+output codematch :letter butfirst :clear butfirst :code
+end
+
+to codeword :word :code
+if emptyp :word [output "]
+output word (codelet first :word :code) (codeword butfirst :word :code)
+end
+
+print codeword "hello "qwertyuiopasdfghjklzxcvbnm
+
+to code :sent :code
+if emptyp :sent [output []]
+output sentence (codeword first :sent :code) (code butfirst :sent :code)
+end
+
+print code [meet at midnight, under the dock.] "qwertyuiopasdfghjklzxcvbnm
+
+to pairup :words
+if emptyp butfirst :words [output []]
+output (sentence (word first :words first butfirst :words) (pairup butfirst :words))
+end
+
+show pairup [now here after glow worm hole]
+
+to numbers :sent
+if emptyp :sent [output []]
+if numberp first :sent [output sentence first :sent numbers butfirst :sent]
+output numbers butfirst :sent
+end
+
+show numbers [76 trombones, 4 calling birds, and 8 days]
+show filter "numberp [76 trombones, 4 calling birds, and 8 days]
+show reduce "word [C S L S]
+show reduce "sum [3 4 5 6]
+
+to french :word
+output lookup :word [[book livre] [computer ordinateur] [window fenetre]]
+end
+
+to lookup :word :dictionary
+if emptyp :dictionary [output "]
+if equalp :word first first :dictionary [output last first :dictionary]
+output lookup :word butfirst :dictionary
+end
+
+print french "computer
+
+to fact :n
+if :n=0 [output 1]
+output :n * fact :n-1
+end
+
+print fact 5
+
+to fiblist :n
+if :n<2 [output [1 1]]
+output newfib fiblist :n-1
+end
+
+to newfib :list
+output fput (sum first :list first butfirst :list) :list
+end
+
+print fiblist 5
+
+to fib :n
+output first fiblist :n
+end
+
+print fib 5
+
+to subsets :word
+if emptyp :word [output (sentence ")]
+local "smaller
+make "smaller subsets butfirst :word
+output sentence :smaller (map [word (first :word) ?] :smaller)
+end
+
+show subsets "abc

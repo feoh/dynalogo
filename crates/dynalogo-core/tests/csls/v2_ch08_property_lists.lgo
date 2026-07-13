@@ -1,0 +1,13 @@
+; Examples from Computer Science Logo Style, Volume 2, Chapter 8: Property Lists
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch8/plist.html
+
+pprop "book "French "livre
+pprop "book "German "buch
+print gprop "book "French
+print gprop "book "German
+show gprop "book "urdu
+
+pprop "book "pages 450
+print plist "book
+remprop "book "pages
+print plist "book

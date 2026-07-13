@@ -1,0 +1,11 @@
+; Examples from Computer Science Logo Style, Volume 2, Chapter 5: Programs as Data
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch5/prgdat.html
+
+to opinion :yes :no
+print sentence :yes [is yummy.]
+print sentence :no [is yucky.]
+end
+
+opinion [Ice cream] "Cheese
+show text "opinion
+po "opinion

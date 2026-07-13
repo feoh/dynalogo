@@ -30,7 +30,8 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 
 - `APPLY`
 - `FOREACH`
-- `MAP`
+- `MAP`, `MAP.SE`
+- `FIND`
 - `FILTER`
 - `REDUCE`
 - `CASCADE`, `CASCADE.2`, `TRANSFER`
@@ -42,9 +43,9 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 ## Words, lists, arrays, and property lists
 
 - `FIRST`, `BUTFIRST`/`BF`, `LAST`, `BUTLAST`/`BL`
-- `FPUT`, `LPUT`, `SENTENCE`/`SE`, `LIST`, `WORD`
+- `FPUT`, `LPUT`, `QUEUE`, `PUSH`, `POP`, `SENTENCE`/`SE`, `LIST`, `WORD`
 - `COUNT`, `ITEM`, `RANK`, `RANPICK`, `WHICH`
-- `EMPTYP`/`EMPTY?`, `EQUALP`/`EQUAL?`, `MEMBERP`/`MEMBER?`
+- `EMPTYP`/`EMPTY?`, `EQUALP`/`EQUAL?`, `MEMBERP`/`MEMBER?`, `MEMBER`, `SUBSTRINGP`
 - `BEFORE`, `INSERT`, `SORT`, `SUPERSORT`, `ASCII`, `CHAR`, `LOWERCASE`, `REV`
 - `WORDP`, `REALWORDP`, `LISTP`, `NUMBERP`, `INTP`, `DECIMALP`, `EVENP`, `DIVISORP`
 - `ARRAY`, `SETITEM`, `LISTTOARRAY`, `ARRAYTOLIST`
@@ -52,12 +53,12 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 
 ## Variables and workspace predicates
 
-- `MAKE`, `NAME`, `THING`, `LOCAL`
+- `MAKE`, `NAME`, `LOCALMAKE`, `THING`, `LOCAL`
 - `EDIT`/`ED`, `EDNS`, `EDSH`
-- `NAMEP`
+- `NAMEP`, `BOUNDP`
 - `DEFINEDP`/`DEFINED?`
 - `PRIMITIVEP`/`PRIMITIVE?`
-- `TEXT`, `FULLTEXT`, `COPYDEF`, `DEFINE`, `.DEFMACRO`
+- `TEXT`, `FULLTEXT`, `PROCEDURES`, `COPYDEF`, `DEFINE`, `.DEFMACRO`
 - `MACROP`/`MACRO?`, `MACROEXPAND`
 - `PO`, `POALL`, `PONS`, `POPS`, `POTS`, `POPLS`, `.PRIMITIVES`
 - `ERASE`/`ER`, `ERN`, `ERNS`, `ERPS`, `ERPL`, `ERALL`
@@ -87,12 +88,12 @@ Loaded at VM startup as Logo procedures rather than Rust primitives:
 - `OPENREAD`, `OPENWRITE`, `OPENAPPEND`, `CLOSE`
 - `READER`, `WRITER`
 - `DRIBBLE`, `NODRIBBLE`
-- `READCHAR`/`RC`, `READLIST`/`RL`, `READWORD`/`RW`
+- `READCHAR`/`RC`, `READLIST`/`RL`, `READWORD`/`RW`, `EOFP`
 - `KEYP`
 - `JOY`, `JOYB`, `PADDLE`, `PADDLEB`
 - `TIMEOUT`
 - `TEXTSCREEN`/`TS`, `SPLITSCREEN`/`SS`, `FULLSCREEN`/`FS`
-- `SETCURSOR`, `SETENV`
+- `SETCURSOR`/`SETPOSN`, `SETENV`
 
 ## Turtle graphics and dynaturtles
 

@@ -1,0 +1,52 @@
+; Examples from Computer Science Logo Style, Volume 1, Chapter 4: Predicates
+; Source URL: https://people.eecs.berkeley.edu/~bh/v1ch4/predic.html
+
+print wordp "hello
+print wordp [hello]
+print emptyp []
+print emptyp 0
+print equalp 3 3.0
+print equalp "hello [hello]
+print equalp "hello first [hello]
+print equalp " []
+print equalp [] butfirst [hello]
+print "hello = first [hello]
+print 2 = 3
+print (first [hello]) = "hello
+print memberp "rain [the rain in Spain]
+print memberp [the rain] [the rain in Spain]
+print memberp [the rain] [[the rain] in Spain]
+print memberp "e "please
+print memberp "e "plain
+
+to vowelp :letter
+output memberp :letter [a e i o u]
+end
+
+print vowelp "e
+print vowelp "g
+
+to oddp :number
+output equalp (remainder :number 2) 1
+end
+
+print oddp 5
+print oddp 8
+
+if equalp 2 1+1 [print "Yup.]
+if equalp 3 2 [print "Nope.]
+
+to about.computersp :sentence
+if memberp "computer :sentence [output "true]
+if memberp "computers :sentence [output "true]
+if memberp "programming :sentence [output "true]
+output "false
+end
+
+print about.computersp [This book is about programming]
+print about.computersp [I like ice cream]
+
+ifelse 4 = 2+2 [print "Yup.] [print "Nope.]
+ifelse 4 = 3+5 [print "Yup.] [print "Nope.]
+
+print ifelse emptyp [] [sum 2 3] [product 6 7]

@@ -200,6 +200,13 @@ impl Value {
             Value::Array(array) => array.show(interner),
         }
     }
+
+    pub fn print_form(&self, interner: &Interner) -> String {
+        match self {
+            Value::List(list) => list.print_form(interner),
+            _ => self.show(interner),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -369,6 +376,17 @@ impl List {
             out.push_str(&value.show(interner));
         }
         out.push(']');
+        out
+    }
+
+    pub fn print_form(&self, interner: &Interner) -> String {
+        let mut out = String::new();
+        for (i, value) in self.iter().enumerate() {
+            if i > 0 {
+                out.push(' ');
+            }
+            out.push_str(&value.show(interner));
+        }
         out
     }
 }

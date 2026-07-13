@@ -269,6 +269,10 @@ impl InputStream {
             Some(tail.strip_suffix('\r').unwrap_or(tail).to_string())
         }
     }
+
+    fn is_eof(&self) -> bool {
+        self.cursor >= self.content.len()
+    }
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -367,9 +371,34 @@ struct EditSession {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+struct ProcedureInput {
+    name: Symbol,
+    default_source: Option<String>,
+    rest: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ProcedureInputSpec {
+    name: String,
+    default_source: Option<String>,
+    rest: bool,
+}
+
+impl ProcedureInputSpec {
+    fn required(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            default_source: None,
+            rest: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Procedure {
     name: Symbol,
     params: Vec<Symbol>,
+    input_specs: Vec<ProcedureInput>,
     chunk: Chunk,
     body_source: String,
     is_macro: bool,
@@ -384,12 +413,26 @@ impl Procedure {
         &self.params
     }
 
+    fn input_specs(&self) -> &[ProcedureInput] {
+        &self.input_specs
+    }
+
+    fn accepts_arity(&self, argc: usize) -> bool {
+        let min = self
+            .input_specs
+            .iter()
+            .filter(|input| input.default_source.is_none() && !input.rest)
+            .count();
+        let has_rest = self.input_specs.iter().any(|input| input.rest);
+        argc >= min && (has_rest || argc <= self.params.len())
+    }
+
     pub fn chunk(&self) -> &Chunk {
         &self.chunk
     }
 
     pub fn body_source(&self) -> &str {
-        &self.body_source
+        self.body_source.as_str()
     }
 
     pub fn is_macro(&self) -> bool {
@@ -720,13 +763,32 @@ impl Vm {
         body: &str,
         is_macro: bool,
     ) -> Result<(), VmError> {
+        let input_specs = params
+            .into_iter()
+            .map(ProcedureInputSpec::required)
+            .collect::<Vec<_>>();
+        self.define_procedure_with_inputs(name, input_specs, body, is_macro)
+    }
+
+    fn define_procedure_with_inputs(
+        &mut self,
+        name: impl AsRef<str>,
+        input_specs: Vec<ProcedureInputSpec>,
+        body: &str,
+        is_macro: bool,
+    ) -> Result<(), VmError> {
         let name = name.as_ref();
         let name_symbol = self.interner.intern(name);
-        let param_symbols: Vec<Symbol> = params
+        let inputs: Vec<ProcedureInput> = input_specs
             .iter()
-            .map(|param| self.interner.intern(param))
+            .map(|input| ProcedureInput {
+                name: self.interner.intern(&input.name),
+                default_source: input.default_source.clone(),
+                rest: input.rest,
+            })
             .collect();
-        self.arities.insert(name, Arity::Exact(param_symbols.len()));
+        let param_symbols = inputs.iter().map(|input| input.name).collect::<Vec<_>>();
+        self.arities.insert(name, procedure_arity(&input_specs));
         let program =
             parse_source(body, &mut self.interner, &self.arities).map_err(vm_error_from_parse)?;
         let chunk = Compiler::new()
@@ -737,6 +799,7 @@ impl Vm {
             Procedure {
                 name: name_symbol,
                 params: param_symbols,
+                input_specs: inputs,
                 chunk,
                 body_source: body.to_string(),
                 is_macro,
@@ -829,7 +892,15 @@ impl Vm {
     }
 
     fn define_procedures_in_source(&mut self, source: &str) -> Result<String, VmError> {
+        struct PendingDefinition {
+            name: String,
+            input_specs: Vec<ProcedureInputSpec>,
+            body: String,
+            is_macro: bool,
+        }
+
         let mut runnable = Vec::new();
+        let mut pending = Vec::new();
         let mut lines = source.lines().peekable();
 
         while let Some(line) = lines.next() {
@@ -842,7 +913,7 @@ impl Vm {
                 continue;
             }
 
-            let (name, params, is_macro) = parse_to_header(trimmed)?;
+            let (name, input_specs, is_macro) = parse_to_header(trimmed)?;
             let mut body = Vec::new();
             let mut saw_end = false;
             for body_line in lines.by_ref() {
@@ -855,11 +926,25 @@ impl Vm {
             if !saw_end {
                 return Err(VmError::new(format!("procedure {name} is missing END")));
             }
-            if is_macro {
-                self.define_macro(name, params, &body.join("\n"))?;
-            } else {
-                self.define_procedure(name, params, &body.join("\n"))?;
-            }
+            pending.push(PendingDefinition {
+                name,
+                input_specs,
+                body: body.join("\n"),
+                is_macro,
+            });
+        }
+
+        for definition in &pending {
+            self.arities
+                .insert(&definition.name, procedure_arity(&definition.input_specs));
+        }
+        for definition in pending {
+            self.define_procedure_with_inputs(
+                definition.name,
+                definition.input_specs,
+                &definition.body,
+                definition.is_macro,
+            )?;
         }
 
         Ok(runnable.join("\n"))
@@ -894,6 +979,9 @@ impl Vm {
             "equalp" | "equal?" => self.equalp(args),
             "emptyp" | "empty?" => self.emptyp(args),
             "memberp" | "member?" => self.memberp(args),
+            "member" => self.member(args),
+            "substringp" => self.substringp(args),
+            "find" => self.find(args),
             "first" => self.first(args),
             "butfirst" | "bf" => self.butfirst(args),
             "last" => self.last(args),
@@ -937,6 +1025,7 @@ impl Vm {
             "readchar" | "rc" => self.readchar(args),
             "readlist" | "rl" => self.readlist(args),
             "readword" | "rw" => self.readword(args),
+            "eofp" => self.eofp(args),
             "keyp" => self.keyp(args),
             "joy" => self.joy(args),
             "joyb" => self.joyb(args),
@@ -946,12 +1035,16 @@ impl Vm {
             "textscreen" | "ts" => self.textscreen(args),
             "splitscreen" | "ss" => self.splitscreen(args),
             "fullscreen" | "fs" => self.fullscreen(args),
-            "setcursor" => self.setcursor(args),
+            "setcursor" | "setposn" => self.setcursor(args),
             "setenv" => self.setenv(args),
             "make" | "name" => self.make(args),
+            "localmake" => self.localmake(args),
             "thing" => self.thing(args),
+            "queue" => self.queue(args),
+            "push" => self.push(args),
+            "pop" => self.pop(args),
             "local" => self.local(args),
-            "namep" => self.namep(args),
+            "namep" | "boundp" => self.namep(args),
             "wordp" => self.wordp(args),
             "realwordp" => self.realwordp(args),
             "listp" => self.listp(args),
@@ -965,6 +1058,7 @@ impl Vm {
             "primitivep" | "primitive?" => self.primitivep(args),
             "text" => self.text(args),
             "fulltext" => self.fulltext(args),
+            "procedures" => self.procedures_reporter(args),
             "copydef" => self.copydef(args),
             "define" => self.define_from_data(args),
             ".defmacro" => self.defmacro(args),
@@ -1002,7 +1096,7 @@ impl Vm {
             "repeat" => self.repeat(args),
             "forever" => self.forever(args),
             "if" => self.r#if(args),
-            "ifelse" => self.ifelse(args),
+            "ifelse" => self.ifelse(args, expects_value),
             "run" => self.run_list(args),
             "runresult" => self.runresult(args),
             "parse" => self.parse(args),
@@ -1010,6 +1104,7 @@ impl Vm {
             "apply" => self.apply(args),
             "foreach" => self.foreach(args),
             "map" => self.map(args),
+            "map.se" => self.map_se(args),
             "filter" => self.filter(args),
             "reduce" => self.reduce(args),
             "cascade" => self.cascade(args),
@@ -1100,7 +1195,12 @@ impl Vm {
             .get(name)
             .cloned()
             .ok_or_else(|| VmError::new(format!("I don't know how to {name}")))?;
-        expect_arity(name, &args, procedure.params.len())?;
+        if !procedure.accepts_arity(args.len()) {
+            return Err(VmError::new(format!(
+                "{name} expected a compatible number of inputs, got {}",
+                args.len()
+            )));
+        }
 
         let control = self.run_procedure_body(&procedure, args)?;
 
@@ -1124,13 +1224,50 @@ impl Vm {
         args: Vec<Value>,
     ) -> Result<ControlFlow, VmError> {
         self.env.push_frame();
-        for (param, value) in procedure.params().iter().zip(args) {
-            let name = self.interner.spelling(*param).to_string();
+        let mut args = args.into_iter();
+        for input in procedure.input_specs() {
+            let value = if input.rest {
+                Value::List(List::from_values(args.by_ref().collect::<Vec<_>>()))
+            } else if let Some(value) = args.next() {
+                value
+            } else if let Some(default_source) = &input.default_source {
+                self.eval_default_input(procedure, input.name, default_source)?
+            } else {
+                let name = self.interner.spelling(input.name).to_string();
+                self.env.pop_frame();
+                return Err(VmError::new(format!(
+                    "{} is missing input :{name}",
+                    self.interner.spelling(procedure.name())
+                )));
+            };
+            let name = self.interner.spelling(input.name).to_string();
             self.env.define_local(name, value);
         }
         let result = self.run(procedure.chunk());
         self.env.pop_frame();
         Ok(result?.control)
+    }
+
+    fn eval_default_input(
+        &mut self,
+        procedure: &Procedure,
+        input: Symbol,
+        source: &str,
+    ) -> Result<Value, VmError> {
+        let default_source = format!("output {source}");
+        let program = parse_source(&default_source, &mut self.interner, &self.arities)
+            .map_err(vm_error_from_parse)?;
+        let chunk = Compiler::new()
+            .compile_effect_program(&program)
+            .map_err(|error| VmError::new(error.to_string()))?;
+        match self.run(&chunk)?.control {
+            ControlFlow::Output(value) => Ok(value),
+            control => Err(VmError::new(format!(
+                "default value for :{} in {} did not output a value ({control:?})",
+                self.interner.spelling(input),
+                self.interner.spelling(procedure.name())
+            ))),
+        }
     }
 
     fn expand_and_run_macro(
@@ -1371,6 +1508,47 @@ impl Vm {
         Ok(PrimitiveResult::Value(self.logo_bool(member)))
     }
 
+    fn member(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("member", &args, 2)?;
+        let found = match &args[1] {
+            Value::List(list) => {
+                let values = list_values(list);
+                values
+                    .iter()
+                    .position(|value| args[0].equalp(value, &self.interner))
+                    .map(|index| Value::List(List::from_values(values[index..].to_vec())))
+            }
+            Value::Word(symbol) | Value::BareWord(symbol) => {
+                let needle = args[0].show(&self.interner);
+                let haystack = self.interner.spelling(*symbol).to_string();
+                haystack
+                    .find(&needle)
+                    .map(|index| Value::word(&mut self.interner, &haystack[index..]))
+            }
+            Value::Number(_) => None,
+            Value::Array(array) => {
+                let list = array.to_list();
+                let values = list_values(&list);
+                values
+                    .iter()
+                    .position(|value| args[0].equalp(value, &self.interner))
+                    .map(|index| Value::List(List::from_values(values[index..].to_vec())))
+            }
+        };
+        Ok(PrimitiveResult::Value(
+            found.unwrap_or_else(|| self.logo_bool(false)),
+        ))
+    }
+
+    fn substringp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("substringp", &args, 2)?;
+        let needle = args[0].show(&self.interner);
+        let haystack = args[1].show(&self.interner);
+        Ok(PrimitiveResult::Value(
+            self.logo_bool(haystack.contains(&needle)),
+        ))
+    }
+
     fn first(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("first", &args, 1)?;
         let value = match &args[0] {
@@ -1505,27 +1683,31 @@ impl Vm {
     }
 
     fn sentence(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
-        expect_arity("sentence", &args, 2)?;
         let mut values = Vec::new();
-        sentence_part(&args[0], &mut values);
-        sentence_part(&args[1], &mut values);
+        for arg in &args {
+            sentence_part(arg, &mut values);
+        }
         Ok(PrimitiveResult::Value(Value::List(List::from_values(
             values,
         ))))
     }
 
     fn list(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
-        expect_arity("list", &args, 2)?;
         Ok(PrimitiveResult::Value(Value::List(List::from_values(args))))
     }
 
     fn word(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
-        expect_arity("word", &args, 2)?;
-        let text = format!(
-            "{}{}",
-            args[0].show(&self.interner),
-            args[1].show(&self.interner)
-        );
+        let mut text = String::new();
+        for arg in &args {
+            match arg {
+                Value::Word(_) | Value::BareWord(_) | Value::Number(_) => {
+                    text.push_str(&arg.show(&self.interner));
+                }
+                Value::List(_) | Value::Array(_) => {
+                    return Err(doesnt_like_as_input("word", arg, &self.interner));
+                }
+            }
+        }
         Ok(PrimitiveResult::Value(Value::word(
             &mut self.interner,
             text,
@@ -1674,7 +1856,7 @@ impl Vm {
 
     fn print(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("print", &args, 1)?;
-        self.write_output_line(&args[0].show(&self.interner))?;
+        self.write_output_line(&args[0].print_form(&self.interner))?;
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -2026,6 +2208,13 @@ impl Vm {
         )))
     }
 
+    fn eofp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("eofp", &args, 0)?;
+        Ok(PrimitiveResult::Value(self.logo_bool(
+            self.read_stream.as_ref().is_none_or(InputStream::is_eof),
+        )))
+    }
+
     fn keyp(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("keyp", &args, 0)?;
         Ok(PrimitiveResult::Value(
@@ -2115,6 +2304,60 @@ impl Vm {
         let name = variable_name_input(&args[0], &self.interner)?;
         self.env.set(name, args[1].clone());
         Ok(PrimitiveResult::NoValue)
+    }
+
+    fn localmake(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("localmake", &args, 2)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        self.env.define_local(name, args[1].clone());
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn queue(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("queue", &args, 2)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        let mut values = self.list_variable_values(&name, "QUEUE")?;
+        values.push(args[1].clone());
+        self.env.set(name, Value::List(List::from_values(values)));
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn push(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("push", &args, 2)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        let mut values = self.list_variable_values(&name, "PUSH")?;
+        values.insert(0, args[1].clone());
+        self.env.set(name, Value::List(List::from_values(values)));
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn pop(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("pop", &args, 1)?;
+        let name = variable_name_input(&args[0], &self.interner)?;
+        let mut values = self.list_variable_values(&name, "POP")?;
+        if values.is_empty() {
+            return Err(doesnt_like_as_input(
+                "pop",
+                &Value::List(List::empty()),
+                &self.interner,
+            ));
+        }
+        let first = values.remove(0);
+        self.env.set(name, Value::List(List::from_values(values)));
+        Ok(PrimitiveResult::Value(first))
+    }
+
+    fn list_variable_values(&self, name: &str, primitive: &str) -> Result<Vec<Value>, VmError> {
+        let value = self
+            .env
+            .get(name)
+            .cloned()
+            .ok_or_else(|| self.error_with_code(11, format!("{name} has no value")))?;
+        match value {
+            Value::List(list) => Ok(list_values(&list)),
+            Value::Array(array) => Ok(list_values(&array.to_list())),
+            _ => Err(doesnt_like_as_input(primitive, &value, &self.interner)),
+        }
     }
 
     fn thing(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -2265,17 +2508,41 @@ impl Vm {
         )?)))
     }
 
+    fn procedures_reporter(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("procedures", &args, 0)?;
+        let procedures = self.visible_workspace_procedures();
+        let names = procedures
+            .into_iter()
+            .map(|procedure| {
+                let name = self.interner.spelling(procedure.name()).to_string();
+                Value::word(&mut self.interner, name)
+            })
+            .collect::<Vec<_>>();
+        Ok(PrimitiveResult::Value(Value::List(List::from_values(
+            names,
+        ))))
+    }
+
     fn copydef(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("copydef", &args, 2)?;
         let new_name = variable_name_input(&args[0], &self.interner)?;
         let procedure = self.workspace_procedure(&args[1])?.clone();
-        let params = procedure
-            .params()
+        let input_specs = procedure
+            .input_specs()
             .iter()
-            .map(|param| self.interner.spelling(*param).to_string())
+            .map(|input| ProcedureInputSpec {
+                name: self.interner.spelling(input.name).to_string(),
+                default_source: input.default_source.clone(),
+                rest: input.rest,
+            })
             .collect::<Vec<_>>();
         let body_source = procedure.body_source().to_string();
-        self.define_procedure_impl(new_name, params, &body_source, procedure.is_macro())?;
+        self.define_procedure_with_inputs(
+            new_name,
+            input_specs,
+            &body_source,
+            procedure.is_macro(),
+        )?;
         Ok(PrimitiveResult::NoValue)
     }
 
@@ -2325,7 +2592,12 @@ impl Vm {
             return Err(VmError::new(format!("{name} is not a macro")));
         }
         let call_args: Vec<Value> = items.collect();
-        expect_arity(&name, &call_args, procedure.params().len())?;
+        if !procedure.accepts_arity(call_args.len()) {
+            return Err(VmError::new(format!(
+                "{name} expected a compatible number of inputs, got {}",
+                call_args.len()
+            )));
+        }
 
         match self.run_procedure_body(&procedure, call_args)? {
             ControlFlow::Output(value) => Ok(PrimitiveResult::Value(value)),
@@ -2953,16 +3225,25 @@ impl Vm {
         }
     }
 
-    fn ifelse(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+    fn ifelse(
+        &mut self,
+        args: Vec<Value>,
+        expects_value: bool,
+    ) -> Result<PrimitiveResult, VmError> {
         expect_arity("ifelse", &args, 3)?;
         let list = if logo_truth(&args[0], &self.interner) {
             list_input(&args[1], "IFELSE", &self.interner)?
         } else {
             list_input(&args[2], "IFELSE", &self.interner)?
         };
-        match self.execute_instruction_list(list)? {
-            ControlFlow::None => Ok(PrimitiveResult::NoValue),
-            control => Ok(PrimitiveResult::Control(control)),
+        if expects_value {
+            let value = result_value(self.execute_instruction_list_result(list)?)?;
+            Ok(PrimitiveResult::Value(value))
+        } else {
+            match self.execute_instruction_list(list)? {
+                ControlFlow::None => Ok(PrimitiveResult::NoValue),
+                control => Ok(PrimitiveResult::Control(control)),
+            }
         }
     }
 
@@ -3039,56 +3320,189 @@ impl Vm {
     }
 
     fn apply(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
-        expect_arity("apply", &args, 2)?;
-        let values = list_values(list_input(&args[1], "APPLY", &self.interner)?);
+        expect_min_arity("apply", &args, 2)?;
+        let mut values = Vec::new();
+        for input in &args[1..] {
+            values.extend(self.iteration_values(input, "APPLY")?.values);
+        }
         self.invoke_template_value(&args[0], values)
             .map(PrimitiveResult::Value)
     }
 
     fn foreach(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
-        expect_arity("foreach", &args, 2)?;
-        let values = list_values(list_input(&args[1], "FOREACH", &self.interner)?);
-        for value in values {
-            self.invoke_template_effect(&args[0], vec![value])?;
+        expect_min_arity("foreach", &args, 2)?;
+        let (template, data_args) = self.foreach_template_and_data(&args);
+        let rows = self.template_iteration_rows(data_args, "FOREACH")?;
+        for (index, values) in rows.into_iter().enumerate() {
+            let bindings = iteration_bindings(index + 1);
+            self.invoke_template_effect_with_bindings(template, values, &bindings)?;
         }
         Ok(PrimitiveResult::NoValue)
     }
 
     fn map(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
-        expect_arity("map", &args, 2)?;
-        let values = list_values(list_input(&args[1], "MAP", &self.interner)?);
+        expect_min_arity("map", &args, 2)?;
+        let template = &args[0];
+        let mut shapes = Vec::new();
+        let rows = self.template_iteration_rows_with_shapes(&args[1..], "MAP", &mut shapes)?;
         let mut mapped = Vec::new();
-        for value in values {
-            mapped.push(self.invoke_template_value(&args[0], vec![value])?);
+        for (index, values) in rows.into_iter().enumerate() {
+            let bindings = iteration_bindings(index + 1);
+            mapped.push(self.invoke_template_value_with_bindings(template, values, &bindings)?);
+        }
+        Ok(PrimitiveResult::Value(iteration_result_value(
+            mapped,
+            shapes.first().copied(),
+            &mut self.interner,
+        )))
+    }
+
+    fn map_se(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_min_arity("map.se", &args, 2)?;
+        let template = &args[0];
+        let rows = self.template_iteration_rows(&args[1..], "MAP.SE")?;
+        let mut sentence = Vec::new();
+        for (index, values) in rows.into_iter().enumerate() {
+            let bindings = iteration_bindings(index + 1);
+            let mapped = self.invoke_template_value_with_bindings(template, values, &bindings)?;
+            sentence_part(&mapped, &mut sentence);
         }
         Ok(PrimitiveResult::Value(Value::List(List::from_values(
-            mapped,
+            sentence,
         ))))
+    }
+
+    fn find(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity("find", &args, 2)?;
+        let template = &args[0];
+        let values = self.iteration_values(&args[1], "FIND")?.values;
+        for (index, value) in values.into_iter().enumerate() {
+            let bindings = iteration_bindings(index + 1);
+            let found =
+                self.invoke_template_value_with_bindings(template, vec![value.clone()], &bindings)?;
+            if logo_truth(&found, &self.interner) {
+                return Ok(PrimitiveResult::Value(value));
+            }
+        }
+        Ok(PrimitiveResult::Value(self.logo_bool(false)))
     }
 
     fn filter(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("filter", &args, 2)?;
-        let values = list_values(list_input(&args[1], "FILTER", &self.interner)?);
+        let template = &args[0];
+        let IterationValues { values, shape } = self.iteration_values(&args[1], "FILTER")?;
         let mut kept = Vec::new();
-        for value in values {
-            let keep = self.invoke_template_value(&args[0], vec![value.clone()])?;
+        for (index, value) in values.into_iter().enumerate() {
+            let bindings = iteration_bindings(index + 1);
+            let keep =
+                self.invoke_template_value_with_bindings(template, vec![value.clone()], &bindings)?;
             if logo_truth(&keep, &self.interner) {
                 kept.push(value);
             }
         }
-        Ok(PrimitiveResult::Value(Value::List(List::from_values(kept))))
+        Ok(PrimitiveResult::Value(iteration_result_value(
+            kept,
+            Some(shape),
+            &mut self.interner,
+        )))
     }
 
     fn reduce(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("reduce", &args, 2)?;
-        let mut values = list_values(list_input(&args[1], "REDUCE", &self.interner)?).into_iter();
+        let template = &args[0];
+        let mut values = self
+            .iteration_values(&args[1], "REDUCE")?
+            .values
+            .into_iter();
         let Some(mut acc) = values.next() else {
             return Err(doesnt_like_as_input("reduce", &args[1], &self.interner));
         };
-        for value in values {
-            acc = self.invoke_template_value(&args[0], vec![acc, value])?;
+        for (offset, value) in values.enumerate() {
+            let bindings = iteration_bindings(offset + 2);
+            acc =
+                self.invoke_template_value_with_bindings(template, vec![acc, value], &bindings)?;
         }
         Ok(PrimitiveResult::Value(acc))
+    }
+
+    fn foreach_template_and_data<'a>(&self, args: &'a [Value]) -> (&'a Value, &'a [Value]) {
+        if args.len() == 2
+            && value_contains_template_binding(&args[0], &self.interner)
+            && !value_contains_template_binding(&args[1], &self.interner)
+        {
+            (&args[0], &args[1..])
+        } else {
+            (&args[args.len() - 1], &args[..args.len() - 1])
+        }
+    }
+
+    fn template_iteration_rows(
+        &mut self,
+        data_args: &[Value],
+        primitive: &str,
+    ) -> Result<Vec<Vec<Value>>, VmError> {
+        let mut shapes = Vec::new();
+        self.template_iteration_rows_with_shapes(data_args, primitive, &mut shapes)
+    }
+
+    fn template_iteration_rows_with_shapes(
+        &mut self,
+        data_args: &[Value],
+        primitive: &str,
+        shapes: &mut Vec<IterationShape>,
+    ) -> Result<Vec<Vec<Value>>, VmError> {
+        let sequences = data_args
+            .iter()
+            .map(|input| self.iteration_values(input, primitive))
+            .collect::<Result<Vec<_>, _>>()?;
+        shapes.extend(sequences.iter().map(|sequence| sequence.shape));
+        let row_count = sequences
+            .iter()
+            .map(|sequence| sequence.values.len())
+            .min()
+            .unwrap_or(0);
+        let rows = (0..row_count)
+            .map(|index| {
+                sequences
+                    .iter()
+                    .map(|sequence| sequence.values[index].clone())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        Ok(rows)
+    }
+
+    fn iteration_values(
+        &mut self,
+        value: &Value,
+        primitive: &str,
+    ) -> Result<IterationValues, VmError> {
+        match value {
+            Value::List(list) => Ok(IterationValues {
+                values: list_values(list),
+                shape: IterationShape::List,
+            }),
+            Value::Array(array) => Ok(IterationValues {
+                values: list_values(&array.to_list()),
+                shape: IterationShape::List,
+            }),
+            Value::Word(symbol) | Value::BareWord(symbol) => {
+                let text = self.interner.spelling(*symbol).to_string();
+                let values = text
+                    .chars()
+                    .map(|c| Value::word(&mut self.interner, c.to_string()))
+                    .collect::<Vec<_>>();
+                Ok(IterationValues {
+                    values,
+                    shape: IterationShape::Word,
+                })
+            }
+            Value::Number(_) => Err(doesnt_like_as_input(
+                &primitive.to_ascii_lowercase(),
+                value,
+                &self.interner,
+            )),
+        }
     }
 
     fn cascade2(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -3274,6 +3688,8 @@ impl Vm {
                 self.env.define_local("?", value);
             }
         }
+        self.env
+            .define_local("?rest", Value::List(List::from_values(values.to_vec())));
         self.bind_extra_template_bindings(extra_bindings);
     }
 
@@ -3292,14 +3708,6 @@ impl Vm {
         extra_bindings: &[(&str, Value)],
     ) -> Result<Value, VmError> {
         result_value(self.invoke_template_result_with_bindings(template, values, extra_bindings)?)
-    }
-
-    fn invoke_template_effect(
-        &mut self,
-        template: &Value,
-        values: Vec<Value>,
-    ) -> Result<ControlFlow, VmError> {
-        self.invoke_template_effect_with_bindings(template, values, &[])
     }
 
     fn invoke_template_effect_with_bindings(
@@ -4243,6 +4651,17 @@ enum Template {
     ImplicitSlot(List),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IterationShape {
+    List,
+    Word,
+}
+
+struct IterationValues {
+    values: Vec<Value>,
+    shape: IterationShape,
+}
+
 fn primitive_to_run_result(result: PrimitiveResult) -> RunResult {
     match result {
         PrimitiveResult::Value(value) => RunResult {
@@ -4264,8 +4683,33 @@ fn primitive_to_run_result(result: PrimitiveResult) -> RunResult {
 }
 
 fn cascade_iteration_bindings(round: usize) -> [(&'static str, Value); 2] {
+    iteration_bindings(round)
+}
+
+fn iteration_bindings(round: usize) -> [(&'static str, Value); 2] {
     let round = Value::number(round as f64);
     [("#", round.clone()), ("repcount", round)]
+}
+
+fn iteration_result_value(
+    values: Vec<Value>,
+    shape: Option<IterationShape>,
+    interner: &mut Interner,
+) -> Value {
+    if matches!(shape, Some(IterationShape::Word)) {
+        let mut word = String::new();
+        for value in &values {
+            match value {
+                Value::Word(symbol) | Value::BareWord(symbol) => {
+                    word.push_str(interner.spelling(*symbol));
+                }
+                _ => return Value::List(List::from_values(values)),
+            }
+        }
+        Value::word(interner, word)
+    } else {
+        Value::List(List::from_values(values))
+    }
 }
 
 fn pop_args(stack: &mut Vec<Value>, argc: usize) -> Result<Vec<Value>, VmError> {
@@ -4281,6 +4725,14 @@ fn expect_arity(name: &str, args: &[Value], expected: usize) -> Result<(), VmErr
         Ok(())
     } else {
         Err(VmError::new(format!("not enough inputs to {name}",)))
+    }
+}
+
+fn expect_min_arity(name: &str, args: &[Value], expected: usize) -> Result<(), VmError> {
+    if args.len() >= expected {
+        Ok(())
+    } else {
+        Err(VmError::new(format!("not enough inputs to {name}")))
     }
 }
 
@@ -4470,9 +4922,9 @@ fn starts_with_logo_word(line: &str, word: &str) -> bool {
     matches!(parts.next(), Some(first) if first.eq_ignore_ascii_case(word))
 }
 
-fn parse_to_header(line: &str) -> Result<(String, Vec<String>, bool), VmError> {
+fn parse_to_header(line: &str) -> Result<(String, Vec<ProcedureInputSpec>, bool), VmError> {
     let tokens = lex(line).map_err(|error| VmError::new(error.to_string()))?;
-    let mut iter = tokens.into_iter();
+    let mut iter = tokens.into_iter().peekable();
     let is_macro = match iter.next().map(|token| token.kind) {
         Some(TokenKind::Word(word)) if word.eq_ignore_ascii_case("to") => false,
         Some(TokenKind::Word(word)) if word.eq_ignore_ascii_case(".macro") => true,
@@ -4484,14 +4936,91 @@ fn parse_to_header(line: &str) -> Result<(String, Vec<String>, bool), VmError> {
         _ => return Err(VmError::new("TO requires a procedure name")),
     };
 
-    let mut params = Vec::new();
-    for token in iter {
+    let mut inputs = Vec::new();
+    while let Some(token) = iter.next() {
         match token.kind {
-            TokenKind::ColonWord(param) => params.push(param),
+            TokenKind::ColonWord(param) => inputs.push(ProcedureInputSpec::required(param)),
+            TokenKind::LBracket => {
+                let param = match iter.next().map(|token| token.kind) {
+                    Some(TokenKind::ColonWord(param)) => param,
+                    _ => {
+                        return Err(VmError::new(
+                            "optional/rest TO inputs must start with :name",
+                        ))
+                    }
+                };
+                let mut default_tokens = Vec::new();
+                let mut depth = 1usize;
+                for token in iter.by_ref() {
+                    match token.kind {
+                        TokenKind::LBracket => {
+                            depth += 1;
+                            default_tokens.push(TokenKind::LBracket);
+                        }
+                        TokenKind::RBracket => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                            default_tokens.push(TokenKind::RBracket);
+                        }
+                        kind => default_tokens.push(kind),
+                    }
+                }
+                if depth != 0 {
+                    return Err(VmError::new("TO input list is missing ]"));
+                }
+                let rest = default_tokens.is_empty();
+                if rest && iter.peek().is_some() {
+                    return Err(VmError::new("rest TO input must be last"));
+                }
+                inputs.push(ProcedureInputSpec {
+                    name: param,
+                    default_source: (!default_tokens.is_empty())
+                        .then(|| tokens_to_source(&default_tokens)),
+                    rest,
+                });
+            }
             _ => return Err(VmError::new("TO parameters must be written as :name")),
         }
     }
-    Ok((name, params, is_macro))
+    Ok((name, inputs, is_macro))
+}
+
+fn procedure_arity(inputs: &[ProcedureInputSpec]) -> Arity {
+    let min = inputs
+        .iter()
+        .filter(|input| input.default_source.is_none() && !input.rest)
+        .count();
+    let max = inputs.iter().filter(|input| !input.rest).count();
+    if min == max {
+        Arity::Exact(min)
+    } else {
+        Arity::Between { min, max }
+    }
+}
+
+fn tokens_to_source(tokens: &[TokenKind]) -> String {
+    tokens
+        .iter()
+        .map(token_to_source)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn token_to_source(token: &TokenKind) -> String {
+    match token {
+        TokenKind::Word(word) => word.clone(),
+        TokenKind::QuotedWord(word) => format!("\"{word}"),
+        TokenKind::ColonWord(word) => format!(":{word}"),
+        TokenKind::Infix(op) => op.to_string(),
+        TokenKind::LBracket => "[".to_string(),
+        TokenKind::RBracket => "]".to_string(),
+        TokenKind::LParen => "(".to_string(),
+        TokenKind::RParen => ")".to_string(),
+        TokenKind::LBrace => "{".to_string(),
+        TokenKind::RBrace => "}".to_string(),
+    }
 }
 
 fn list_input<'a>(value: &'a Value, name: &str, interner: &Interner) -> Result<&'a List, VmError> {
@@ -4681,10 +5210,9 @@ fn procedure_definition_text(procedure: &Procedure, interner: &Interner) -> Stri
     let mut source = String::new();
     source.push_str("to ");
     source.push_str(interner.spelling(procedure.name()));
-    for param in procedure.params() {
+    for input in procedure.input_specs() {
         source.push(' ');
-        source.push(':');
-        source.push_str(interner.spelling(*param));
+        source.push_str(&procedure_input_source(input, interner));
     }
     source.push('\n');
     if !procedure.body_source().is_empty() {
@@ -4695,6 +5223,15 @@ fn procedure_definition_text(procedure: &Procedure, interner: &Interner) -> Stri
     }
     source.push_str("end\n");
     source
+}
+
+fn procedure_input_source(input: &ProcedureInput, interner: &Interner) -> String {
+    let name = interner.spelling(input.name);
+    match (&input.default_source, input.rest) {
+        (_, true) => format!("[:{name}]"),
+        (Some(default_source), false) => format!("[:{name} {default_source}]"),
+        (None, false) => format!(":{name}"),
+    }
 }
 
 fn value_source_literal(value: &Value, interner: &Interner) -> String {
@@ -4785,9 +5322,9 @@ fn procedure_header_line(procedure: &Procedure, interner: &mut Interner) -> List
     let mut values = vec![Value::word(interner, "to"), Value::Word(procedure.name())];
     values.extend(
         procedure
-            .params()
+            .input_specs()
             .iter()
-            .map(|param| Value::word(interner, format!(":{}", interner.spelling(*param)))),
+            .map(|input| Value::word(interner, procedure_input_source(input, interner))),
     );
     List::from_values(values)
 }
@@ -4830,6 +5367,9 @@ fn primitive_names() -> &'static [&'static str] {
         "empty?",
         "memberp",
         "member?",
+        "member",
+        "substringp",
+        "find",
         "first",
         "butfirst",
         "bf",
@@ -4838,6 +5378,9 @@ fn primitive_names() -> &'static [&'static str] {
         "bl",
         "fput",
         "lput",
+        "queue",
+        "push",
+        "pop",
         "sentence",
         "se",
         "list",
@@ -4884,6 +5427,7 @@ fn primitive_names() -> &'static [&'static str] {
         "rl",
         "readword",
         "rw",
+        "eofp",
         "keyp",
         "joy",
         "joyb",
@@ -4897,18 +5441,22 @@ fn primitive_names() -> &'static [&'static str] {
         "fullscreen",
         "fs",
         "setcursor",
+        "setposn",
         "setenv",
         "make",
         "name",
+        "localmake",
         "thing",
         "local",
         "namep",
+        "boundp",
         "definedp",
         "defined?",
         "primitivep",
         "primitive?",
         "text",
         "fulltext",
+        "procedures",
         "copydef",
         "define",
         ".defmacro",
@@ -4956,6 +5504,7 @@ fn primitive_names() -> &'static [&'static str] {
         "apply",
         "foreach",
         "map",
+        "map.se",
         "filter",
         "reduce",
         "cascade",
@@ -5298,6 +5847,21 @@ fn value_expr_to_source(
     }
 }
 
+fn value_contains_template_binding(value: &Value, interner: &Interner) -> bool {
+    match value {
+        Value::BareWord(symbol) | Value::Word(symbol) => {
+            template_binding_name(interner.spelling(*symbol)).is_some()
+        }
+        Value::List(list) => list
+            .iter()
+            .any(|value| value_contains_template_binding(value, interner)),
+        Value::Array(array) => {
+            value_contains_template_binding(&Value::List(array.to_list()), interner)
+        }
+        Value::Number(_) => false,
+    }
+}
+
 fn template_binding_name(text: &str) -> Option<String> {
     if text == "?" || text == "#" {
         return Some(text.to_string());
@@ -5312,6 +5876,9 @@ fn template_binding_name(text: &str) -> Option<String> {
     }
     if rest.eq_ignore_ascii_case("out") {
         return Some("?out".to_string());
+    }
+    if rest.eq_ignore_ascii_case("rest") {
+        return Some("?rest".to_string());
     }
     None
 }
@@ -5440,9 +6007,65 @@ mod tests {
     }
 
     #[test]
+    fn optional_and_rest_procedure_inputs_follow_ucblogo_header_forms() {
+        let (result, _) = match run("to collect :required [:optional \"fallback] [:rest]
+             print sentence :required sentence :optional :rest
+             end
+             collect \"one
+             (collect \"one \"two \"three \"four)")
+        {
+            Ok(value) => value,
+            Err(error) => panic!("optional/rest fixture failed: {error}"),
+        };
+        assert_eq!(result.output, "one fallback\none two three four\n");
+    }
+
+    #[test]
+    fn optional_procedure_input_defaults_can_use_prior_inputs() {
+        let (result, _) = match run("to addmaybe :left [:right :left + 1]
+             print :left + :right
+             end
+             addmaybe 4
+             addmaybe 4 10")
+        {
+            Ok(value) => value,
+            Err(error) => panic!("optional default fixture failed: {error}"),
+        };
+        assert_eq!(result.output, "9\n14\n");
+    }
+
+    #[test]
     fn thing_primitive_reads_variable_by_word_name() {
         let (result, _) = run("make \"x 7 print thing \"x").unwrap();
         assert_eq!(result.output, "7\n");
+    }
+
+    #[test]
+    fn csls_workspace_variable_helpers_work() {
+        let (result, _) = run("make \"x 1
+             to localdemo
+             localmake \"x 2
+             print :x
+             end
+             localdemo
+             print :x
+             print boundp \"x
+             print boundp \"missing
+             print memberp \"localdemo procedures")
+        .unwrap();
+        assert_eq!(result.output, "2\n1\ntrue\nfalse\ntrue\n");
+    }
+
+    #[test]
+    fn csls_queue_push_pop_mutate_list_variables() {
+        let (result, vm) = run("make \"items [b]
+             queue \"items \"c
+             push \"items \"a
+             print pop \"items
+             show :items")
+        .unwrap();
+        assert_eq!(result.output, "a\n[b c]\n");
+        assert_eq!(vm.env().get("items").unwrap().show(vm.interner()), "[b c]");
     }
 
     #[test]
@@ -5496,7 +6119,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             result.output,
-            "h\nello\no\nhell\nhithere\n[a b]\n[a b c d]\n[z a b]\n[a b z]\n"
+            "h\nello\no\nhell\nhithere\na b\na b c d\nz a b\na b z\n"
         );
     }
 
@@ -5515,8 +6138,19 @@ mod tests {
         .unwrap();
         assert_eq!(
             result.output,
-            "3\nb\n2\n0\ntrue\n[a c d e f t z]\ntrue\ntrue\ntrue\nfalse\n"
+            "3\nb\n2\n0\ntrue\na c d e f t z\ntrue\ntrue\ntrue\nfalse\n"
         );
+    }
+
+    #[test]
+    fn csls_tail_member_and_substring_primitives() {
+        let (result, _) = run("show member \"b [a b c]
+             print member \"e \"please
+             print member \"z [a b c]
+             print substringp \"ease \"please
+             print substringp \"z \"please")
+        .unwrap();
+        assert_eq!(result.output, "[b c]\nease\nfalse\ntrue\nfalse\n");
     }
 
     #[test]
@@ -5617,7 +6251,33 @@ mod tests {
              print apply \"sum [10 20] \
              print runresult [sum 7 8]")
         .unwrap();
-        assert_eq!(result.output, "[2 3 4]\n[2 3]\n10\na\nb\n30\n15\n");
+        assert_eq!(result.output, "2 3 4\n2 3\n10\na\nb\n30\n15\n");
+    }
+
+    #[test]
+    fn ucblogo_template_iteration_order_slots_and_word_inputs() {
+        let (result, _) = match run("(foreach [a b] [x y] [print word ?1 ?2 print # show ?rest])
+             print (map [word ?1 ?2] [a b] [x y])
+             print map [word ? #] \"ab
+             print filter [not equalp ? \"b] \"abc
+             print reduce [word ?1 ?2] \"abc")
+        {
+            Ok(value) => value,
+            Err(error) => panic!("template iteration fixture failed: {error}"),
+        };
+        assert_eq!(
+            result.output,
+            "ax\n1\n[a x]\nby\n2\n[b y]\nax by\na1b2\nac\nabc\n"
+        );
+    }
+
+    #[test]
+    fn csls_find_and_map_se_template_primitives() {
+        let (result, _) = run("print find [equalp ? \"b] [a b c]
+             print find [equalp ? \"z] [a b c]
+             show map.se [list ? ?] [a b]")
+        .unwrap();
+        assert_eq!(result.output, "b\nfalse\n[a a b b]\n");
     }
 
     #[test]
@@ -5650,7 +6310,7 @@ mod tests {
              cond [[[false] [print \"bad]] [[true] [print \"good]]] \
              case 2 [[[1] [print \"one]] [[2 3] [print \"small]] [else [print \"other]]]")
         .unwrap();
-        assert_eq!(result.output, "[1 3 5]\ngood\nsmall\n");
+        assert_eq!(result.output, "1 3 5\ngood\nsmall\n");
     }
 
     #[test]
@@ -5662,7 +6322,7 @@ mod tests {
              print arraytolist :a \
              print arraytolist listtoarray [x y]")
         .unwrap();
-        assert_eq!(result.output, "middle\n3\n[[] middle []]\n[x y]\n");
+        assert_eq!(result.output, "middle\n3\n[] middle []\nx y\n");
     }
 
     #[test]
@@ -5674,7 +6334,7 @@ mod tests {
              remprop \"animal \"legs \
              print gprop \"animal \"legs")
         .unwrap();
-        assert_eq!(result.output, "4\n[legs 4 sound woof]\n[]\n");
+        assert_eq!(result.output, "4\nlegs 4 sound woof\n\n");
         assert!(vm.property_lists().contains_key("animal"));
     }
 
@@ -5748,7 +6408,7 @@ mod tests {
         assert_eq!(lines[1], "65");
         assert_eq!(lines[2], "B");
         assert_eq!(lines[3], "hello");
-        assert_eq!(lines[4], "[c b a]");
+        assert_eq!(lines[4], "c b a");
         assert_eq!(lines[5], "desserts");
         assert_eq!(lines[6], "true");
         assert_eq!(lines[7], "false");
@@ -5922,6 +6582,39 @@ mod tests {
     }
 
     #[test]
+    fn eofp_reports_current_input_stream_status() {
+        let path = unique_temp_path("eofp.txt");
+        fs::write(&path, "hello\n").unwrap();
+
+        let mut vm = Vm::new();
+        let result = vm
+            .eval_source(&format!(
+                "setread \"{} print eofp print readword print eofp",
+                logo_path(&path)
+            ))
+            .unwrap();
+        assert_eq!(result.output, "false\nhello\ntrue\n");
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn csls_new_primitives_report_representative_errors() {
+        for source in [
+            "localmake [] 1",
+            "print member \"a",
+            "make \"items \"word queue \"items \"x",
+            "make \"items [] pop \"items",
+            "print boundp []",
+            "procedures \"extra",
+            "eofp \"extra",
+            "setposn \"bad 1",
+        ] {
+            assert!(run(source).is_err(), "expected {source:?} to fail");
+        }
+    }
+
+    #[test]
     fn save_writes_visible_workspace_procedures_to_source_file() {
         let path = unique_temp_path("save.lgo");
         let mut vm = Vm::new();
@@ -5980,7 +6673,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             result.output,
-            "[[to square :x] [output product :x :x]]\n[[to square :x] [output product :x :x] [end]]\n"
+            "[to square :x] [output product :x :x]\n[to square :x] [output product :x :x] [end]\n"
         );
     }
 
@@ -6124,7 +6817,7 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
             .unwrap();
         assert_eq!(
             result.output,
-            "[[0 20] [12 0] [0 -20] [-12 0]]\n[[0 10] [10 -10] [-10 -10]]\n"
+            "[0 20] [12 0] [0 -20] [-12 0]\n[0 10] [10 -10] [-10 -10]\n"
         );
         let _ = std::fs::remove_file(script_path);
     }
@@ -6154,7 +6847,7 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
             .unwrap();
         vm.clear_output();
         let result = vm.eval_source("print plist \"animal").unwrap();
-        assert_eq!(result.output, "[]\n");
+        assert_eq!(result.output, "\n");
 
         vm.clear_output();
         vm.eval_source("erns erps").unwrap();
@@ -6176,7 +6869,7 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
         )
         .unwrap();
         let result = vm.eval_source("print quad 6 print text \"quad").unwrap();
-        assert_eq!(result.output, "36\n[[to quad :x] [output product :x :x]]\n");
+        assert_eq!(result.output, "36\n[to quad :x] [output product :x :x]\n");
         assert!(vm.procedures().contains_key("quad"));
     }
 
@@ -6190,14 +6883,14 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
             .unwrap();
         assert_eq!(
             result.output,
-            "25\n[[to square :size] [output product :size :size]]\n"
+            "25\n[to square :size] [output product :size :size]\n"
         );
     }
 
     #[test]
     fn parse_and_runparse() {
         let (result, _) = run("print parse \"|sum 1 2| print runparse \"|sum 3 4|").unwrap();
-        assert_eq!(result.output, "[sum 1 2]\n7\n");
+        assert_eq!(result.output, "sum 1 2\n7\n");
     }
 
     #[test]
@@ -6228,7 +6921,7 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
     #[test]
     fn wait_zero_is_noop_and_error_without_caught_failure_is_empty_list() {
         let (result, _) = run("wait 0 print error").unwrap();
-        assert_eq!(result.output, "[]\n");
+        assert_eq!(result.output, "\n");
     }
 
     #[test]
@@ -6672,7 +7365,7 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
     #[test]
     fn turtle_motion_primitives_update_state_and_record_lines() {
         let (result, vm) = run("fd 100 rt 90 fd 50 print pos print heading").unwrap();
-        assert_eq!(result.output, "[50 100]\n90\n");
+        assert_eq!(result.output, "50 100\n90\n");
         let state = vm.turtles().state(TurtleId::new(0)).unwrap();
         assert_eq!(state.position, Point::new(50.0, 100.0));
         assert_eq!(state.heading, 90.0);
@@ -6747,7 +7440,7 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
     fn atari_turtle_state_primitives_setx_sety_and_shownp() {
         let (result, vm) =
             run("ht print shownp setx 25 sety -10 st print shownp print pos").unwrap();
-        assert_eq!(result.output, "false\ntrue\n[25 -10]\n");
+        assert_eq!(result.output, "false\ntrue\n25 -10\n");
         let state = vm.turtles().state(TurtleId::new(0)).unwrap();
         assert_eq!(state.position, Point::new(25.0, -10.0));
         assert!(state.visible);
@@ -6788,13 +7481,13 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
     #[test]
     fn tell_ask_each_who_select_and_restore_active_turtles() {
         let (result, _) = run("tell [1 2] ask 3 [print who] print who").unwrap();
-        assert_eq!(result.output, "[3]\n[1 2]\n");
+        assert_eq!(result.output, "3\n1 2\n");
     }
 
     #[test]
     fn each_runs_body_once_per_active_turtle() {
         let (result, _) = run("tell [1 2 3] each [print who]").unwrap();
-        assert_eq!(result.output, "[1]\n[2]\n[3]\n");
+        assert_eq!(result.output, "1\n2\n3\n");
     }
 
     #[test]
@@ -6939,13 +7632,13 @@ path.write_text('putsh "diamond [[0 20] [12 0] [0 -20] [-12 0]]\nputsh "triangle
     #[test]
     fn putsh_and_getsh_store_shape_data_in_registry() {
         let (result, _) = run("putsh \"badge [triangle blue] print getsh \"badge").unwrap();
-        assert_eq!(result.output, "[triangle blue]\n");
+        assert_eq!(result.output, "triangle blue\n");
     }
 
     #[test]
     fn getsh_of_unknown_shape_returns_empty_list() {
         let (result, _) = run("print getsh \"missing").unwrap();
-        assert_eq!(result.output, "[]\n");
+        assert_eq!(result.output, "\n");
     }
 
     #[test]

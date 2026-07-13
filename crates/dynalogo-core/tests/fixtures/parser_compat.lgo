@@ -1,0 +1,5 @@
+; Parser compatibility regression modeled on CSLS/UCBLogo grouped expressions.
+make "x 4
+print (:x + 1)
+print (:x + 1) * 2
+print (sentence "CSLS [grouped expression])

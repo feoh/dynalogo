@@ -1,0 +1,67 @@
+; Examples from Computer Science Logo Style, Volume 3, Chapter 3: Algorithms and Data Structures
+; Source URL: https://people.eecs.berkeley.edu/~bh/v3ch3/algs.html
+
+to min :a :b
+output ifelse :a < :b [:a] [:b]
+end
+
+to ssort :list
+if emptyp :list [output []]
+local "smallest
+make "smallest reduce "min :list
+output fput :smallest (ssort remove.once :smallest :list)
+end
+
+to remove.once :item :list
+if equalp :item first :list [output butfirst :list]
+output fput first :list (remove.once :item butfirst :list)
+end
+
+show ssort [5 20 3 5 18 9]
+
+to worldtree
+make "world [France China Canada]
+make "France [Paris Dijon Avignon]
+make "China [Beijing Shanghai Guangzhou Suzhou]
+make "Canada [Ontario Quebec Manitoba]
+make "Ontario [Toronto Ottawa Windsor]
+make "Quebec [Montreal Lachine]
+make "Manitoba [Winnipeg]
+end
+
+to locate :city
+output locate1 :city "world
+end
+
+to locate1 :city :subtree
+if equalp :city :subtree [output (list :city)]
+if not namep :subtree [output []]
+local "lower
+make "lower locate.in.forest :city (thing :subtree)
+if emptyp :lower [output []]
+output fput :subtree :lower
+end
+
+to locate.in.forest :city :forest
+if emptyp :forest [output []]
+local "child
+make "child locate1 :city first :forest
+if not emptyp :child [output :child]
+output locate.in.forest :city butfirst :forest
+end
+
+to cities :tree
+if not namep :tree [output (list :tree)]
+output cities.in.forest thing :tree
+end
+
+to cities.in.forest :forest
+if emptyp :forest [output []]
+output sentence (cities first :forest) (cities.in.forest butfirst :forest)
+end
+
+worldtree
+show locate "Shanghai
+show locate "Montreal
+show cities "France
+show cities "Canada

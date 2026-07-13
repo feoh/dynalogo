@@ -1,0 +1,17 @@
+; Examples from Computer Science Logo Style, Volume 2, Chapter 3: Local and Global Control
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch3/exit.html
+
+to multiply :list
+output catch "early [mul1 :list]
+end
+
+to mul1 :list
+if emptyp :list [output 1]
+if not numberp first :list [(throw "early "non-number)]
+if equalp first :list 0 [(throw "early 0)]
+output product first :list (mul1 butfirst :list)
+end
+
+print multiply [781 105 87 foo 24 13 6]
+print multiply [4 5 6 0 1 2 3]
+

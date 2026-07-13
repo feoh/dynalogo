@@ -1,2 +1,2 @@
 25
-[[to square :size] [output product :size :size]]
+[to square :size] [output product :size :size]
