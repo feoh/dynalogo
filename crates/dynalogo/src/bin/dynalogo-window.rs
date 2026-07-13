@@ -1086,7 +1086,7 @@ fn custom_shape_points(value: &Value) -> Option<Vec<Vec2>> {
     let Value::List(points) = value else {
         return None;
     };
-    let parsed: Option<Vec<Vec2>> = points.iter().map(point_from_value).collect();
+    let parsed: Option<Vec<Vec2>> = points.iter().map(|value| point_from_value(&value)).collect();
     let parsed = parsed?;
     if parsed.len() < 2 {
         None

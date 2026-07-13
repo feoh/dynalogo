@@ -296,13 +296,27 @@ impl LogoArray {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct List(Option<Arc<ConsCell>>);
+#[derive(Debug, Clone)]
+pub struct List(Option<Arc<RwLock<ConsCell>>>);
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 struct ConsCell {
     head: Value,
     tail: List,
+}
+
+impl PartialEq for List {
+    fn eq(&self, other: &Self) -> bool {
+        let mut a = self.iter();
+        let mut b = other.iter();
+        loop {
+            match (a.next(), b.next()) {
+                (None, None) => return true,
+                (Some(left), Some(right)) if left == right => {}
+                _ => return false,
+            }
+        }
+    }
 }
 
 impl List {
@@ -311,7 +325,7 @@ impl List {
     }
 
     pub fn cons(head: Value, tail: List) -> Self {
-        Self(Some(Arc::new(ConsCell { head, tail })))
+        Self(Some(Arc::new(RwLock::new(ConsCell { head, tail }))))
     }
 
     pub fn from_values(values: impl IntoIterator<Item = Value>) -> Self {
@@ -326,33 +340,51 @@ impl List {
         self.0.is_none()
     }
 
-    pub fn first(&self) -> Option<&Value> {
-        self.0.as_deref().map(|cell| &cell.head)
+    pub fn first(&self) -> Option<Value> {
+        self.0
+            .as_ref()
+            .map(|cell| cell.read().expect("list lock poisoned").head.clone())
     }
 
-    pub fn butfirst(&self) -> Option<&List> {
-        self.0.as_deref().map(|cell| &cell.tail)
+    pub fn butfirst(&self) -> Option<List> {
+        self.0
+            .as_ref()
+            .map(|cell| cell.read().expect("list lock poisoned").tail.clone())
     }
 
     pub fn len(&self) -> usize {
         self.iter().count()
     }
 
-    pub fn item(&self, one_based_index: usize) -> Option<&Value> {
+    pub fn item(&self, one_based_index: usize) -> Option<Value> {
         if one_based_index == 0 {
             return None;
         }
         self.iter().nth(one_based_index - 1)
     }
 
-    pub fn iter(&self) -> ListIter<'_> {
-        ListIter {
-            next: self.0.as_deref(),
-        }
+    pub fn iter(&self) -> ListIter {
+        ListIter { next: self.clone() }
     }
 
     pub fn pointer_identity(&self) -> Option<usize> {
         self.0.as_ref().map(|cell| Arc::as_ptr(cell) as usize)
+    }
+
+    pub fn set_first(&self, value: Value) -> bool {
+        let Some(cell) = &self.0 else {
+            return false;
+        };
+        cell.write().expect("list lock poisoned").head = value;
+        true
+    }
+
+    pub fn set_butfirst(&self, tail: List) -> bool {
+        let Some(cell) = &self.0 else {
+            return false;
+        };
+        cell.write().expect("list lock poisoned").tail = tail;
+        true
     }
 
     pub fn equalp(&self, other: &List, interner: &Interner) -> bool {
@@ -361,7 +393,7 @@ impl List {
         loop {
             match (a.next(), b.next()) {
                 (None, None) => return true,
-                (Some(left), Some(right)) if left.equalp(right, interner) => {}
+                (Some(left), Some(right)) if left.equalp(&right, interner) => {}
                 _ => return false,
             }
         }
@@ -391,17 +423,19 @@ impl List {
     }
 }
 
-pub struct ListIter<'a> {
-    next: Option<&'a ConsCell>,
+pub struct ListIter {
+    next: List,
 }
 
-impl<'a> Iterator for ListIter<'a> {
-    type Item = &'a Value;
+impl Iterator for ListIter {
+    type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let cell = self.next?;
-        self.next = cell.tail.0.as_deref();
-        Some(&cell.head)
+        let cell = self.next.0.as_ref()?.clone();
+        let cell = cell.read().expect("list lock poisoned");
+        let head = cell.head.clone();
+        self.next = cell.tail.clone();
+        Some(head)
     }
 }
 

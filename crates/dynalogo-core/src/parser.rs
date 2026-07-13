@@ -74,6 +74,8 @@ impl ArityTable {
             ("BL", 1),
             ("FPUT", 2),
             ("LPUT", 2),
+            (".SETFIRST", 2),
+            (".SETBF", 2),
             ("MEMBER", 2),
             ("FIND", 2),
             ("MAP.SE", 2),
@@ -963,7 +965,7 @@ mod tests {
         let Expr::Literal(Value::List(list)) = &program.expressions()[0] else {
             panic!("expected list");
         };
-        let values: Vec<Value> = list.iter().cloned().collect();
+        let values: Vec<Value> = list.iter().collect();
         assert_eq!(values.len(), 3);
         assert_eq!(values[1], Value::number(-20.0));
         assert_eq!(values[2], Value::number(-30.0));

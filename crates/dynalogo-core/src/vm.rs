@@ -1006,6 +1006,8 @@ impl Vm {
             "butlast" | "bl" => self.butlast(args),
             "fput" => self.fput(args),
             "lput" => self.lput(args),
+            ".setfirst" => self.setfirst(args),
+            ".setbf" => self.setbf(args),
             "sentence" | "se" => self.sentence(args),
             "list" => self.list(args),
             "word" => self.word(args),
@@ -1512,7 +1514,7 @@ impl Vm {
         let member = match &args[1] {
             Value::List(list) => list
                 .iter()
-                .any(|value| args[0].equalp(value, &self.interner)),
+                .any(|value| args[0].equalp(&value, &self.interner)),
             Value::Word(symbol) | Value::BareWord(symbol) => self
                 .interner
                 .spelling(*symbol)
@@ -1521,7 +1523,7 @@ impl Vm {
             Value::Array(array) => array
                 .to_list()
                 .iter()
-                .any(|value| args[0].equalp(value, &self.interner)),
+                .any(|value| args[0].equalp(&value, &self.interner)),
         };
         Ok(PrimitiveResult::Value(self.logo_bool(member)))
     }
@@ -1583,7 +1585,6 @@ impl Vm {
             }
             Value::List(list) => list
                 .first()
-                .cloned()
                 .ok_or_else(|| doesnt_like_as_input("first", &args[0], &self.interner))?,
             Value::Array(array) => array
                 .item(array.origin())
@@ -1607,14 +1608,10 @@ impl Vm {
                 let text = drop_first_char(&Value::Number(*number).show(&self.interner));
                 Value::word(&mut self.interner, text)
             }
-            Value::List(list) => Value::List(list.butfirst().cloned().unwrap_or_else(List::empty)),
-            Value::Array(array) => Value::List(
-                array
-                    .to_list()
-                    .butfirst()
-                    .cloned()
-                    .unwrap_or_else(List::empty),
-            ),
+            Value::List(list) => Value::List(list.butfirst().unwrap_or_else(List::empty)),
+            Value::Array(array) => {
+                Value::List(array.to_list().butfirst().unwrap_or_else(List::empty))
+            }
         };
         Ok(PrimitiveResult::Value(value))
     }
@@ -1636,13 +1633,11 @@ impl Vm {
             Value::List(list) => list
                 .iter()
                 .last()
-                .cloned()
                 .ok_or_else(|| doesnt_like_as_input("last", &args[0], &self.interner))?,
             Value::Array(array) => array
                 .to_list()
                 .iter()
                 .last()
-                .cloned()
                 .ok_or_else(|| doesnt_like_as_input("last", &args[0], &self.interner))?,
         };
         Ok(PrimitiveResult::Value(value))
@@ -1664,12 +1659,12 @@ impl Vm {
                 Value::word(&mut self.interner, text)
             }
             Value::List(list) => {
-                let mut values: Vec<Value> = list.iter().cloned().collect();
+                let mut values: Vec<Value> = list.iter().collect();
                 values.pop();
                 Value::List(List::from_values(values))
             }
             Value::Array(array) => {
-                let mut values: Vec<Value> = array.to_list().iter().cloned().collect();
+                let mut values: Vec<Value> = array.to_list().iter().collect();
                 values.pop();
                 Value::List(List::from_values(values))
             }
@@ -1693,11 +1688,36 @@ impl Vm {
         let Value::List(list) = &args[1] else {
             return Err(doesnt_like_as_input("lput", &args[1], &self.interner));
         };
-        let mut values: Vec<Value> = list.iter().cloned().collect();
+        let mut values: Vec<Value> = list.iter().collect();
         values.push(args[0].clone());
         Ok(PrimitiveResult::Value(Value::List(List::from_values(
             values,
         ))))
+    }
+
+    fn setfirst(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity(".setfirst", &args, 2)?;
+        let Value::List(list) = &args[0] else {
+            return Err(doesnt_like_as_input(".setfirst", &args[0], &self.interner));
+        };
+        if !list.set_first(args[1].clone()) {
+            return Err(doesnt_like_as_input(".setfirst", &args[0], &self.interner));
+        }
+        Ok(PrimitiveResult::NoValue)
+    }
+
+    fn setbf(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
+        expect_arity(".setbf", &args, 2)?;
+        let Value::List(list) = &args[0] else {
+            return Err(doesnt_like_as_input(".setbf", &args[0], &self.interner));
+        };
+        let Value::List(tail) = &args[1] else {
+            return Err(doesnt_like_as_input(".setbf", &args[1], &self.interner));
+        };
+        if !list.set_butfirst(tail.clone()) {
+            return Err(doesnt_like_as_input(".setbf", &args[0], &self.interner));
+        }
+        Ok(PrimitiveResult::NoValue)
     }
 
     fn sentence(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
@@ -1759,7 +1779,6 @@ impl Vm {
             }
             Value::List(list) => list
                 .item(index)
-                .cloned()
                 .ok_or_else(|| doesnt_like_as_input("item", &args[0], &self.interner))?,
             Value::Array(array) => array
                 .item(index as isize)
@@ -1771,8 +1790,8 @@ impl Vm {
     fn which(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("which", &args, 2)?;
         let values = match &args[1] {
-            Value::List(list) => list.iter().cloned().collect::<Vec<_>>(),
-            Value::Array(array) => array.to_list().iter().cloned().collect::<Vec<_>>(),
+            Value::List(list) => list.iter().collect::<Vec<_>>(),
+            Value::Array(array) => array.to_list().iter().collect::<Vec<_>>(),
             _ => return Err(doesnt_like_as_input("which", &args[1], &self.interner)),
         };
         let position = values
@@ -1978,12 +1997,12 @@ impl Vm {
         expect_arity("rev", &args, 1)?;
         let value = match &args[0] {
             Value::List(list) => {
-                let mut values = list.iter().cloned().collect::<Vec<_>>();
+                let mut values = list.iter().collect::<Vec<_>>();
                 values.reverse();
                 Value::List(List::from_values(values))
             }
             Value::Array(array) => {
-                let mut values = array.to_list().iter().cloned().collect::<Vec<_>>();
+                let mut values = array.to_list().iter().collect::<Vec<_>>();
                 values.reverse();
                 Value::List(List::from_values(values))
             }
@@ -2596,7 +2615,7 @@ impl Vm {
     fn macroexpand(&mut self, args: Vec<Value>) -> Result<PrimitiveResult, VmError> {
         expect_arity("macroexpand", &args, 1)?;
         let list = list_input(&args[0], "MACROEXPAND", &self.interner)?;
-        let mut items = list.iter().cloned();
+        let mut items = list.iter();
         let head = items
             .next()
             .ok_or_else(|| VmError::new("MACROEXPAND requires a non-empty instruction list"))?;
@@ -3188,7 +3207,7 @@ impl Vm {
         expect_arity("listtoarray", &args, 1)?;
         let list = list_input(&args[0], "LISTTOARRAY", &self.interner)?;
         Ok(PrimitiveResult::Value(Value::Array(
-            LogoArray::from_values(list.iter().cloned()),
+            LogoArray::from_values(list.iter()),
         )))
     }
 
@@ -3660,7 +3679,7 @@ impl Vm {
                 if let Some(Value::List(formals)) = list.first() {
                     let params =
                         parameter_names_input(&Value::List(formals.clone()), &self.interner)?;
-                    let body = list.butfirst().cloned().unwrap_or_else(List::empty);
+                    let body = list.butfirst().unwrap_or_else(List::empty);
                     Ok(Template::ExplicitSlot { params, body })
                 } else {
                     Ok(Template::ImplicitSlot(list.clone()))
@@ -4385,7 +4404,7 @@ impl Vm {
         match value {
             Value::List(list) => list
                 .iter()
-                .map(|item| self.turtle_id_from_value(item))
+                .map(|item| self.turtle_id_from_value(&item))
                 .collect(),
             _ => Ok(vec![self.turtle_id_from_value(value)?]),
         }
@@ -5053,7 +5072,7 @@ fn list_input<'a>(value: &'a Value, name: &str, interner: &Interner) -> Result<&
 }
 
 fn list_values(list: &List) -> Vec<Value> {
-    list.iter().cloned().collect()
+    list.iter().collect()
 }
 
 fn result_value(result: RunResult) -> Result<Value, VmError> {
@@ -5072,8 +5091,8 @@ fn result_value(result: RunResult) -> Result<Value, VmError> {
 
 fn rank_value(value: &Value) -> usize {
     match value {
-        Value::List(list) => 1 + list.iter().map(rank_value).max().unwrap_or(0),
-        Value::Array(array) => 1 + array.to_list().iter().map(rank_value).max().unwrap_or(0),
+        Value::List(list) => 1 + list.iter().map(|value| rank_value(&value)).max().unwrap_or(0),
+        Value::Array(array) => 1 + array.to_list().iter().map(|value| rank_value(&value)).max().unwrap_or(0),
         Value::Word(_) | Value::BareWord(_) | Value::Number(_) => 0,
     }
 }
@@ -5106,15 +5125,15 @@ fn point_input(value: &Value, interner: &Interner) -> Result<Point, VmError> {
         return Err(doesnt_like_as_input("setpos", value, interner));
     }
     Ok(Point::new(
-        number_input_named("setpos", x, interner)?,
-        number_input_named("setpos", y, interner)?,
+        number_input_named("setpos", &x, interner)?,
+        number_input_named("setpos", &y, interner)?,
     ))
 }
 
 fn sentence_part(value: &Value, values: &mut Vec<Value>) {
     match value {
-        Value::List(list) => values.extend(list.iter().cloned()),
-        Value::Array(array) => values.extend(array.to_list().iter().cloned()),
+        Value::List(list) => values.extend(list.iter()),
+        Value::Array(array) => values.extend(array.to_list().iter()),
         _ => values.push(value.clone()),
     }
 }
@@ -5124,12 +5143,12 @@ fn local_names(value: &Value, interner: &Interner) -> Result<Vec<String>, VmErro
         Value::Word(symbol) => Ok(vec![interner.spelling(*symbol).to_string()]),
         Value::List(list) => list
             .iter()
-            .map(|value| variable_name_input(value, interner))
+            .map(|value| variable_name_input(&value, interner))
             .collect(),
         Value::Array(array) => array
             .to_list()
             .iter()
-            .map(|value| variable_name_input(value, interner))
+            .map(|value| variable_name_input(&value, interner))
             .collect(),
         _ => Err(doesnt_like_as_input("variable name", value, interner)),
     }
@@ -5144,7 +5163,7 @@ fn parameter_names_input(value: &Value, interner: &Interner) -> Result<Vec<Strin
             .iter()
             .map(|value| match value {
                 Value::Word(symbol) | Value::BareWord(symbol) => {
-                    normalize_parameter_name(interner.spelling(*symbol))
+                    normalize_parameter_name(interner.spelling(symbol))
                 }
                 _ => Err(VmError::new(format!(
                     "{} is not a procedure input name",
@@ -5157,7 +5176,7 @@ fn parameter_names_input(value: &Value, interner: &Interner) -> Result<Vec<Strin
             .iter()
             .map(|value| match value {
                 Value::Word(symbol) | Value::BareWord(symbol) => {
-                    normalize_parameter_name(interner.spelling(*symbol))
+                    normalize_parameter_name(interner.spelling(symbol))
                 }
                 _ => Err(VmError::new(format!(
                     "{} is not a procedure input name",
@@ -5197,7 +5216,7 @@ fn define_body_input(
     };
     list.iter()
         .map(|line| match line {
-            Value::List(line_list) => Ok(list_to_source(line_list, interner, arities)),
+            Value::List(line_list) => Ok(list_to_source(&line_list, interner, arities)),
             _ => Err(VmError::new(format!(
                 "{} is not a procedure body line",
                 line.show(interner)
@@ -5266,12 +5285,12 @@ fn value_source_literal(value: &Value, interner: &Interner) -> String {
 
 fn contentslist_input(value: &Value, interner: &Interner) -> Result<EditContents, VmError> {
     if let Value::List(list) = value {
-        let parts: Vec<&Value> = list.iter().collect();
+        let parts: Vec<Value> = list.iter().collect();
         if parts.len() == 3 && parts.iter().all(|part| matches!(part, Value::List(_))) {
             return Ok(EditContents {
-                procedures: local_names(parts[0], interner)?,
-                variables: local_names(parts[1], interner)?,
-                plists: local_names(parts[2], interner)?,
+                procedures: local_names(&parts[0], interner)?,
+                variables: local_names(&parts[1], interner)?,
+                plists: local_names(&parts[2], interner)?,
                 shapes: Vec::new(),
             });
         }
@@ -5396,6 +5415,8 @@ fn primitive_names() -> &'static [&'static str] {
         "bl",
         "fput",
         "lput",
+        ".setfirst",
+        ".setbf",
         "queue",
         "push",
         "pop",
@@ -5689,7 +5710,7 @@ fn compile_list_source(
 }
 
 fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> String {
-    let values: Vec<&Value> = list.iter().collect();
+    let values: Vec<Value> = list.iter().collect();
     let mut rendered = Vec::new();
     let mut index = 0;
     while index < values.len() {
@@ -5703,9 +5724,9 @@ fn list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> Str
 fn macro_list_to_source(list: &List, interner: &Interner, arities: &ArityTable) -> String {
     list.iter()
         .map(|value| match value {
-            Value::List(inner) => format!("[{}]", macro_list_to_source(inner, interner, arities)),
+            Value::List(inner) => format!("[{}]", macro_list_to_source(&inner, interner, arities)),
             Value::Word(symbol) => {
-                let spelling = interner.spelling(*symbol);
+                let spelling = interner.spelling(symbol);
                 if spelling.starts_with(':')
                     || arities.get(spelling).is_some()
                     || is_operator_word(spelling)
@@ -5716,7 +5737,7 @@ fn macro_list_to_source(list: &List, interner: &Interner, arities: &ArityTable) 
                 }
             }
             Value::BareWord(symbol) => {
-                let spelling = interner.spelling(*symbol);
+                let spelling = interner.spelling(symbol);
                 if let Some(binding) = template_binding_name(spelling) {
                     format!(":{binding}")
                 } else {
@@ -5765,7 +5786,6 @@ fn insert_sorted_tree(value: Value, tree: &List, interner: &Interner) -> Result<
     };
     let current = tree
         .item(2)
-        .cloned()
         .ok_or_else(|| VmError::new("sort tree is missing a value"))?;
     let right = match tree.item(3) {
         Some(Value::List(list)) => list.clone(),
@@ -5795,23 +5815,21 @@ fn flatten_sorted_tree(tree: &List) -> Result<List, VmError> {
         return Err(VmError::new("sort tree must have three elements"));
     }
     let left = match tree.item(1) {
-        Some(Value::List(list)) => flatten_sorted_tree(list)?,
+        Some(Value::List(list)) => flatten_sorted_tree(&list)?,
         _ => return Err(VmError::new("sort tree left branch must be a list")),
     };
     let current = tree
         .item(2)
-        .cloned()
         .ok_or_else(|| VmError::new("sort tree is missing a value"))?;
     let right = match tree.item(3) {
-        Some(Value::List(list)) => flatten_sorted_tree(list)?,
+        Some(Value::List(list)) => flatten_sorted_tree(&list)?,
         _ => return Err(VmError::new("sort tree right branch must be a list")),
     };
 
     Ok(List::from_values(
         left.iter()
-            .cloned()
             .chain(std::iter::once(current))
-            .chain(right.iter().cloned()),
+            .chain(right.iter()),
     ))
 }
 
@@ -5823,7 +5841,7 @@ fn is_operator_word(text: &str) -> bool {
 }
 
 fn value_expr_to_source(
-    values: &[&Value],
+    values: &[Value],
     interner: &Interner,
     arities: &ArityTable,
 ) -> (String, usize) {
@@ -5872,7 +5890,7 @@ fn value_contains_template_binding(value: &Value, interner: &Interner) -> bool {
         }
         Value::List(list) => list
             .iter()
-            .any(|value| value_contains_template_binding(value, interner)),
+            .any(|value| value_contains_template_binding(&value, interner)),
         Value::Array(array) => {
             value_contains_template_binding(&Value::List(array.to_list()), interner)
         }
@@ -6084,6 +6102,29 @@ mod tests {
         .unwrap();
         assert_eq!(result.output, "a\n[b c]\n");
         assert_eq!(vm.env().get("items").unwrap().show(vm.interner()), "[b c]");
+    }
+
+    #[test]
+    fn csls_mutable_list_cells_preserve_shared_tail_identity() {
+        let (result, vm) = run("make \"tail [x y]
+             make \"left fput \"a :tail
+             make \"right fput \"b :tail
+             .setfirst butfirst :left \"X
+             show :left
+             show :right
+             .setbf butfirst :right [Z]
+             show :left
+             show :right
+             pprop \"node \"kids :tail
+             .setfirst gprop \"node \"kids \"K
+             show :tail
+             show gprop \"node \"kids")
+        .unwrap();
+        assert_eq!(
+            result.output,
+            "[a X y]\n[b X y]\n[a X Z]\n[b X Z]\n[K Z]\n[K Z]\n"
+        );
+        assert_eq!(vm.env().get("tail").unwrap().show(vm.interner()), "[K Z]");
     }
 
     #[test]
