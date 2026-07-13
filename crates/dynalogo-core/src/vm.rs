@@ -245,6 +245,14 @@ impl InputStream {
         })
     }
 
+    fn scripted(name: impl Into<PathBuf>, content: impl Into<String>) -> Self {
+        Self {
+            path: name.into(),
+            content: content.into(),
+            cursor: 0,
+        }
+    }
+
     fn read_char(&mut self) -> Option<String> {
         let tail = self.content.get(self.cursor..)?;
         let ch = tail.chars().next()?;
@@ -525,6 +533,16 @@ impl Vm {
 
     pub fn clear_keypresses(&mut self) {
         self.outside_world.key_buffer.clear();
+    }
+
+    /// Connect READWORD/READLIST/READCHAR/EOFP to deterministic scripted input.
+    ///
+    /// This is intended for headless tests and scripted examples that should not
+    /// block on the host terminal. The supplied `name` appears in EOF/error
+    /// messages so fixture failures can identify the input source.
+    pub fn set_scripted_input(&mut self, name: impl Into<PathBuf>, content: impl Into<String>) {
+        self.read_stream = Some(InputStream::scripted(name, content));
+        self.current_read_managed = false;
     }
 
     pub fn set_joystick_state(&mut self, index: usize, direction: u8, button: bool) {

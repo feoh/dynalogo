@@ -130,6 +130,12 @@ Acceptance criteria:
 - Test output normalization is documented so expected files remain stable across
   platforms.
 
+Implementation note: scripted interactive examples live under
+`crates/dynalogo-core/tests/csls_input/` as `.lgo` sources paired with `.in`
+input scripts and `.out` stdout oracles. The integration harness uses
+`Vm::set_scripted_input` so `READWORD`, `READLIST`, `READCHAR`, and `EOFP`
+execute deterministically without reading from the host terminal.
+
 ### Deterministic graphics/turtle assertions
 
 Task: `tk-add-deterministic-graphics-turtle-assertions-for-csls-geometry-examples-dcd34d`
