@@ -13,7 +13,8 @@ Add the WASM target once:
 rustup target add wasm32-unknown-unknown
 ```
 
-Build the release binary (this is the same build the Pages workflow runs):
+Build the release binary (this is the build Pages should run once deployment
+is re-enabled):
 
 ```bash
 cargo build --release -p dynalogo --bin dynalogo-window \
@@ -35,10 +36,11 @@ cd /tmp/dynalogo-web && python3 -m http.server 8080
 
 Then open `http://localhost:8080` in a browser.
 
-This mirrors what [`.github/workflows/pages.yml`](../.github/workflows/pages.yml)
-does on every push to `main`, so a working local build here is a good signal
-that the published Pages demo will also work. See the repository's GitHub
-Pages settings for the live URL.
+This mirrors the intended Pages artifact layout. Automatic Pages deployment is
+currently disabled because GitHub-hosted release-mode WASM linking fails for the
+macroquad browser binary even though local release builds pass. See
+[`.github/workflows/pages.yml`](../.github/workflows/pages.yml) for the disabled
+workflow note before re-enabling the live deployment.
 
 ## How the demo page works
 

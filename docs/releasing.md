@@ -2,7 +2,8 @@
 
 Publishing is manual-trigger: pushing a `vX.Y.Z` tag (or running the
 workflow via `workflow_dispatch`) is what starts it. Nothing publishes on a
-plain push to `main`.
+plain push to `main`. If `CARGO_REGISTRY_TOKEN` is absent, the workflow still
+runs validation but skips the crates.io publish steps cleanly.
 
 ## One-time setup
 
@@ -26,9 +27,12 @@ plain push to `main`.
    ```
 
 4. The `Publish crates` workflow (`.github/workflows/publish.yml`) runs
-   fmt/clippy/tests, then publishes `dynalogo-core` first and `dynalogo`
-   second, since `dynalogo` depends on `dynalogo-core` as a path dependency
-   that only resolves once the former is on crates.io.
+   fmt/clippy/tests. When `CARGO_REGISTRY_TOKEN` is configured, it then
+   publishes `dynalogo-core` first and `dynalogo` second, since `dynalogo`
+   depends on `dynalogo-core` as a path dependency that only resolves once the
+   former is on crates.io. When the token is not configured, the publish steps
+   are skipped and the GitHub Release artifacts are still produced by
+   `.github/workflows/release.yml`.
 
 There is no automatic rollback: a bad publish must be yanked by hand with
 `cargo yank -p <crate> --version <version>`.

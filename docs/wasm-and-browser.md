@@ -86,15 +86,22 @@ plain Logo source.
 
 ## GitHub Pages deployment
 
-The current Pages workflow:
+The Pages workflow is currently disabled from automatic push/tag execution and
+is manual-only/no-op. It was disabled because GitHub-hosted release-mode WASM
+linking fails for the macroquad browser binary even though local release builds
+pass. Earlier failures reported missing browser host imports such as
+`console_log`, `init_webgl`, `setup_canvas_size`, `canvas_width`,
+`canvas_height`, `dpi_scale`, and `run_animation_loop`.
 
-- builds the WASM binary
-- assembles a site artifact from `web/`, the `.wasm`, and example files
-- publishes it through GitHub Pages
+When re-enabled, the workflow should:
 
-Use it as the reference deployment path before inventing a separate browser
-pipeline. If you change the shell layout, make the same change locally and in
-`.github/workflows/pages.yml`.
+- build the WASM binary
+- assemble a site artifact from `web/`, the `.wasm`, and example files
+- publish it through GitHub Pages
+
+Use that intended artifact layout as the reference deployment path before
+inventing a separate browser pipeline. If you change the shell layout, make the
+same change locally and in `.github/workflows/pages.yml`.
 
 ## Current browser limitations
 

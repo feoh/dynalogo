@@ -1,61 +1,30 @@
 ---
 name: GitHub Pages demo
 
+# Temporarily disabled from automatic push/tag execution.
+#
+# Recent GitHub-hosted release-mode WASM builds fail during rust-lld linking for
+# the macroquad browser binary, while the same command succeeds locally. Earlier
+# failures reported missing browser host imports such as console_log,
+# init_webgl, setup_canvas_size, canvas_width, canvas_height, dpi_scale, and
+# run_animation_loop. Until the browser packaging/linker path is corrected, keep
+# this workflow manual-only and no-op so normal pushes/releases do not emit
+# repeated "GitHub Pages demo: Some jobs were not successful" notifications.
 "on":
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
-  build-demo:
+  pages-disabled:
+    name: Pages deployment disabled
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-
-      - name: Install wasm target
-        run: rustup target add wasm32-unknown-unknown
-
-      - name: Build browser demo
-        run: >-
-          cargo build --release -p dynalogo --bin dynalogo-window
-          --target wasm32-unknown-unknown
-
-      - name: Prepare Pages artifact
+      - name: Explain disabled Pages deployment
         run: |
-          rm -rf site
-          mkdir -p site/examples
-          cp web/index.html site/index.html
-          cp web/mq_js_bundle.js site/mq_js_bundle.js
-          cp \
-            target/wasm32-unknown-unknown/release/dynalogo-window.wasm \
-            site/dynalogo-window.wasm
-          cp examples/*.lgo site/examples/
-          touch site/.nojekyll
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-  deploy-demo:
-    needs: build-demo
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          echo "GitHub Pages deployment is temporarily disabled."
+          echo "Reason: GitHub-hosted release-mode WASM linking fails"
+          echo "for the macroquad browser binary."
+          echo "Re-enable this workflow after fixing the browser"
+          echo "packaging/linker path."

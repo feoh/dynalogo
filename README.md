@@ -88,9 +88,10 @@ lines on a centered Cartesian canvas.
 
 ### Browser demo (WASM)
 
-DynaLOGO now includes a browser-oriented macroquad build of
-`dynalogo-window`, plus a GitHub Pages workflow that publishes a small in-page
-REPL demo.
+DynaLOGO includes a browser-oriented macroquad build of `dynalogo-window` and
+an in-page REPL demo shell. The GitHub Pages deployment workflow is currently
+manual-only and no-op while a GitHub-hosted release-mode WASM linker failure is
+investigated.
 
 You can validate the browser build locally with:
 
@@ -99,10 +100,11 @@ rustup target add wasm32-unknown-unknown
 cargo build -p dynalogo --bin dynalogo-window --target wasm32-unknown-unknown
 ```
 
-The committed demo shell lives in `web/index.html`, and the Pages workflow
-copies that shell, the compiled `dynalogo-window.wasm`, and the example `.lgo`
-files into the published site artifact. The shell includes a grouped example
-gallery dropdown covering every program in `examples/`, plus a Starter
+The committed demo shell lives in `web/index.html`. When Pages deployment is
+re-enabled, the workflow should copy that shell, the compiled
+`dynalogo-window.wasm`, and the example `.lgo` files into the published site
+artifact. The shell includes a grouped example gallery dropdown covering every
+program in `examples/`, plus a Starter
 snippet; picking one and pressing "Load Example" fills the REPL textarea for
 "Run in Demo". It also includes a small browser-side shape editor for building
 `PUTSH` / `SETSHAPE` commands against the current shape registry.
@@ -141,7 +143,9 @@ Implemented today:
 - File/outside-world helpers: `LOAD SAVE OPENREAD OPENWRITE OPENAPPEND`
   `READWORD READCHAR DRIBBLE KEYP JOY PADDLE TIMEOUT SETCURSOR SETENV`
 - Static turtle graphics: `FD BK LT RT SETXY SETPOS SETH HOME CS PU PD`
-  `PN SETPN PC SETPC SETPENSIZE SETSCRUNCH SETLABELHEIGHT LABEL HT ST POS HEADING XCOR YCOR`
+  <!-- typos:ignore PN SETPN -->
+  `PN SETPN PC SETPC SETPENSIZE SETSCRUNCH SETLABELHEIGHT LABEL HT ST POS`
+  `HEADING XCOR YCOR`
 - Dynaturtle shape surface: `SETSHAPE SHAPE PUTSH GETSH`, registry-backed
   custom-outline rendering, the browser shape editor, and `$EDITOR`-driven
   `EDSH`

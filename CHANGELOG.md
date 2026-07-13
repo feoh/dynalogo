@@ -11,12 +11,21 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-13
+
 ### Added
 
 - Added native/window command history navigation with Up/Down arrows.
 - Added native/window exit aliases (`exit`, `quit`, `bye`) and Ctrl+Q.
 - Added native/window input font size controls with Ctrl+Plus/Equals and
   Ctrl+Minus, including hold-repeat behavior.
+
+### Changed
+
+- Disabled automatic GitHub Pages demo deployment while the GitHub-hosted
+  release-mode WASM linker failure is investigated.
+- Made the crates.io publish workflow skip publish steps cleanly when
+  `CARGO_REGISTRY_TOKEN` is not configured.
 
 ### Fixed
 
@@ -84,7 +93,8 @@ Logo interpreter, native frontends, browser demo, and compatibility surface.
 - Browser/WASM demo published via GitHub Pages.
 - CI workflow running `cargo fmt`, `cargo clippy`, and `cargo test`.
 
-[Unreleased]: https://github.com/feoh/dynalogo/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/feoh/dynalogo/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/feoh/dynalogo/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/feoh/dynalogo/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/feoh/dynalogo/releases/tag/v0.1.1
 [0.1.0]: https://github.com/feoh/dynalogo/releases/tag/v0.1.0
