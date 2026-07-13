@@ -28,6 +28,8 @@ const DEFAULT_INPUT_FONT_SIZE: f32 = 22.0;
 const MIN_INPUT_FONT_SIZE: f32 = 14.0;
 const MAX_INPUT_FONT_SIZE: f32 = 42.0;
 const INPUT_FONT_SIZE_STEP: f32 = 2.0;
+const INPUT_FONT_REPEAT_DELAY: f64 = 0.35;
+const INPUT_FONT_REPEAT_INTERVAL: f64 = 0.06;
 const LOG_LINE_HEIGHT: f32 = 20.0;
 const PROMPT_TOP_PADDING: f32 = 12.0;
 const INPUT_BASELINE_OFFSET: f32 = 14.0;
@@ -77,6 +79,7 @@ struct App {
     eval_worker: EvalWorker,
     should_quit: bool,
     input_font_size: f32,
+    input_font_repeat: FontSizeRepeat,
 }
 
 impl App {
@@ -97,6 +100,7 @@ impl App {
             eval_worker: EvalWorker::idle(),
             should_quit: false,
             input_font_size: DEFAULT_INPUT_FONT_SIZE,
+            input_font_repeat: FontSizeRepeat::default(),
         };
         sync_browser_log(&app.log);
         app
@@ -105,8 +109,11 @@ impl App {
     fn handle_input(&mut self) {
         let mut events = Vec::new();
         let ctrl_down = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
+        let mut font_steps = 0;
         while let Some(ch) = get_char_pressed() {
-            if !ctrl_down && !ch.is_control() {
+            if ctrl_down {
+                font_steps += input_font_char_step(ch);
+            } else if !ch.is_control() {
                 events.push(InputEvent::Char(ch));
             }
         }
@@ -128,11 +135,18 @@ impl App {
         if ctrl_down && is_key_pressed(KeyCode::Q) {
             self.request_quit();
         }
-        if ctrl_down && (is_key_pressed(KeyCode::Equal) || is_key_pressed(KeyCode::KpAdd)) {
-            self.adjust_input_font_size(INPUT_FONT_SIZE_STEP);
+
+        if font_steps == 0 {
+            font_steps += self.input_font_repeat.steps_for(
+                input_font_key_direction(ctrl_down),
+                input_font_key_pressed(ctrl_down),
+                get_time(),
+            );
+        } else {
+            self.input_font_repeat.reset();
         }
-        if ctrl_down && (is_key_pressed(KeyCode::Minus) || is_key_pressed(KeyCode::KpSubtract)) {
-            self.adjust_input_font_size(-INPUT_FONT_SIZE_STEP);
+        if font_steps != 0 {
+            self.adjust_input_font_size(font_steps as f32 * INPUT_FONT_SIZE_STEP);
         }
 
         for command in process_input_state_events(&mut self.input, events) {
@@ -712,6 +726,65 @@ fn prompt_layout(
         log_line_height: LOG_LINE_HEIGHT,
         log_lines: requested_log_lines.min(available_lines),
         input_baseline,
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+struct FontSizeRepeat {
+    direction: i32,
+    next_at: f64,
+}
+
+impl FontSizeRepeat {
+    fn reset(&mut self) {
+        self.direction = 0;
+        self.next_at = 0.0;
+    }
+
+    fn steps_for(&mut self, direction: i32, pressed_now: bool, now: f64) -> i32 {
+        if direction == 0 {
+            self.reset();
+            return 0;
+        }
+        if pressed_now || self.direction != direction {
+            self.direction = direction;
+            self.next_at = now + INPUT_FONT_REPEAT_DELAY;
+            return direction;
+        }
+        if now >= self.next_at {
+            self.next_at = now + INPUT_FONT_REPEAT_INTERVAL;
+            return direction;
+        }
+        0
+    }
+}
+
+fn input_font_key_direction(ctrl_down: bool) -> i32 {
+    if !ctrl_down {
+        return 0;
+    }
+    let increase = is_key_down(KeyCode::Equal) || is_key_down(KeyCode::KpAdd);
+    let decrease = is_key_down(KeyCode::Minus) || is_key_down(KeyCode::KpSubtract);
+    match (increase, decrease) {
+        (true, false) => 1,
+        (false, true) => -1,
+        _ => 0,
+    }
+}
+
+fn input_font_key_pressed(ctrl_down: bool) -> bool {
+    ctrl_down
+        && (is_key_pressed(KeyCode::Equal)
+            || is_key_pressed(KeyCode::KpAdd)
+            || is_key_pressed(KeyCode::Minus)
+            || is_key_pressed(KeyCode::KpSubtract))
+}
+
+fn input_font_char_step(ch: char) -> i32 {
+    match ch {
+        '+' | '=' => 1,
+        '-' | '_' => -1,
+        _ => 0,
     }
 }
 
@@ -1408,6 +1481,27 @@ mod tests {
             adjust_input_font_size(MIN_INPUT_FONT_SIZE, -INPUT_FONT_SIZE_STEP),
             MIN_INPUT_FONT_SIZE
         );
+    }
+
+    #[test]
+    fn input_font_char_step_accepts_plus_equals_and_minus_variants() {
+        assert_eq!(input_font_char_step('+'), 1);
+        assert_eq!(input_font_char_step('='), 1);
+        assert_eq!(input_font_char_step('-'), -1);
+        assert_eq!(input_font_char_step('_'), -1);
+        assert_eq!(input_font_char_step('x'), 0);
+    }
+
+    #[test]
+    fn font_size_repeat_emits_initial_and_repeated_steps() {
+        let mut repeat = FontSizeRepeat::default();
+        assert_eq!(repeat.steps_for(1, true, 10.0), 1);
+        assert_eq!(repeat.steps_for(1, false, 10.1), 0);
+        assert_eq!(repeat.steps_for(1, false, 10.35), 1);
+        assert_eq!(repeat.steps_for(1, false, 10.36), 0);
+        assert_eq!(repeat.steps_for(-1, false, 10.37), -1);
+        assert_eq!(repeat.steps_for(0, false, 10.38), 0);
+        assert_eq!(repeat, FontSizeRepeat::default());
     }
 
     #[test]

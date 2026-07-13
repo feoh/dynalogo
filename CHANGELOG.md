@@ -16,7 +16,7 @@ changes; see [docs/versioning.md](docs/versioning.md) for details.
 - Added native/window command history navigation with Up/Down arrows.
 - Added native/window exit aliases (`exit`, `quit`, `bye`) and Ctrl+Q.
 - Added native/window input font size controls with Ctrl+Plus/Equals and
-  Ctrl+Minus.
+  Ctrl+Minus, including hold-repeat behavior.
 
 ### Fixed
 
