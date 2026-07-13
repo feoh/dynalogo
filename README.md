@@ -18,6 +18,8 @@ TO SPACESHIP
 END
 ```
 
+![DynaLOGO native turtle window](Dynalogo_Screenshot.png)
+
 ## Goals
 
 - **UCBLogo compatibility** — the full rich syntax and library (~400
