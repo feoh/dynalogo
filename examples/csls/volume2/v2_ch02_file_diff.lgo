@@ -1,0 +1,243 @@
+; Source: Computer Science Logo Style, Volume 2, Chapter 2: File Differences
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch2/diff.html
+; Program source URL: https://people.eecs.berkeley.edu/~bh/v2ch2/diff.lg
+; Full faithful transcript of the chapter's real diff algorithm and
+; file-comparison procedures (not a curated stand-in), credited to Brian
+; Harvey. Transcribed verbatim from the "Program Listing" section at the end
+; of the chapter, which is the complete, final version of every procedure
+; (superseding the incremental drafts shown earlier in the chapter's prose).
+;
+; Adaptation note: the book's demo invocation is `diff "Text1 "Text2 []`,
+; reading two files named literally "Text1" and "Text2" in the current
+; directory. Below we create those two files as scratch files under /tmp
+; with the exact sample contents shown in the chapter's "Input Files" table,
+; then call `diff` with those concrete paths -- only the file paths are
+; adapted; the diff algorithm itself is untouched.
+;
+; Errata note: the chapter's mid-text walkthrough of `report` prints three
+; dashes ("---") as the separator between the two files' differing lines,
+; matching the sample output transcript shown near the top of the chapter.
+; But the final "Program Listing" version of `report` (transcribed here)
+; prints five dashes ("-----") instead. This is an inconsistency in Harvey's
+; own text, not a transcription error here -- so a real run of this file
+; will show "-----" where the chapter's printed sample output shows "---".
+
+to diff :file1 :file2 :output
+local "caseignoredp
+make "caseignoredp "false
+openread :file1
+openread :file2
+if not emptyp :output [openwrite :output]
+setwrite :output
+print [DIFF results:]
+print sentence [< File 1 =] :file1
+print sentence [> File 2 =] :file2
+diff.same (makefile 1 :file1) (makefile 2 :file2)
+print "==========
+setread []
+setwrite []
+close :file1
+close :file2
+if not emptyp :output [close :output]
+end
+
+;; Skip over identical lines in the two files.
+
+to diff.same :fib1 :fib2
+local [line1 line2]
+do.while [make "line1 getline :fib1
+          make "line2 getline :fib2
+          if and listp :line1 listp :line2 [stop]    ; Both files ended.
+] [equalp :line1 :line2]
+addline :fib1 :line1                                 ; Difference found.
+addline :fib2 :line2
+diff.differ :fib1 :fib2
+end
+
+;; Remember differing lines while looking for ones that match.
+
+to diff.differ :fib1 :fib2
+local "line
+make "line readline :fib1
+addline :fib1 :line
+ifelse memberp :line lines :fib2 ~
+       [diff.found :fib1 :fib2] ~
+       [diff.differ :fib2 :fib1]
+end
+
+to diff.found :fib1 :fib2
+local "lines
+make "lines member2 (last butlast lines :fib1) ~
+                    (last lines :fib1) ~
+                    (lines :fib2)
+ifelse emptyp :lines ~
+       [diff.differ :fib2 :fib1] ~
+       [report :fib1 :fib2 (butlast butlast lines :fib1)
+             (firstn (lines :fib2) (count lines :fib2)-(count :lines))]
+end
+
+to member2 :line1 :line2 :lines
+if emptyp butfirst :lines [output []]
+if and equalp :line1 first :lines equalp :line2 first butfirst :lines ~
+   [output :lines]
+output member2 :line1 :line2 butfirst :lines
+end
+
+to firstn :stuff :number
+if :number = 0 [output []]
+output fput (first :stuff) (firstn butfirst :stuff :number-1)
+end
+
+;; Read from file or from saved lines.
+
+to getline :fib
+nextlinenum :fib
+output readline :fib
+end
+
+to readline :fib
+if savedp :fib [output popsaved :fib]
+setread filename :fib
+output readword
+end
+
+;; Matching lines found, now report the differences.
+
+to report :fib1 :fib2 :lines1 :lines2
+local [end1 end2 dashes]
+if equalp (which :fib1) 2 [report :fib2 :fib1 :lines2 :lines1 stop]
+print "==========
+make "end1 (linenum :fib1)+(count :lines1)-1
+make "end2 (linenum :fib2)+(count :lines2)-1
+make "dashes "false
+ifelse :end1 < (linenum :fib1) [
+    print (sentence "INSERT :end1+1 (word (linenum :fib2) "- :end2))
+] [ifelse :end2 < (linenum :fib2) [
+    print (sentence "DELETE (word (linenum :fib1) "- :end1) :end2+1)
+] [
+    print (sentence "CHANGE (word (linenum :fib1) "- :end1)
+                            (word (linenum :fib2) "- :end2))
+    make "dashes "true
+]]
+process :fib1 "|< | :lines1 :end1
+if :dashes [print "-----]
+process :fib2 "|> | :lines2 :end2
+diff.same :fib1 :fib2
+end
+
+to process :fib :prompt :lines :end
+foreach :lines [type :prompt print ?]
+savelines :fib butfirst butfirst chop :lines (lines :fib)
+setlines :fib []
+setlinenum :fib :end+2
+end
+
+to chop :counter :stuff
+if emptyp :counter [output :stuff]
+output chop butfirst :counter butfirst :stuff
+end
+
+;; Constructor, selectors, and mutators for File Information Block (FIB)
+;; Five elements: file number, file name, line number,
+;; differing lines, and saved lines for re-reading.
+
+to makefile :number :name
+local "file
+make "file array 5               ; Items 4 and 5 will be empty lists.
+setitem 1 :file :number
+setitem 2 :file :name
+setitem 3 :file 0
+output :file
+end
+
+to which :fib
+output item 1 :fib
+end
+
+to filename :fib
+output item 2 :fib
+end
+
+to linenum :fib
+output item 3 :fib
+end
+
+to nextlinenum :fib
+setitem 3 :fib (item 3 :fib)+1
+end
+
+to setlinenum :fib :value
+setitem 3 :fib :value
+end
+
+to addline :fib :line
+setitem 4 :fib (lput :line item 4 :fib)
+end
+
+to setlines :fib :value
+setitem 4 :fib :value
+end
+
+to lines :fib
+output item 4 :fib
+end
+
+to savelines :fib :value
+setitem 5 :fib (sentence :value item 5 :fib)
+end
+
+to savedp :fib
+output not emptyp item 5 :fib
+end
+
+to popsaved :fib
+local "result
+make "result first item 5 :fib
+setitem 5 :fib (butfirst item 5 :fib)
+output :result
+end
+
+;; ---------------------------------------------------------------------
+;; Demo: the chapter's own sample run, `diff "Text1 "Text2 []`, adapted
+;; only in the two literal file paths (see adaptation note above). This
+;; recreates the exact "Text1"/"Text2" sample contents from the chapter's
+;; "Input Files" table, then runs the unmodified diff algorithm on them.
+
+openwrite "/tmp/dynalogo_csls_v2ch2_text1.txt
+setwrite "/tmp/dynalogo_csls_v2ch2_text1.txt
+print [My goal in this series of books]
+print [is to make the goals and methods]
+print [of a serious computer scientist]
+print [accessible, at an introductory]
+print [level, to people who are]
+print [interested in computer]
+print [programming but are not computer]
+print [science majors.]
+print [If you're an]
+print [adult or teenaged hobbyist,]
+print [or a teacher who wants to use the]
+print [computer as an educational tool,]
+print [you're definitely part of this]
+print [audience.]
+setwrite []
+close "/tmp/dynalogo_csls_v2ch2_text1.txt
+
+openwrite "/tmp/dynalogo_csls_v2ch2_text2.txt
+setwrite "/tmp/dynalogo_csls_v2ch2_text2.txt
+print [My goal in this series of books]
+print [is to make the goals and methods]
+print [of a mad computer scientist]
+print [accessible, at an introductory]
+print [level, to people who are]
+print [interested in playing computer]
+print [games.]
+print [If you're an]
+print [adult or teenaged hobbyist,]
+print [you're definitely part of this]
+print [audience.]
+print [And I hope you appreciate]
+print [the privilege!]
+setwrite []
+close "/tmp/dynalogo_csls_v2ch2_text2.txt
+
+diff "/tmp/dynalogo_csls_v2ch2_text1.txt "/tmp/dynalogo_csls_v2ch2_text2.txt []

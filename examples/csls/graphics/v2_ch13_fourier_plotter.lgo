@@ -1,12 +1,184 @@
-; Source: Computer Science Logo Style, Volume 2 Chapter 13, Fourier Series Plotter.
+; Source: Computer Science Logo Style, Volume 2, Chapter 13: Fourier Series Plotter
 ; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch13/fourie.html
-; Modeled deterministic fixture: plot a small sampled sine-wave curve as a
-; headless turtle trace suitable for CI.
+; Program source URL: https://people.eecs.berkeley.edu/~bh/v2ch13/plot.lg
+; Full faithful transcript of the chapter's Fourier plotter (not a curated
+; stand-in), credited to Brian Harvey.
+;
+; The chapter opens with a small illustration of why sine waves matter (a
+; turtle circling forever traces a sine wave vertically over time), then
+; walks through the design of a general Fourier-series plotter, including
+; several rejected/superseded drafts before arriving at the final program
+; printed in the chapter's "Program Listing" section. This transcript
+; reproduces the final working program's definitions first (as the book's
+; reader is assumed to have already loaded them from "plot.lg" before
+; typing the demo commands quoted in the "Square Waves" section), followed
+; by those demo commands in the order the chapter shows them, followed by
+; the earlier drafts discussed later in the chapter's narrative (quoted
+; here, after the demos, so they cannot affect the plots drawn above).
+;
+; Three adaptations were needed for DynaLOGO, each noted inline below:
+;  1. DynaLOGO's FOR only accepts literal numbers in its control list (it
+;     does not evaluate expressions like the book's "[2*:xrange]"), so the
+;     book's FOR-based scan is rewritten with an equivalent WHILE loop.
+;  2. DynaLOGO parses "-:xrange" (unary minus on a non-literal) as a call
+;     to the binary "-" operator with only one input, so "(-:xrange)" is
+;     rewritten as "(0 - :xrange)".
+;  3. DynaLOGO treats "(name ...)" as a greedy explicit-input call whenever
+;     the first token after "(" is a bare word, even when that word (like
+;     XCOR) takes zero inputs; "(xcor+:deltax)" is rewritten as
+;     "((xcor)+:deltax)" so XCOR's value is parenthesized on its own first.
 
-clearscreen
-setpc 6
-setpensize 1
-penup
-setxy -6 0
+; --- Introductory example (start of chapter): a turtle moving in a circle
+; forever traces a sine wave in its vertical motion over time. Defined here
+; exactly as printed, but not invoked, since CIRCLE never terminates.
+to circle
+fd 1
+rt 1
+circle
+end
+
+; --- The complete Fourier series plotter, exactly as given in the
+; chapter's final "Program Listing" section (with the three adaptations
+; above; DynaLOGO also requires SETUP.VALUES and KEYWORD to be defined
+; before PLOT since it resolves bare, unparenthesized call arities at
+; parse time, so those two are moved ahead of PLOT here).
+
+;; Handle keyword inputs
+
+to setup.values :list
+if emptyp :list [stop]
+make first :list first butfirst :list
+setup.values butfirst butfirst :list
+end
+
+.macro keyword :inputs :defaults
+if or (wordp :inputs) (numberp first :inputs) ~
+   [make "inputs sentence (first :defaults) :inputs]
+output `[local ,[filter [not numberp ?] :defaults]
+         setup.values ,[:defaults]
+         setup.values ,[:inputs]]
+end
+
+to series :harmonic
+if :harmonic < 1 [output 0]
+output (term :harmonic)+(series :harmonic-:skip)
+end
+
+to term :harmonic
+output (sin :xscale * :harmonic * :x) / :harmonic
+end
+
+to plot :inputs
+keyword :inputs ~
+        [maxharm 5 deltax 2 yscale 75 cycles 1 xrange 230 skip 2]
+localmake "xscale :cycles*180/:xrange
+splitscreen clearscreen hideturtle penup
+setpos list (0 - :xrange) 0
 pendown
-repeat 7 [setxy sum -6 repcount product 4 sin product repcount 30]
+localmake "x :deltax
+while [:x <= (2 * :xrange)] ~
+      [setpos list ((xcor)+:deltax) (:yscale * series :maxharm)
+       make "x :x + :deltax]
+end
+
+; --- Demonstration calls from the "Square Waves" section, in reading order.
+
+plot 1
+plot 5
+plot 23
+plot 45
+plot 77
+plot [maxharm 77 yscale 140 deltax 1]
+plot [11 cycles 5]
+plot 6
+plot [3 skip 1]
+plot [16 skip 3]
+
+; --- "Keyword Inputs" section: two hypothetical instructions the chapter
+; quotes to explain why keyword (rather than positional) inputs were used.
+; Neither is a call PLOT (with its real single :inputs parameter) or ITEM
+; can satisfy, so they are preserved here as comments rather than as code
+; that would error out if actually run:
+;   plot 5 2 75 1 230 2
+;   print item [index 2 list [vanilla chocolate strawberry]]
+
+; --- "Making the Variables Local" section: the earlier drafts of KEYWORD
+; before the chapter converts it into a macro. Quoted here, after the demo
+; calls above, so redefining KEYWORD/SERIES/TERM below cannot change what
+; was already plotted.
+
+; First draft of KEYWORD: it works, but (as the chapter explains) it
+; creates *global* variables for the keywords rather than local ones.
+to keyword :inputs :defaults
+if or (wordp :inputs) (numberp first :inputs) ~
+   [make "inputs sentence (first :defaults) :inputs]
+setup.values :defaults
+setup.values :inputs
+end
+
+; The chapter then shows PLOT wrapping that draft with an explicit LOCAL
+; declaration, but leaves the procedure body unfinished ("...") because the
+; point of the example is that duplicating the keyword names is unaesthetic.
+; That fragment has no matching END in the original text, so it is quoted
+; here as a comment rather than reproduced as runnable code:
+;   to plot :inputs
+;   local [maxharm deltax yscale cycles xrange skip]
+;   keyword :inputs [maxharm 5 deltax 2 yscale 75 cycles 1 xrange 230 skip 2]
+;   ...
+
+; A broken attempt to make KEYWORD itself localize the variables. This
+; parses and runs, but (as the chapter explains) LOCAL here applies to
+; KEYWORD's own procedure frame, not to its caller PLOT's -- which is
+; exactly why the chapter converts KEYWORD into a macro instead:
+to keyword :inputs :defaults
+local filter [not numberp ?] :defaults
+if or (wordp :inputs) (numberp first :inputs) ~
+   [make "inputs sentence (first :defaults) :inputs]
+setup.values :defaults
+setup.values :inputs
+end
+
+; --- "Indirect Assignment" section: the chapter highlights this single line
+; from SETUP.VALUES above as an example of indirect (computed-name) MAKE:
+;   make first :list first butfirst :list
+
+; --- "Numeric Precision" section: two alternative formulations of SERIES,
+; both explicitly rejected in favor of the recursive version used above.
+
+; An iterative version using FOR and repeated MAKE -- rejected because
+; repeatedly reassigning a variable with MAKE "isn't very good Logo style":
+to series
+localmake "result 0
+for [harmonic :maxharm 1 [-:skip]] ~
+    [make "result :result + (term :harmonic)]
+output :result
+end
+
+; A version built on a hypothetical ACCUMULATE operation (the chapter
+; leaves implementing ACCUMULATE, per Chapter 10's techniques, as an
+; exercise for the reader; it is not defined here):
+to series
+output accumulate "sum [harmonic :maxharm 1 [-:skip]] [term :harmonic]
+end
+
+; --- "Dynamic Scope" section: explicit-input alternatives to TERM and
+; SERIES, contrasted with the dynamically-scoped versions used in the real
+; program above. The chapter notes that SERIES here would need still more
+; explicit inputs to be fully consistent, and leaves it at that.
+to term :x :harmonic :xscale
+output (sin :xscale * :harmonic * :x) / :harmonic
+end
+
+to series :x :harmonic :skip :xscale
+if :harmonic < 1 [output 0]
+output (term :harmonic)+(series :harmonic-:skip)
+end
+
+; --- "Further Explorations" section: dividing by :harmonic gives the square
+; and sawtooth family; the chapter poses dividing by :harmonic squared as an
+; open question about what other waveforms result. A weighted-list "timbre"
+; input is also discussed, e.g. a timbre equivalent to PLOT 5:
+;   [1 0 0.3333 0 0.2]
+to term :harmonic
+op (sin :xscale * :harmonic * :x)/(:harmonic * :harmonic)
+end

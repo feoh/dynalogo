@@ -1,0 +1,233 @@
+; Source: Computer Science Logo Style, Volume 1, Chapter 10: Turtle Geometry
+; Source URL: https://people.eecs.berkeley.edu/~bh/v1ch10/turtle.html
+; Full faithful transcript of the chapter's turtle-graphics examples (not a
+; curated stand-in), credited to Brian Harvey.
+
+clearscreen
+
+; --- "A Review, or a Brief Introduction": first fd, then pu/fd ---
+forward 80
+
+penup
+forward 30
+
+; --- dash: first named procedure in the chapter (pu/fd/pd/fd blinking line) ---
+to dash :count
+repeat :count [penup forward 4 pendown forward 4]
+end
+
+clearscreen dash 14
+
+; --- the "classic beginning point of Logo turtle graphics": a square ---
+repeat 4 [forward 100 right 90]
+
+; --- "Local vs. Global Descriptions": the same square drawn via Cartesian setpos ---
+clearscreen
+setpos [0 100]
+setpos [100 100]
+setpos [100 0]
+setpos [0 0]
+
+; --- square: turtle-relative version of the same shape, reusable at any position/heading ---
+to square :size
+repeat 4 [forward :size right 90]
+end
+
+; --- face: square used repeatedly, at different sizes/positions/angles, to draw a face ---
+to face
+pendown square 100
+penup forward 20
+right 90
+forward 25
+pendown forward 50
+penup back 75
+left 90
+forward 65
+right 90
+forward 20
+pendown square 15
+penup forward 45
+pendown square 15
+penup back 15
+right 90
+forward 20
+left 45
+pendown square 20
+end
+
+; --- squares drawn in several orientations, demonstrating turtle-relative locality ---
+repeat 20 [pendown square 12 penup forward 20 right 18]
+
+; --- "Symmetry": squiggle, an arbitrary sequence of forward/right turns ---
+to squiggle
+forward 100
+right 135
+forward 40
+right 120
+forward 60
+right 15
+end
+
+; repeating squiggle reveals hidden 4-fold symmetry
+repeat 20 [squiggle]
+
+; --- squaggle: another arbitrary squiggle, revealing 18-fold symmetry when repeated ---
+to squaggle
+forward 50
+right 150
+forward 60
+right 100
+forward 30
+right 90
+end
+
+; --- poly: the classic recursive regular-polygon procedure (runs forever, no stop rule) ---
+to poly :size :angle
+forward :size
+right :angle
+poly :size :angle
+end
+
+; poly 100 90
+; poly 80 60
+; poly 100 144
+; Left commented out here because poly has no stop rule and, run as shown in the
+; book, is meant to be interrupted by hand (BREAK / command-period) once you've
+; seen the shape; running all three unconditionally would hang this script.
+
+; --- squoggle: a third arbitrary squiggle, used later to test predicted symmetry ---
+to squoggle
+forward 50
+right 70
+forward 10
+right 160
+forward 35
+right 58
+end
+
+; --- protect.heading: restores the turtle's original heading after running any squiggle ---
+to protect.heading :squig
+local "oldheading
+make "oldheading heading
+run :squig
+setheading :oldheading
+end
+
+protect.heading [squiggle]
+protect.heading [squaggle]
+
+; --- spin: decorated poly that lets you choose the symmetry, using protect.heading ---
+to spin :turns :command
+repeat :turns [protect.heading :command right 360 / :turns]
+end
+
+spin 3 [squiggle]
+spin 5 [squiggle]
+spin 4 [squaggle]
+spin 6 [squoggle]
+spin 6 [fd 40 squoggle]
+spin 5 [pu fd 50 pd squaggle]
+
+; --- squirrel: the exception to "every squiggle retraces its steps" (total turning is not
+; a divisor of 360, so repeating it sends the turtle off into the distance rather than
+; closing up into a symmetrical figure) ---
+to squirrel
+forward 40
+right 90
+forward 10
+right 90
+forward 15
+right 90
+forward 20
+right 90
+end
+
+repeat 20 [squirrel]
+
+; --- fingers: a more deliberately designed shape, meant to be used with spin ---
+to fingers :size
+penup forward 10 pendown
+right 5
+repeat 5 [forward :size right 170 forward :size left 170]
+left 5
+penup back 10 pendown
+end
+
+spin 4 [fingers 50]
+spin 10 [fingers 30]
+
+; --- "Fractals": the tree sequence. `tree` is redefined several times below, exactly as
+; the book presents it -- each `to tree` overwrites the previous definition, so only the
+; LAST one is the version actually active (and safely invoked) at the end of this file.
+; This mirrors the experience of a reader typing each version into a REPL in turn.
+
+; --- tree, first approximation (recursive shape, but NO stop rule -- runs forever) ---
+; to tree :size
+; forward :size
+; left 20
+; tree :size/2
+; right 40
+; tree :size/2
+; end
+; Left commented out (rather than defined-then-overwritten) because DynaLOGO validates
+; a procedure body before running any part of the script, and this version has no base
+; case: invoking it would recurse without bound. The book itself never runs this version
+; without safeguard either -- it goes straight on to the depth-limited and
+; minimum-size-limited variants below.
+
+; --- tree, depth-limited variant: an explicit :depth input bounds the recursion ---
+to tree :depth :size
+if :depth = 0 [stop]
+forward :size
+left 20
+tree (:depth - 1) :size / 2
+right 40
+tree (:depth - 1) :size / 2
+end
+
+; --- tree, minimum-size variant: stop once branches get too small (chosen by the book as
+; "a little simpler" than the depth-limited version) -- but NOT yet state-invariant, so the
+; turtle ends up somewhere other than where it started ---
+to tree :size
+if :size < 4 [stop]
+forward :size
+left 20
+tree :size / 2
+right 40
+tree :size / 2
+end
+
+; --- tree, state-invariant variant: climbs back down the trunk so the turtle returns to its
+; original position and heading, which is what makes the recursive branching actually work ---
+to tree :size
+if :size < 4 [stop]
+forward :size
+left 20
+tree :size / 2
+right 40
+tree :size / 2
+left 20
+back :size
+end
+
+; tree 50
+; Left commented out here because this variant is itself superseded a few lines below by
+; the final embellished version, which is the one actually invoked at the end of the file.
+
+; --- tree, final embellished version: less symmetrical, more branches, branches partway up
+; the trunk as well as at the top. This is the last redefinition of `tree`, so it is the
+; version left active and invoked below. ---
+to tree :size
+if :size < 5 [forward :size back :size stop]
+forward :size / 3
+left 30 tree :size * 2 / 3 right 30
+forward :size / 6
+right 25 tree :size / 2 left 25
+forward :size / 3
+right 25 tree :size / 2 left 25
+forward :size / 6
+back :size
+end
+
+clearscreen
+tree 50

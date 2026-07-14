@@ -1,6 +1,9 @@
 # Example programs
 
-These programs are compatible with the current DynaLOGO feature set.
+These examples include small programs compatible with the current DynaLOGO
+feature set plus a credited source corpus from Brian Harvey's *Computer Science
+Logo Style* (CSLS). Some full CSLS transcripts intentionally preserve upstream
+UCBLogo code that may exceed DynaLOGO's current compatibility surface.
 
 ## Run from the terminal REPL
 
@@ -27,7 +30,10 @@ Then paste a program into the prompt.
 
 ### Computer Science Logo Style corpus
 
-- `csls/` — runnable examples adapted from Brian Harvey's *Computer Science Logo Style*, organized by volume/chapter with attribution, source URLs, and expected-output sidecars. See [`csls/README.md`](csls/README.md).
+- `csls/` — examples from Brian Harvey's *Computer Science Logo Style*,
+  organized by volume/chapter with attribution, source URLs, expected-output
+  sidecars for deterministic examples, and full upstream transcripts for the
+  larger application/graphics examples. See [`csls/README.md`](csls/README.md).
 
 ### Classic turtle graphics
 

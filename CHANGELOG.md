@@ -10,6 +10,16 @@ and the project follows [Semantic Versioning](https://semver.org/); see
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-07-13
+
+### Added
+
+- Added full credited Computer Science Logo Style source transcripts for the
+  larger graphics/application examples, including Turtle Geometry, Data Files,
+  File Differences, Solitaire, BASIC Compiler, Pattern Matcher, Doctor,
+  Cryptographer's Helper, Fourier plotting, and Volume 3 math, algorithms,
+  Pascal, and STUDENT programs.
+
 ## [1.0.1] - 2026-07-13
 
 ### Fixed
@@ -181,7 +191,8 @@ Logo interpreter, native frontends, browser demo, and compatibility surface.
 - Browser/WASM demo published via GitHub Pages.
 - CI workflow running `cargo fmt`, `cargo clippy`, and `cargo test`.
 
-[Unreleased]: https://github.com/feoh/dynalogo/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/feoh/dynalogo/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/feoh/dynalogo/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/feoh/dynalogo/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/feoh/dynalogo/compare/v0.1.4...v1.0.0
 [0.1.4]: https://github.com/feoh/dynalogo/compare/v0.1.3...v0.1.4

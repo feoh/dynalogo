@@ -1,0 +1,385 @@
+; Source: Computer Science Logo Style, Volume 2, Chapter 7: A Pattern Matcher
+; Source URL: https://people.eecs.berkeley.edu/~bh/v2ch7/match.html
+; Program source URL: https://people.eecs.berkeley.edu/~bh/v2ch7/match.lg
+; Full faithful transcript of the chapter's pattern-matching engine (not a
+; curated stand-in), credited to Brian Harvey.
+;
+; The chapter first shows small programs that USE the finished MATCH command
+; (foreshadowing what it can do), then walks through building it, first as a
+; simplified "#"-only prototype, then as the complete generalized engine
+; shown in the chapter's own "Program Listing" section. This file preserves
+; that reading order: later definitions of the same name (MATCH, CONVERSE,
+; STRIP.AND) intentionally supersede earlier ones, exactly as they do for a
+; reader typing the chapter into an interpreter from top to bottom.
+;
+; Two small, purely mechanical adaptations for DynaLOGO were needed and are
+; called out inline where they occur:
+;   1. DynaLOGO resolves a prefix call's argument count from the arity table
+;      as it stands at the *defining* procedure's own compile time, rather
+;      than lazily at first call the way UCBLogo does. Since this chapter
+;      routinely calls a helper before that helper is defined (the whole
+;      point of showing usage before implementation), those forward
+;      references are wrapped in explicit parentheses below so DynaLOGO can
+;      delimit their arguments unambiguously. This changes no behavior.
+;   2. DynaLOGO's IF only accepts the 2-input form (condition, true-branch);
+;      the book's simplified prototype MATCH uses the classic 3-input
+;      IF-with-else-bracket form once, which is rewritten as IFELSE below.
+
+;; ---- CONVERSE: a toy conversational program that introduces matching ----
+
+to converse
+local [response name like]
+print [Hi, my name is Toby and I like ice cream]
+print [Tell me about yourself]
+make "response readlist
+if (match [# my name is #name] :response) [(do.name (strip.and :name))]
+if (match [# i like #like] :response) [(do.like (strip.and :like))]
+print [Nice meeting you!]
+end
+
+to do.name :name
+print sentence "Hello, :name
+end
+
+to do.like :like
+print sentence [I'm glad you like] :like
+end
+
+to strip.and :text
+local "short
+if (match [#short and #] :text) [output :short]
+output :text
+end
+
+;; ---- A predicate-tagged pattern example ----
+
+to ask.age
+local "age
+print [How old are you?]
+if (match [# !age:numberp #] readlist) ~
+   [print (sentence [You are] :age [years old.])]
+end
+
+;; ---- Word-level predicates used as pattern tags ----
+
+to colorp :word
+output memberp :word [red orange yellow blue green violet white black]
+end
+
+to ends.y :word
+output equalp last :word "y
+end
+
+;; ---- A predicate to reject a particular word ----
+
+to notand :word
+output not equalp :word "and
+end
+
+;; ---- List-level predicates for the "@" (group) quantifier ----
+
+to threep :list
+output equalp count :list 3
+end
+
+to headtailp :list
+if (count :list) < 2 [output "false]
+output equalp first :list last :list
+end
+
+;; ---- STRIP.AND revised to use the "^" (as-few-as-possible) quantifier ----
+
+to strip.and :text
+local "short
+if (match [^short and #] :text) [output :short]
+output :text
+end
+
+;; ---- CONVERSE revised to use ANYOF, NOTAND, and the "&" quantifier ----
+
+to converse
+local [response name like rest]
+print [Hi, my name is Toby and I like ice cream]
+print [Tell me about yourself]
+make "response readlist
+while [(match [@:anyof [[My name is #name:notand]
+                        [I like #like:notand]
+                        [&:notand]]
+                       ?:in [and] #rest] ~
+              :line)] ~
+      [make "response :rest]
+if not emptyp :name [print sentence "Hello, :name]
+if not emptyp :like [print sentence [I'm glad you like] :like]
+print [Nice meeting you!]
+end
+
+;; ---- LISTEQUALP: recursive list comparison, the conceptual seed of MATCH ----
+
+to listequalp :a :b
+if emptyp :a [output emptyp :b]
+if emptyp :b [output "false]
+if wordequalp first :a first :b ~
+   [output (listequalp (butfirst :a) (butfirst :b))]
+output "false
+end
+
+;; ---- MATCH, first version: recognizes only "#" ("zero or more words") ----
+;; This simplified prototype is superseded below by the chapter's complete,
+;; generalized MATCH; it is kept here because the chapter presents it as a
+;; real, working stepping stone toward the final engine. Its inner
+;; three-branch IF (the book's [output match ...][output "false]) is
+;; rewritten as IFELSE; see adaptation note (2) above.
+
+to match :pat :sen
+if emptyp :pat [output emptyp :sen]
+if emptyp :sen [ifelse equalp first :pat "#
+                   [output match butfirst :pat :sen]
+                   [output "false]]
+if equalp first :pat "# [output or (match butfirst :pat :sen) ~
+                                   (match :pat butfirst :sen)]
+if equalp first :pat first :sen ~
+   [output match butfirst :pat butfirst :sen]
+output "false
+end
+
+;; ---- SERIAL.AND / SERIAL.OR: the short-circuit technique MATCH relies on ----
+
+to serial.and :pred1 :pred2
+if not run :pred1 [output "false]
+output run :pred2
+end
+
+to serial.or :pred1 :pred2
+if run :pred1 [output "true]
+output run :pred2
+end
+
+;; ---- The complete, generalized pattern matcher (chapter's Program Listing) ----
+;; This is the final MATCH: it recognizes the special pattern words "#" "!"
+;; "&" "@" "^" "?", the ":predicate" and ":[sub pattern]" tags, and the
+;; "anyof"/"in" combinators. It supersedes the simplified prototype above.
+
+to match :pat :sen
+local [special.var special.pred special.buffer in.list]
+if or wordp :pat wordp :sen [output "false]
+if emptyp :pat [output emptyp :sen]
+if listp first :pat [output (special (fput "!: :pat) :sen)]
+if memberp first first :pat [? # ! & @ ^] [output (special :pat :sen)]
+if emptyp :sen [output "false]
+if equalp first :pat first :sen ~
+   [output match butfirst :pat butfirst :sen]
+output "false
+end
+
+;; Parsing quantifiers
+
+to special :pat :sen
+(set.special (parse.special (butfirst first :pat) "))
+output run (list (word "match (first first :pat)))
+end
+
+to parse.special :word :var
+if emptyp :word [output list :var "always]
+if equalp first :word ": [output list :var butfirst :word]
+output parse.special butfirst :word word :var first :word
+end
+
+to set.special :list
+make "special.var first :list
+make "special.pred last :list
+if emptyp :special.var [make "special.var "special.buffer]
+if memberp :special.pred [in anyof] [set.in]
+if not emptyp :special.pred [stop]
+make "special.pred first butfirst :pat
+make "pat fput first :pat butfirst butfirst :pat
+end
+
+to set.in
+make "in.list first butfirst :pat
+make "pat fput first :pat butfirst butfirst :pat
+end
+
+;; Exactly one match
+
+to match!
+if emptyp :sen [output "false]
+if not try.pred [output "false]
+make :special.var first :sen
+output match butfirst :pat butfirst :sen
+end
+
+;; Zero or one match
+
+to match?
+make :special.var []
+if emptyp :sen [output match butfirst :pat :sen]
+if not try.pred [output match butfirst :pat :sen]
+make :special.var first :sen
+if match butfirst :pat butfirst :sen [output "true]
+make :special.var []
+output match butfirst :pat :sen
+end
+
+;; Zero or more matches
+
+to match#
+make :special.var []
+output (#test (#gather :sen))
+end
+
+to #gather :sen
+if emptyp :sen [output :sen]
+if not try.pred [output :sen]
+make :special.var lput first :sen thing :special.var
+output #gather butfirst :sen
+end
+
+to #test :sen
+if match butfirst :pat :sen [output "true]
+if emptyp thing :special.var [output "false]
+output (#test2 (fput (last thing :special.var) :sen))
+end
+
+to #test2 :sen
+make :special.var butlast thing :special.var
+output #test :sen
+end
+
+;; One or more matches
+
+to match&
+output (&test match#)
+end
+
+to &test :tf
+if emptyp thing :special.var [output "false]
+output :tf
+end
+
+;; Zero or more matches (as few as possible)
+
+to match^
+make :special.var []
+output (^test :sen)
+end
+
+to ^test :sen
+if match butfirst :pat :sen [output "true]
+if emptyp :sen [output "false]
+if not try.pred [output "false]
+make :special.var lput first :sen thing :special.var
+output ^test butfirst :sen
+end
+
+;; Match words in a group
+
+to match@
+make :special.var :sen
+output (@test [])
+end
+
+to @test :sen
+if @try.pred [if match butfirst :pat :sen [output "true]]
+if emptyp thing :special.var [output "false]
+output (@test2 (fput (last thing :special.var) :sen))
+end
+
+to @test2 :sen
+make :special.var butlast thing :special.var
+output @test :sen
+end
+
+;; Applying the predicates
+
+to try.pred
+if listp :special.pred [output match :special.pred first :sen]
+output run (list :special.pred (quoted first :sen))
+end
+
+to quoted :thing
+if listp :thing [output :thing]
+output word "" :thing
+end
+
+to @try.pred
+if listp :special.pred [output match :special.pred thing :special.var]
+output run list :special.pred thing :special.var
+end
+
+;; Special predicates
+
+to always :x
+output "true
+end
+
+to in :word
+output memberp :word :in.list
+end
+
+to anyof :sen
+output (anyof1 :sen :in.list)
+end
+
+to anyof1 :sen :pats
+if emptyp :pats [output "false]
+if match first :pats :sen [output "true]
+output anyof1 :sen butfirst :pats
+end
+
+;; ---- Demonstrations, adapted from the chapter's own worked examples ----
+;; The book shows these interactively at a "?" prompt; they are reproduced
+;; here as non-interactive PRINT/SHOW calls so the whole file runs to
+;; completion unattended.
+
+print match [Every # is a #] [Every book is a joy to read]
+print match [Every # is a #] [Every adolescent is obnoxious]
+
+print match [#food is for #animal] [Hay is for horses]
+show :food
+show :animal
+
+print match [hello #middle goodbye] [hello is [very much] like goodbye]
+show :middle
+
+print match [hi #middle:wordp bye] [hi and then bye]
+show :middle
+
+print match [hi #middle:wordp bye] [hi and [then] bye]
+
+print match [hi #mid:wordp #dle:listp bye] [hi and [then] bye]
+show :mid
+show :dle
+
+print match [a #:[x # y] b] [a [x 111 y] [x 222 y] b]
+print match [a #:[x # y] b] [a [x 333 zzz] b]
+
+print match [a #all:[x #some y] b] [a [x 111 y] [x 222 y] b]
+show :all
+show :some
+
+print match [#nums:numberp #rest] [3 2 1 blastoff!]
+show :nums
+show :rest
+
+print match [@begin:threep #rest] [a b c d e]
+show :begin
+show :rest
+
+print match [#front @good:headtailp #back] [a b c x d e f g x h i]
+show :front
+show :good
+show :back
+
+print match [#front xx #back] [a b c d xx e f g xx h i]
+show :front
+show :back
+
+print match [^front xx #back] [a b c d xx e f g xx h i]
+show :front
+show :back
+
+print match [a #x b &y ! c] [a i b j c b k c]
+show :x
+show :y
+
+print match [a #x b &x ! c] [a i b j c b k c]
